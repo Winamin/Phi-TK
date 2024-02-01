@@ -71,3 +71,9 @@ jobs:
           releaseBody: 'From GitHub Action'
           releaseDraft: true
           prerelease: false
+          
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: Artifacts
+          path: src-tauri/target/release/bundle/
