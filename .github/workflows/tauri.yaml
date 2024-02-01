@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [ubuntu-20.04, windows-latest]
+        platform: [windows-latest]
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -71,3 +71,9 @@ jobs:
           releaseBody: 'From GitHub Action'
           releaseDraft: true
           prerelease: false
+          
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: Artifacts
+          path: src-tauri/target/release/bundle/
