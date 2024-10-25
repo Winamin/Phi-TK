@@ -150,7 +150,7 @@ import TipTextField from './TipTextField.vue';
 
 const props = defineProps<{ initAspectRatio?: number }>();
 
-const RESOLUTIONS = [ '1280x720','1920x1080', '2560x1440', '3840x2160', '2844x1600', '2388x1668'];
+const RESOLUTIONS = [ '1280x720','1920x1080', '2560x1440', '3840x2160', '2844x1600', '2388x1668','4096x3072','1440x1080'];
 
 function parseResolution(resolution: string): [number, number] | null {
   let parts = resolution.split(/[xX]/g);
