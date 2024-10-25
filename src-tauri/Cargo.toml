@@ -2,7 +2,7 @@
 name = "phira-render"
 version = "0.1.3"
 description = "Phira render"
-authors = ["Mivik", "HLMC","Beks"]
+authors = ["Mivik", "HLMC", "Beks"]
 license = ""
 repository = ""
 default-run = "phira-render"
