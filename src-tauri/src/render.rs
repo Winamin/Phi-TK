@@ -193,7 +193,7 @@ pub async fn main() -> Result<()> {
         }
     let music: Result<_> = async { AudioClip::new(fs.load_file(&info.music).await?) }.await;
     let music = music.with_context(|| tl!("load-music-failed"))?;
-    let ending = ld!("ending.mp3");
+    let ending = ld!("ending.flac");
     let track_length = music.length() as f64;
     let sfx_click = ld!("click.ogg");
     let sfx_drag = ld!("drag.ogg");
@@ -212,7 +212,7 @@ pub async fn main() -> Result<()> {
 
     send(IPCEvent::StartMixing);
     let mixing_output = NamedTempFile::new()?;
-    let sample_rate = 48000;
+    let sample_rate = 96000;
     let sample_rate_f64 = sample_rate as f64;
     assert_eq!(sample_rate, ending.sample_rate());
     assert_eq!(sample_rate, sfx_click.sample_rate());
@@ -273,6 +273,7 @@ pub async fn main() -> Result<()> {
             );
         }
     }
+    
     let mut pos = O + length + A;
     while place(pos, &ending, volume_music) != 0 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
