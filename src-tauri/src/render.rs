@@ -279,7 +279,7 @@ pub async fn main() -> Result<()> {
         pos += ending.frame_count() as f64 / sample_rate_f64;
     }
     let mut proc = cmd_hidden(&ffmpeg)
-        .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a flac -f flac", sample_rate).split_whitespace())
+        .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
         .arg(mixing_output.path())
         .stdin(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -349,7 +349,7 @@ pub async fn main() -> Result<()> {
     write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
     let args2 = format!(
-        "-c:a copy -c:v {} -pix_fmt yuv420p -b:v {} -map 0:v:0 -map 1:a:0 -ss 00:00:03.5 -vf vflip -f mp4",
+        "-c:a copy -c:v {} -pix_fmt yuv420p -b:v {} -map 0:v:0 -map 1:a:0 -ss 00:00:03.5 -vf vflip -f mov",
         //"-c:a copy -c:v {} -pix_fmt yuv420p -b:v {} -map 0:v:0 -map 1:a:0 -vf vflip -f mp4",
         if use_cuda {
             "h264_nvenc"
