@@ -279,7 +279,7 @@ pub async fn main() -> Result<()> {
         pos += ending.frame_count() as f64 / sample_rate_f64;
     }
     let mut proc = cmd_hidden(&ffmpeg)
-        .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f64le -f wav", sample_rate).split_whitespace())
+        .args(format!("-y -f f64le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
         .arg(mixing_output.path())
         .stdin(Stdio::piped())
         .stderr(Stdio::inherit())
