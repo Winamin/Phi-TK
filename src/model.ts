@@ -51,9 +51,15 @@ export interface Task {
 
 export interface RenderConfig {
   resolution: number[];
+  ffmpegPreset: string;
   endingLength: number;
+  disableLoading: boolean;
+  chartDebug: boolean;
+  chartRatio: number;
   fps: number;
   hardwareAccel: boolean;
+  hevc: boolean;
+  bitrateControl: string;
   bitrate: string;
 
   aggressive: boolean;
