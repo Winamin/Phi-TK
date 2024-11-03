@@ -39,6 +39,7 @@ pub struct RenderConfig {
     chart_ratio: f32,
     fps: u32,
     hardware_accel: bool,
+    hevc: bool,
     bitrate_control: String,
     bitrate: String,
 
@@ -118,7 +119,6 @@ pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
         },
         id: 0,
         rks: config.player_rks,
-        historic_best: 0,
     })
 }
 
@@ -183,7 +183,7 @@ pub async fn main() -> Result<()> {
     };
     dbg!(&ffmpeg);
 
-    let mut painter = TextPainter::new(font, None);
+    let mut painter = TextPainter::new(font);
 
     let mut config = params.config.to_config();
     config.mods = Mods::AUTOPLAY;
@@ -221,23 +221,29 @@ pub async fn main() -> Result<()> {
     send(IPCEvent::StartMixing);
     let mixing_output = NamedTempFile::new()?;
     let sample_rate = 96000;
+    let sample_rate_f64 = sample_rate as f64;
     assert_eq!(sample_rate, ending.sample_rate());
     assert_eq!(sample_rate, sfx_click.sample_rate());
     assert_eq!(sample_rate, sfx_drag.sample_rate());
     assert_eq!(sample_rate, sfx_flick.sample_rate());
-    let mut output = vec![0.0_f32; (video_length * sample_rate as f64).ceil() as usize * 2];
+    
+    let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
     {
-        let pos = O - chart.offset.min(0.) as f64;
-        let count = (music.length() as f64 * sample_rate as f64) as usize;
-        let mut it = output[((pos * sample_rate as f64).round() as usize * 2)..].iter_mut();
-        let ratio = 1. / sample_rate as f64;
-        for frame in 0..count {
-            let position = frame as f64 * ratio;
-            let frame = music.sample(position as f32).unwrap_or_default();
-            *it.next().unwrap() += frame.0 * volume_music;
-            *it.next().unwrap() += frame.1 * volume_music;
+        if volume_music != 0.0 {
+            let pos = O - chart.offset.min(0.) as f64;
+            let count = (music.length() as f64 * sample_rate_f64) as usize;
+            let mut it = output[((pos * sample_rate_f64).round() as usize * 2)..].iter_mut();
+            let ratio = 1. / sample_rate_f64;
+            for frame in 0..count {
+                let position = frame as f64 * ratio;
+                let frame = music.sample(position as f32).unwrap_or_default();
+                *it.next().unwrap() += frame.0 * volume_music;
+                *it.next().unwrap() += frame.1 * volume_music;
+            }
         }
+        
     }
+    
     let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
         let position = (pos * sample_rate_f64).round() as usize * 2;
         if position >= output.len() {
@@ -252,10 +258,12 @@ pub async fn main() -> Result<()> {
             *dst += frame.0 * volume;
             let dst = it.next().unwrap();
             *dst += frame.1 * volume;
-            }
+        }
         return len;
     };
-    if volume_sfx = 0.0 {
+
+    // 尝试在volume_sfx=0时不处理音效
+    if volume_sfx != 0.0 {
         for note in chart
             .lines
             .iter()
@@ -275,7 +283,7 @@ pub async fn main() -> Result<()> {
     }
     let mut pos = O + length + A;
     while place(pos, &ending, volume_music) != 0 {
-        pos += ending.frame_count() as f64 / sample_rate as f64;
+        pos += ending.frame_count() as f64 / sample_rate_f64;
     }
     let mut proc = cmd_hidden(&ffmpeg)
         .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
@@ -303,7 +311,7 @@ pub async fn main() -> Result<()> {
     let player = build_player(&params.config).await?;
     let mut main = Main::new(
         Box::new(
-            LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None, None).await?,
+            LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?,
         ),
         tm,
         {
@@ -338,8 +346,29 @@ pub async fn main() -> Result<()> {
             .with_context(|| tl!("run-ffmpeg-failed"))?
             .stdout,
     )?;
+
     let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
     let has_qsv = params.config.hardware_accel && codecs.contains("h264_qsv");
+    let has_amf = params.config.hardware_accel && codecs.contains("h264_amf");
+
+    let use_cuda_hevc = params.config.hardware_accel && codecs.contains("hevc_nvenc");
+    let has_qsv_hevc = params.config.hardware_accel && codecs.contains("hevc_qsv");
+    let has_amf_hevc = params.config.hardware_accel && codecs.contains("hevc_amf");
+
+    let ffmpeg_preset =  if !use_cuda && !has_qsv && has_amf {"-quality"} else {"-preset"};
+    let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
+
+    let (nvenc, qsv, amf, cpu) = if params.config.hevc {
+        ("hevc_nvenc", "hevc_qsv", "hevc_amf", "libx265")
+    } else {
+        ("h264_nvenc", "h264_qsv", "h264_amf", "libx264")
+    };
+    if params.config.hardware_accel && !use_cuda_hevc && !has_qsv_hevc && !has_amf_hevc {bail!(tl!("no-hwacc"));}
+
+    let ffmpeg_preset_name = if use_cuda {ffmpeg_preset_name_list.nth(1)
+    } else if has_qsv {ffmpeg_preset_name_list.nth(0)
+    } else if has_amf {ffmpeg_preset_name_list.nth(2)
+    } else {ffmpeg_preset_name_list.nth(0)};
 
     let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
     if use_cuda {
@@ -348,18 +377,25 @@ pub async fn main() -> Result<()> {
     write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
     let args2 = format!(
-        "-c:a copy -c:v {} -pix_fmt yuv420p -b:v {} -map 0:v:0 -map 1:a:0 -vf vflip -f mov",
-        if use_cuda {
-            "h264_nvenc"
-        } else if has_qsv {
-            "h264_qsv"
-        } else if params.config.hardware_accel {
-            bail!(tl!("no-hwacc"));
+        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
+        if use_cuda {nvenc} 
+        else if has_qsv {qsv} 
+        //else if has_amf {amf}
+        else if params.config.hardware_accel {bail!(tl!("no-hwacc"));} 
+        else {cpu},
+        if params.config.bitrate_control == "CRF" {
+            if use_cuda {"-cq"}
+            else if has_qsv {"-q"}
+            //else if has_amf {"-qp_p"}
+            else {"-crf"}
         } else {
-            // "libx264 -preset ultrafast"
-            "libx264"
+            "-b:v"
         },
         params.config.bitrate,
+        ffmpeg_preset,
+        ffmpeg_preset_name.unwrap(),
+        if params.config.disable_loading{"-ss 00:00:03.5"}
+        else{"-ss 00:00:00"},
     );
 
     let mut proc = cmd_hidden(&ffmpeg)
