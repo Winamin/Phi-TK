@@ -59,7 +59,7 @@ zh-CN:
   choose:
     archive: 压缩包 (.zip, .pez)
     folder: 文件夹
-    can-also-drop: 也可以直接拖放谱面到这里哦
+    can-also-drop: 也可以直接拖放谱面至此处
     drop: 拖放谱面至此处
 
   chart-file: 谱面文件
@@ -81,10 +81,10 @@ zh-CN:
   preview: 预览
   render: 渲染
 
-  render-started: phira已经开始渲染了哦！
+  render-started: 视频已开始渲染！
   see-tasks: 查看任务列表
 
-  ffmpeg-not-found: 笨蛋怎么没有安装 FFmpeg。快去下载 FFmpeg.exe 并放置在指定文件夹内!
+  ffmpeg-not-found: 您尚未安装 FFmpeg。请下载 FFmpeg.exe 并放置在指定文件夹内。
 
 </i18n>
 
@@ -312,16 +312,16 @@ function tryParseAspect(): number | undefined {
         <v-form ref="form" v-if="chartInfo">
           <v-row no-gutters class="mx-n2">
             <v-col cols="8">
-              <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="chartInfo.name"></v-text-field>
+              <v-text-field class="mx-2" :label="t('chart-name')" v-model="chartInfo.name"></v-text-field>
             </v-col>
             <v-col cols="4">
-              <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]" v-model="chartInfo.level"></v-text-field>
+              <v-text-field class="mx-2" :label="t('level')" v-model="chartInfo.level"></v-text-field>
             </v-col>
           </v-row>
 
           <v-row no-gutters class="mx-n2 mt-1">
             <v-col cols="12" sm="4">
-              <v-text-field class="mx-2" :label="t('charter')" :v-model="chartInfo.charter"></v-text-field>
+              <v-text-field class="mx-2" :label="t('charter')" v-model="chartInfo.charter"></v-text-field>
             </v-col>
             <v-col cols="12" sm="4">
               <v-text-field class="mx-2" :label="t('composer')" v-model="chartInfo.composer"></v-text-field>
@@ -361,7 +361,7 @@ function tryParseAspect(): number | undefined {
 
       <template v-slot:item.4>
         <div class="d-flex flex-column justify-center align-center mb-2" style="gap: 1rem">
-          <span style="font-size: 84px">😋</span>
+          <span style="font-size: 84px">🎉</span>
           <h2>{{ t('render-started') }}</h2>
           <v-btn @click="router.push({ name: 'tasks' })" v-t="'see-tasks'"></v-btn>
         </div>
