@@ -32,9 +32,15 @@ use tempfile::NamedTempFile;
 #[serde(rename_all = "camelCase")]
 pub struct RenderConfig {
     resolution: (u32, u32),
+    ffmpeg_preset: String,
     ending_length: f64,
+    disable_loading: bool,
+    chart_debug: bool,
+    chart_ratio: f32,
     fps: u32,
     hardware_accel: bool,
+    hevc: bool,
+    bitrate_control: String,
     bitrate: String,
 
     aggressive: bool,
@@ -73,6 +79,8 @@ impl RenderConfig {
             speed: self.speed,
             volume_music: self.volume_music,
             volume_sfx: self.volume_sfx,
+            chart_debug: self.chart_debug,
+            chart_ratio: self.chart_ratio,
             ..Default::default()
         }
     }
@@ -212,7 +220,7 @@ pub async fn main() -> Result<()> {
 
     send(IPCEvent::StartMixing);
     let mixing_output = NamedTempFile::new()?;
-    let sample_rate = 96000;
+    let sample_rate = 48000;
     let sample_rate_f64 = sample_rate as f64;
     assert_eq!(sample_rate, ending.sample_rate());
     assert_eq!(sample_rate, sfx_click.sample_rate());
@@ -273,7 +281,6 @@ pub async fn main() -> Result<()> {
             );
         }
     }
-    
     let mut pos = O + length + A;
     while place(pos, &ending, volume_music) != 0 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
@@ -339,31 +346,56 @@ pub async fn main() -> Result<()> {
             .with_context(|| tl!("run-ffmpeg-failed"))?
             .stdout,
     )?;
+
     let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
     let has_qsv = params.config.hardware_accel && codecs.contains("h264_qsv");
+    let has_amf = params.config.hardware_accel && codecs.contains("h264_amf");
+
+    let use_cuda_hevc = params.config.hardware_accel && codecs.contains("hevc_nvenc");
+    let has_qsv_hevc = params.config.hardware_accel && codecs.contains("hevc_qsv");
+    let has_amf_hevc = params.config.hardware_accel && codecs.contains("hevc_amf");
+
+    let ffmpeg_preset = if !use_cuda && !has_qsv && has_amf {"-quality"} else {"-preset"};
+    let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
+
+    if params.config.hevc {
+        let ffmpeg_preset_name = if use_cuda_hevc {
+            ffmpeg_preset_name_list.nth(1)
+        } else if has_qsv_hevc {
+            ffmpeg_preset_name_list.nth(0) // Intel QSV for HEVC
+        } else if has_amf_hevc {
+            ffmpeg_preset_name_list.nth(2)
+        } else {
+            ffmpeg_preset_name_list.nth(0)
+        };
 
     let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
-    if use_cuda {
+    if use_cuda_hevc {
         args += " -hwaccel_output_format cuda";
+    } else if has_qsv_hevc {
+        args += " -hwaccel_output_format qsv"; // Intel QSV output format
     }
     write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
     let args2 = format!(
-        "-c:a copy -c:v {} -pix_fmt yuv420p -b:v {} -map 0:v:0 -map 1:a:0 -ss 00:00:03.5 -vf vflip -f mov",
-        //"-c:a copy -c:v {} -pix_fmt yuv420p -b:v {} -map 0:v:0 -map 1:a:0 -vf vflip -f mp4",
-        if use_cuda {
-            "h264_nvenc"
-        } else if has_qsv {
-            "h264_qsv"
-        } else if params.config.hardware_accel {
-            bail!(tl!("no-hwacc"));
+        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mkv",
+        if use_cuda_hevc {"hevc_nvenc"}
+        else if has_qsv_hevc {"hevc_qsv"} // Intel QSV
+        else if params.config.hardware_accel {bail!(tl!("no-hwacc"));}
+        else {"libx265"},
+        if params.config.bitrate_control == "CRF" {
+            if use_cuda_hevc {"-cq"}
+            else if has_qsv_hevc {"-q"}
+            else {"-crf"}
         } else {
-            // "libx264 -preset ultrafast"
-            "libx264"
+            "-b:v"
         },
         params.config.bitrate,
+        ffmpeg_preset,
+        ffmpeg_preset_name.unwrap(),
+        if params.config.disable_loading{"-ss 00:00:03.5"}
+        else{"-ss 00:00:00"},
     );
-
     let mut proc = cmd_hidden(&ffmpeg)
         .args(args.split_whitespace())
         .arg(mixing_output.path())
@@ -373,6 +405,58 @@ pub async fn main() -> Result<()> {
         .stderr(Stdio::inherit())
         .spawn()
         .with_context(|| tl!("run-ffmpeg-failed"))?;
+    } else {
+    let ffmpeg_preset_name = if use_cuda {
+        ffmpeg_preset_name_list.nth(1)
+    } else if has_qsv {
+        ffmpeg_preset_name_list.nth(0) // Intel QSV for H264
+    } else if has_amf {
+        ffmpeg_preset_name_list.nth(2)
+    } else {
+        ffmpeg_preset_name_list.nth(0)
+    };
+
+    let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
+    if use_cuda {
+        args += " -hwaccel_output_format cuda";
+    } else if has_qsv {
+        args += " -hwaccel_output_format qsv"; // Intel QSV output format
+    }
+    write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
+    
+    let args2 = format!(
+      "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mkv",
+       if use_cuda {"h264_nvenc"} 
+       else if has_qsv {"h264_qsv"} 
+       //else if has_amf {"h264_amf"}
+       else if params.config.hardware_accel {bail!(tl!("no-hwacc"));} 
+       else {"libx264"},
+       if params.config.bitrate_control == "CRF" {
+           if use_cuda {"-cq"}
+           else if has_qsv {"-q"}
+           //else if has_amf {"-qp_p"}
+           else {"-crf"}
+       } else {
+           "-b:v"
+       },
+       params.config.bitrate,
+       ffmpeg_preset,
+       ffmpeg_preset_name.unwrap(),
+       if params.config.disable_loading{"-ss 00:00:03.5"}
+       else{"-ss 00:00:00"},
+    );
+    let mut proc = cmd_hidden(&ffmpeg)
+    .args(args.split_whitespace())
+    .arg(mixing_output.path())
+    .args(args2.split_whitespace())
+    .arg(output_path)
+    .stdin(Stdio::piped())
+    .stderr(Stdio::inherit())
+    .spawn()
+    .with_context(|| tl!("run-ffmpeg-failed"))?;
+    }
+    
+
     let mut input = proc.stdin.take().unwrap();
 
     let byte_size = vw as usize * vh as usize * 4;
