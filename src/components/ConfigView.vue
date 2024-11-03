@@ -7,10 +7,11 @@ en:
     audio: Audio
 
   resolution: Resolution
+  ffmpeg-preset: Preset
   fps: FPS
 
   hw-accel: Hardware Acceleration
-  hw-accel-tips: If render fails, try to turn it off
+  hw-accel-tips: If hardware accelerated rendering is not supported, it will fail
 
   fxaa: FXAA
   fxaa-tips: FXAA, as a low-cost anti-aliasing method, will cause the picture to be blurred, and it is not recommended to turn it on
@@ -18,8 +19,9 @@ en:
   sample-count: Sample Count
   sample-count-tips: Must be a power of 2. A non-1 sample count enables MSAA, which can improve the quality of the picture while increasing the performance cost
 
-  bitrate: Bitrate
-  bitrate-tips: A higher bitrate will result in higher quality and larger file size
+  bitrate-control: Bitrate Control
+  bitrate: Quantization parameters/Bitrate
+  bitrate-tips: CRF-This is the CRF level. CBR-This is the bitrate
 
   player-avatar: Player Avatar
   player-name: Player Name
@@ -42,7 +44,7 @@ en:
   double-hint: Double Hit Hint
 
   aggressive: Aggressive Optimization
-  aggressive-tips: Improve rendering speed, but may cause some notes to disappear
+  aggressive-tips: Hide off-screen note, Improve rendering speed, but may cause some notes to disappear
 
   disable-particle: Disable Particle
   disable-effect: Disable Effect
@@ -51,6 +53,9 @@ en:
   volume-sfx: SFX Volume
 
   ending-length: Result Screen Duration
+  disable-loading: Remove loading screen
+  chart_debug: Debug Mode
+  chart_ratio: Chart Zoom
 
   presets: Presets
   preset-refresh: Refresh
@@ -72,19 +77,24 @@ zh-CN:
     audio: 音频
 
   resolution: 分辨率
+  ffmpeg-preset: 预设
   fps: FPS
 
   hw-accel: 硬件加速
-  hw-accel-tips: 如果渲染失败，请尝试关闭此选项
+  hw-accel-tips: 如果不支持硬件加速，渲染将会失败
 
   fxaa: FXAA
   fxaa-tips: FXAA 以低成本实现抗锯齿，但会导致画面模糊，不建议开启
 
+  hevc: HEVC编码
+  hevc-tips: 使用 HEVC 编码，压缩率更高，渲染速度更慢
+
   sample-count: 采样数
   sample-count-tips: 非 1 的采样数(必须为 2 的幂)会启用 MSAA(若开头无画面请关闭此项)
 
-  bitrate: 码率
-  bitrate-tips: 码率越高，画面质量越高，文件大小也越大
+  bitrate-control: 码率控制
+  bitrate: 量化参数/码率
+  bitrate-tips: CRF-该项为CRF级别 CBR-该项为码率
 
   player-avatar: 玩家头像
   player-name: 玩家名
@@ -107,7 +117,7 @@ zh-CN:
   double-hint: 双押提示
 
   aggressive: 激进优化
-  aggressive-tips: 提升渲染速度，但可能会导致部分音符消失
+  aggressive-tips: 剔除屏幕外按键，提升渲染速度，但可能会导致部分音符消失
 
   disable-particle: 禁用粒子
   disable-effect: 禁用特效
@@ -116,6 +126,9 @@ zh-CN:
   volume-sfx: 音效音量
 
   ending-length: 结算画面时长
+  disable-loading: 加载画面
+  chart_debug: 调试模式
+  chart_ratio: 谱面缩放
 
   presets: 预设配置
   preset-refresh: 刷新
@@ -150,7 +163,9 @@ import TipTextField from './TipTextField.vue';
 
 const props = defineProps<{ initAspectRatio?: number }>();
 
-const RESOLUTIONS = [ '1280x720','1920x1080', '2560x1440', '3840x2160', '2844x1600', '2388x1668','4096x3072','1440x1080'];
+const RESOLUTIONS = [ '1280x720','1920x1080', '2560x1440', '3840x2160', '2844x1600', '2388x1668', '1600x1080'];
+const ffmpegPresetPresetList = ['veryfast p1 speed', 'faster p2 speed','fast p3 balanced', 'medium p4 balanced', 'slow balanced', 'slower p6 quality', 'veryslow p7 quality'];
+const bitrateControlList = ['CRF','CBR'];
 
 function parseResolution(resolution: string): [number, number] | null {
   let parts = resolution.split(/[xX]/g);
@@ -169,12 +184,15 @@ const sampleCountRule = (value: string) => (isNumeric(value) && Math.log2(Number
 const form = ref<VForm>();
 
 const resolution = ref('1920x1080'),
+  ffmpegPreset = ref('medium p4 balanced'),
   fps = ref('60'),
-  hwAccel = ref(true);
+  hwAccel = ref(true),
+  hevc = ref(false);
 
 const fxaa = ref(false),
   sampleCount = ref('1'),
-  bitrate = ref('7M');
+  bitrateControl = ref('CRF'),
+  bitrate = ref('26');
 
 const playerAvatar = ref<string>(),
   playerName = ref(''),
@@ -226,7 +244,7 @@ updateRespacks();
 const noteScale = ref(1);
 
 const doubleHint = ref(true),
-  aggressive = ref(true),
+  aggressive = ref(false),
   disableParticle = ref(false),
   disableEffect = ref(false);
 
@@ -234,6 +252,11 @@ const volumeMusic = ref(1),
   volumeSfx = ref(1);
 
 const endingLength = ref('-2.0');
+
+const disableLoading = ref(false)
+
+const chartDebug = ref(false)
+const chartRatio = ref(1.0)
 
 const STD_CHALLENGE_COLORS = ['white', 'green', 'blue', 'red', 'golden', 'rainbow'];
 
@@ -247,9 +270,15 @@ async function buildConfig(): Promise<RenderConfig | null> {
       let parts = resolution.value.split('x');
       return [parseInt(parts[0]), parseInt(parts[1])];
     })(),
+    ffmpegPreset: ffmpegPreset.value,
     endingLength: parseFloat(endingLength.value),
+    disableLoading: !disableLoading.value,
+    chartDebug: chartDebug.value,
+    chartRatio: chartRatio.value,
     fps: parseInt(fps.value),
     hardwareAccel: hwAccel.value,
+    hevc: hevc.value,
+    bitrateControl: bitrateControl.value,
     bitrate: bitrate.value,
 
     aggressive: aggressive.value,
@@ -273,7 +302,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
 
 function onEnter() {
   if (preset.value.key !== 'default') return;
-  resolution.value = RESOLUTIONS[0];
+  resolution.value = RESOLUTIONS[1];
   if (props.initAspectRatio) {
     for (let res of RESOLUTIONS) {
       let [w, h] = parseResolution(res)!;
@@ -293,9 +322,15 @@ function StickyLabel(props: { title: string }) {
 
 function applyConfig(config: RenderConfig) {
   resolution.value = config.resolution.join('x');
+  ffmpegPreset.value = config.ffmpegPreset;
   endingLength.value = String(config.endingLength);
+  disableLoading.value = config.disableLoading;
+  chartDebug.value = config.chartDebug;
+  chartRatio.value = config.chartRatio;
   fps.value = String(config.fps);
   hwAccel.value = config.hardwareAccel;
+  hevc.value = config.hevc;
+  bitrateControl.value = config.bitrateControl;
   bitrate.value = config.bitrate;
 
   aggressive.value = config.aggressive;
@@ -317,12 +352,18 @@ function applyConfig(config: RenderConfig) {
 
 const DEFAULT_CONFIG: RenderConfig = {
   resolution: [1920, 1080],
+  ffmpegPreset: 'medium p4 balanced',
   endingLength: -2.0,
+  disableLoading: true,
+  chartDebug: false,
+  chartRatio: 1,
   fps: 60,
   hardwareAccel: true,
-  bitrate: '7M',
+  hevc: false,
+  bitrateControl: 'CRF',
+  bitrate: '26',
 
-  aggressive: true,
+  aggressive: false,
   challengeColor: 'golden',
   challengeRank: 45,
   disableEffect: false,
@@ -442,8 +483,11 @@ async function replacePreset() {
     <div>
       <StickyLabel :title="t('title.output')"></StickyLabel>
       <v-row no-gutters class="mx-n2">
-        <v-col cols="6">
+        <v-col cols="3">
           <v-combobox :label="t('resolution')" :items="RESOLUTIONS" class="mx-2" :rules="[resolutionRule]" v-model="resolution"></v-combobox>
+        </v-col>
+        <v-col cols="3">
+          <v-combobox :label="t('ffmpeg-preset')" :items="ffmpegPresetPresetList" class="mx-2" :rules="[RULES.non_empty]" v-model="ffmpegPreset"></v-combobox>
         </v-col>
         <v-col cols="3">
           <v-text-field :label="t('fps')" class="mx-2" type="number" :rules="[RULES.positiveInt]" v-model="fps"></v-text-field>
@@ -453,11 +497,14 @@ async function replacePreset() {
         </v-col>
       </v-row>
       <v-row no-gutters class="mx-n2 mt-1">
-        <v-col cols="4">
+        <v-col cols="3">
           <TipTextField :label="t('sample-count')" class="mx-2" type="number" :rules="[sampleCountRule]" v-model="sampleCount" :tooltip="t('sample-count-tips')"></TipTextField>
         </v-col>
-        <v-col cols="5">
+        <v-col cols="3">
           <TipTextField :label="t('bitrate')" class="mx-2" :rules="[RULES.non_empty]" v-model="bitrate" :tooltip="t('bitrate-tips')"></TipTextField>
+        </v-col>
+        <v-col cols="3">
+          <v-combobox :label="t('bitrate-control')" :items="bitrateControlList" class="mx-2" :rules="[RULES.non_empty]" v-model="bitrateControl"></v-combobox>
         </v-col>
         <v-col cols="3">
           <TipSwitch :label="t('fxaa')" :tooltip="t('fxaa-tips')" v-model="fxaa"></TipSwitch>
@@ -479,7 +526,7 @@ async function replacePreset() {
             :model-value="playerAvatar ? playerAvatar.split('\\').pop()!.split('/').pop() : ''"></v-text-field>
         </v-col>
         <v-col cols="8">
-          <v-text-field class="mx-2" :label="t('player-name')" :v-model="playerName"></v-text-field>
+          <v-text-field class="mx-2" :label="t('player-name')" v-model="playerName"></v-text-field>
         </v-col>
       </v-row>
       <v-row no-gutters class="mx-n2 mt-1">
@@ -497,7 +544,7 @@ async function replacePreset() {
 
     <div class="mt-2">
       <StickyLabel :title="t('title.graphics')"></StickyLabel>
-      <v-row no-gutters class="mx-n2 align-center">
+      <v-row no-gutters class="mx-n2 mt-4 align-center">
         <v-col cols="8">
           <v-combobox class="mx-2" :label="t('respack')" :items="respacks" item-title="name" v-model="respack"></v-combobox>
         </v-col>
@@ -508,12 +555,12 @@ async function replacePreset() {
           <v-btn class="pa-1" size="large" @click="openRespackFolder" v-t="'respack-open'"></v-btn>
         </v-col>
       </v-row>
-      <v-row no-gutters class="mx-n2 mt-8 align-center">
+      <v-row no-gutters class="mx-n2 mt-4 align-center">
         <v-col cols="12" class="px-6">
           <v-slider :label="t('note-scale')" thumb-label="always" :min="0" :max="5" :step="0.05" v-model="noteScale"> </v-slider>
         </v-col>
       </v-row>
-      <v-row no-gutters class="mx-n2 mt-1">
+      <v-row no-gutters class="mx-n2 mt-2">
         <v-col cols="3">
           <TipSwitch :label="t('double-hint')" v-model="doubleHint"></TipSwitch>
         </v-col>
@@ -539,9 +586,25 @@ async function replacePreset() {
           <v-slider :label="t('volume-sfx')" thumb-label="always" :min="0" :max="2" :step="0.05" v-model="volumeSfx"> </v-slider>
         </v-col>
       </v-row>
-      <v-row no-gutters class="mx-n2 mt-1">
+      <v-row no-gutters class="mx-n2 align-center">
         <v-col cols="12">
           <v-text-field :label="t('ending-length')" v-model="endingLength" type="number" :rules="[RULES.non_empty]"></v-text-field>
+        </v-col>
+      </v-row>
+      <v-row no-gutters class="mx-n2 mt-2">
+        <v-col cols="3">
+          <TipSwitch :label="t('disable-loading')" v-model="disableLoading"></TipSwitch>
+        </v-col>
+        <v-col cols="3">
+          <TipSwitch :label="t('chart_debug')" v-model="chartDebug"></TipSwitch>
+        </v-col>
+        <v-col cols="3">
+          <TipSwitch :label="t('hevc')" :tooltip="t('hevc-tips')" v-model="hevc"></TipSwitch>
+        </v-col>
+      </v-row>
+      <v-row no-gutters class="mx-n2 mt-2 align-center px-6">
+        <v-col cols="6">
+          <v-slider :label="t('chart_ratio')" thumb-label="always" :min="0.05" :max="1" :step="0.05" v-model="chartRatio"> </v-slider>
         </v-col>
       </v-row>
     </div>
