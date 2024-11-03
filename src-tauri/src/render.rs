@@ -253,7 +253,6 @@ pub async fn main() -> Result<()> {
             let dst = it.next().unwrap();
             *dst += frame.1 * volume;
             }
-        }
         return len;
     };
     if volume_sfx = 0.0 {
