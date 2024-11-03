@@ -1,37 +1,11 @@
 
 # phira-render
 
-A helpful tool to render your Phigros charts. Built with Tauri + Vuetify.
+这是从phira render那Import repository来的，修复了一些问题与优化，并添加了一些功能
 
 ## Features
 
-- Ergonomic UI;
-- Fast (3-4x boost compred to prpr-render);
-- Bind RPE in few clicks;
-- Task list;
-- Add and manage multiple presets;
+- 支持wav pcm32le 96khz的无损音频;
+- CRF码率控制;
+- 铺面揭秘功能;
 - ...
-
-## Screenshots
-
-![Render Options](arts/render-options.png)
-
-![Task List](arts/task-list.png)
-
-## Installation
-
-Check [Releases](https://github.com/TeamFlos/phira-render/releases).
-
-## Manual build
-
-Dev
-
-```bash
-cargo tauri dev
-```
-
-Build
-
-```bash
-cargo tauri build
-```
