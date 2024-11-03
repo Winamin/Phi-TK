@@ -11,7 +11,7 @@ en:
   fps: FPS
 
   hw-accel: Hardware Acceleration
-  hw-accel-tips: If hardware accelerated rendering is not supported, it will fail
+  hw-accel-tips: Improve rendering speed, slightly reduce quality
 
   fxaa: FXAA
   fxaa-tips: FXAA, as a low-cost anti-aliasing method, will cause the picture to be blurred, and it is not recommended to turn it on
@@ -81,10 +81,13 @@ zh-CN:
   fps: FPS
 
   hw-accel: 硬件加速
-  hw-accel-tips: 如果不支持硬件加速，渲染将会失败
+  hw-accel-tips: 提升渲染速度，略微降低质量
 
   fxaa: FXAA
   fxaa-tips: FXAA 以低成本实现抗锯齿，但会导致画面模糊，不建议开启
+
+  hevc: HEVC编码
+  hevc-tips: 使用 HEVC 编码，压缩率更高，渲染速度更慢
 
   sample-count: 采样数
   sample-count-tips: 非 1 的采样数(必须为 2 的幂)会启用 MSAA(若开头无画面请关闭此项)
@@ -184,11 +187,12 @@ const resolution = ref('1920x1080'),
   ffmpegPreset = ref('medium p4 balanced'),
   fps = ref('60'),
   hwAccel = ref(true),
+  hevc = ref(false);
 
 const fxaa = ref(false),
   sampleCount = ref('1'),
   bitrateControl = ref('CRF'),
-  bitrate = ref('26');
+  bitrate = ref('28');
 
 const playerAvatar = ref<string>(),
   playerName = ref(''),
@@ -273,6 +277,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
     chartRatio: chartRatio.value,
     fps: parseInt(fps.value),
     hardwareAccel: hwAccel.value,
+    hevc: hevc.value,
     bitrateControl: bitrateControl.value,
     bitrate: bitrate.value,
 
@@ -324,6 +329,7 @@ function applyConfig(config: RenderConfig) {
   chartRatio.value = config.chartRatio;
   fps.value = String(config.fps);
   hwAccel.value = config.hardwareAccel;
+  hevc.value = config.hevc;
   bitrateControl.value = config.bitrateControl;
   bitrate.value = config.bitrate;
 
@@ -353,8 +359,9 @@ const DEFAULT_CONFIG: RenderConfig = {
   chartRatio: 1,
   fps: 60,
   hardwareAccel: true,
+  hevc: false,
   bitrateControl: 'CRF',
-  bitrate: '26',
+  bitrate: '28',
 
   aggressive: false,
   challengeColor: 'golden',
