@@ -119,6 +119,7 @@ pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
         },
         id: 0,
         rks: config.player_rks,
+        historic_best: 0,
     })
 }
 
@@ -183,7 +184,7 @@ pub async fn main() -> Result<()> {
     };
     dbg!(&ffmpeg);
 
-    let mut painter = TextPainter::new(font);
+    let mut painter = TextPainter::new(font, None);
 
     let mut config = params.config.to_config();
     config.mods = Mods::AUTOPLAY;
@@ -220,29 +221,24 @@ pub async fn main() -> Result<()> {
 
     send(IPCEvent::StartMixing);
     let mixing_output = NamedTempFile::new()?;
-    let sample_rate = 48000;
-    let sample_rate_f64 = sample_rate as f64;
+    let sample_rate = 96000;
     assert_eq!(sample_rate, ending.sample_rate());
     assert_eq!(sample_rate, sfx_click.sample_rate());
     assert_eq!(sample_rate, sfx_drag.sample_rate());
     assert_eq!(sample_rate, sfx_flick.sample_rate());
-    if volume_music != 0.0 {
-        let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
-        {
-            let pos = O - chart.offset.min(0.) as f64;
-            let count = (music.length() as f64 * sample_rate_f64) as usize;
-            let mut it = output[((pos * sample_rate_f64).round() as usize * 2)..].iter_mut();
-            let ratio = 1. / sample_rate_f64;
-            for frame in 0..count {
-                let position = frame as f64 * ratio;
-                let frame = music.sample(position as f32).unwrap_or_default();
-                *it.next().unwrap() += frame.0 * volume_music;
-                *it.next().unwrap() += frame.1 * volume_music;
-            }
+    let mut output = vec![0.0_f32; (video_length * sample_rate as f64).ceil() as usize * 2];
+    {
+        let pos = O - chart.offset.min(0.) as f64;
+        let count = (music.length() as f64 * sample_rate as f64) as usize;
+        let mut it = output[((pos * sample_rate as f64).round() as usize * 2)..].iter_mut();
+        let ratio = 1. / sample_rate as f64;
+        for frame in 0..count {
+            let position = frame as f64 * ratio;
+            let frame = music.sample(position as f32).unwrap_or_default();
+            *it.next().unwrap() += frame.0 * volume_music;
+            *it.next().unwrap() += frame.1 * volume_music;
         }
     }
-    
-    
     let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
         let position = (pos * sample_rate_f64).round() as usize * 2;
         if position >= output.len() {
@@ -257,16 +253,11 @@ pub async fn main() -> Result<()> {
             *dst += frame.0 * volume;
             let dst = it.next().unwrap();
             *dst += frame.1 * volume;
-            /*if let (Some(dst1), Some(dst2)) = (it.next(), it.next()) {
-                *dst1 += frame.0 * volume;
-                *dst2 += frame.1 * volume;
             }*/
         }
         return len;
     };
-
-    // 尝试在volume_sfx=0时不处理音效
-    if volume_sfx != 0.0 {
+    if volume_sfx = 0.0 {
         for note in chart
             .lines
             .iter()
@@ -286,7 +277,7 @@ pub async fn main() -> Result<()> {
     }
     let mut pos = O + length + A;
     while place(pos, &ending, volume_music) != 0 {
-        pos += ending.frame_count() as f64 / sample_rate_f64;
+        pos += ending.frame_count() as f64 / sample_rate as f64;
     }
     let mut proc = cmd_hidden(&ffmpeg)
         .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
@@ -314,7 +305,7 @@ pub async fn main() -> Result<()> {
     let player = build_player(&params.config).await?;
     let mut main = Main::new(
         Box::new(
-            LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?,
+            LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None, None).await?,
         ),
         tm,
         {
@@ -349,7 +340,6 @@ pub async fn main() -> Result<()> {
             .with_context(|| tl!("run-ffmpeg-failed"))?
             .stdout,
     )?;
-
     let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
     let has_qsv = params.config.hardware_accel && codecs.contains("h264_qsv");
     let has_amf = params.config.hardware_accel && codecs.contains("h264_amf");
