@@ -252,7 +252,7 @@ pub async fn main() -> Result<()> {
             *dst += frame.0 * volume;
             let dst = it.next().unwrap();
             *dst += frame.1 * volume;
-            }*/
+            }
         }
         return len;
     };
