@@ -1,9 +1,9 @@
 // Generated using https://theme-generator.vuetifyjs.com/
 
 export default {
-  dark: false,
+  dark: true,
   colors: {
-    primary: '#3f51b5',
+    primary: '#e91e63',
     secondary: '#f44336',
     accent: '#e91e63',
   },
