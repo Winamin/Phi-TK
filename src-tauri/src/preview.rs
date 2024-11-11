@@ -10,62 +10,10 @@ use prpr::{
     Main,
 };
 use std::io::BufRead;
-use rayon::prelude::*;
-use std::any::Any;
-use std::collections::HashMap;
-
-struct SceneManager {
-    scenes: HashMap<String, Box<dyn Scene>>,
-    current_scene: Option<String>,
-}
-
-impl SceneManager {
-    fn new() -> Self {
-        SceneManager {
-            scenes: HashMap::new(),
-            current_scene: None,
-        }
-    }
-
-    fn add_scene(&mut self, name: String, scene: Box<dyn Scene>) {
-        self.scenes.insert(name, scene);
-    }
-
-    fn switch_to(&mut self, name: String) {
-        self.current_scene = Some(name);
-    }
-
-    fn update(&mut self, tm: &mut TimeManager) -> Result<()> {
-        if let Some(ref name) = self.current_scene {
-            if let Some(scene) = self.scenes.get_mut(name) {
-                scene.update(tm)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn render(&mut self, tm: &mut TimeManager, ui: &mut Ui) -> Result<()> {
-        if let Some(ref name) = self.current_scene {
-            if let Some(scene) = self.scenes.get_mut(name) {
-                scene.render(tm, ui)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn should_exit(&self) -> bool {
-        if let Some(ref name) = self.current_scene {
-            if let Some(scene) = self.scenes.get(name) {
-                return scene.should_exit();
-            }
-        }
-        false
-    }
-}
 
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
-    fn on_result(&mut self, _tm: &mut TimeManager, result: Box<dyn Any>) -> Result<()> {
+    fn on_result(&mut self, _tm: &mut TimeManager, result: Box<dyn std::any::Any>) -> Result<()> {
         show_error(
             result
                 .downcast::<anyhow::Error>()
@@ -87,13 +35,11 @@ impl Scene for BaseScene {
     fn render(&mut self, _tm: &mut TimeManager, _ui: &mut Ui) -> Result<()> {
         Ok(())
     }
-    fn next_scene(&mut self, _tm: &mut TimeManager) -> NextScene {
+    fn next_scene(&mut self, _tm: &mut TimeManager) -> prpr::scene::NextScene {
         self.0.take().unwrap_or_default()
     }
-    fn should_exit(&self) -> bool {
-        self.0.is_none()
-    }
 }
+
 pub async fn main() -> Result<()> {
     set_pc_assets_folder(&std::env::args().nth(2).unwrap());
 
@@ -110,27 +56,31 @@ pub async fn main() -> Result<()> {
     config.mods |= Mods::AUTOPLAY;
 
     let font = FontArc::try_from_vec(load_file("font.ttf").await?)?;
-    let mut painter = TextPainter::new(font);
+    let mut painter = TextPainter::new(font, None);
 
     let player = build_player(&params.config).await?;
 
     let tm = TimeManager::default();
-    let ctm = TimeManager::from_config(&config);
-
-    let mut scene_manager = SceneManager::new();
-
-    let loading_scene = LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?;
-    scene_manager.add_scene("loading".to_string(), Box::new(BaseScene(Some(NextScene::Overlay(Box::new(loading_scene))), false)));
-    scene_manager.switch_to("loading".to_string());
-
+    let ctm = TimeManager::from_config(&config); // strange variable name...
+    let mut main = Main::new(
+        Box::new(BaseScene(
+            Some(NextScene::Overlay(Box::new(
+                LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None, None)
+                    .await?,
+            ))),
+            false,
+        )),
+        ctm,
+        None,
+    )
+    .await?;
     let mut fps_time = -1;
 
     'app: loop {
         let frame_start = tm.real_time();
-        scene_manager.update(&mut tm)?;
-        let mut ui = Ui::new(&mut painter, viewport);
-        scene_manager.render(&mut tm, &mut ui)?;
-        if scene_manager.should_exit() {
+        main.update()?;
+        main.render(&mut painter)?;
+        if main.should_exit() {
             break 'app;
         }
 
