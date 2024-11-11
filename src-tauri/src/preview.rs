@@ -128,7 +128,7 @@ pub async fn main() -> Result<()> {
     'app: loop {
         let frame_start = tm.real_time();
         scene_manager.update(&mut tm)?;
-        let mut ui = Ui::new(&mut painter);
+        let mut ui = Ui::new(&mut painter, viewport);
         scene_manager.render(&mut tm, &mut ui)?;
         if scene_manager.should_exit() {
             break 'app;
