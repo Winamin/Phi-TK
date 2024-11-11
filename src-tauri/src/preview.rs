@@ -7,6 +7,7 @@ use prpr::{
     scene::{show_error, GameMode, LoadingScene, NextScene, Scene},
     time::TimeManager,
     ui::{FontArc, TextPainter, Ui},
+    scene::{Scene, NextScene}
     Main,
 };
 use std::io::BufRead;
