@@ -7,13 +7,17 @@ use prpr::{
     scene::{show_error, GameMode, LoadingScene, NextScene, Scene},
     time::TimeManager,
     ui::{FontArc, TextPainter, Ui},
-    scene::{Scene, NextScene}
     Main,
 };
 use std::io::BufRead;
 use rayon::prelude::*;
 use std::any::Any;
 use std::collections::HashMap;
+
+struct SceneManager {
+    scenes: HashMap<String, Box<dyn Scene>>,
+    current_scene: Option<String>,
+}
 
 impl SceneManager {
     fn new() -> Self {
@@ -46,8 +50,19 @@ impl SceneManager {
                 scene.render(tm, ui)?;
             }
         }
+        Ok(())
+    }
+
+    fn should_exit(&self) -> bool {
+        if let Some(ref name) = self.current_scene {
+            if let Some(scene) = self.scenes.get(name) {
+                return scene.should_exit();
+            }
+        }
+        false
     }
 }
+
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
     fn on_result(&mut self, _tm: &mut TimeManager, result: Box<dyn std::any::Any>) -> Result<()> {
@@ -100,21 +115,18 @@ pub async fn main() -> Result<()> {
     let tm = TimeManager::default();
     let ctm = TimeManager::from_config(&config);
 
-    let mut scenes = vec![
-        Box::new(BaseScene(Some(NextScene::Overlay(Box::new(
-            LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?,
-        ))), false)),
-        // Add more scenes if needed
-    ];
+    let mut scene_manager = SceneManager::new();
 
-    let mut scene_manager = SceneManager::new(scenes);
+    let loading_scene = LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?;
+    scene_manager.add_scene("loading".to_string(), Box::new(BaseScene(Some(NextScene::Overlay(Box::new(loading_scene))), false)));
+    scene_manager.switch_to("loading".to_string());
 
     let mut fps_time = -1;
 
     'app: loop {
         let frame_start = tm.real_time();
         scene_manager.update(&mut tm)?;
-        scene_manager.render(&mut painter)?;
+        scene_manager.render(&mut tm, &mut painter)?;
         if scene_manager.should_exit() {
             break 'app;
         }
