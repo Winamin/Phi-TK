@@ -65,7 +65,7 @@ impl SceneManager {
 
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
-    fn on_result(&mut self, _tm: &mut TimeManager, result: Box<dyn std::any::Any>) -> Result<()> {
+    fn on_result(&mut self, _tm: &mut TimeManager, result: Box<dyn Any>) -> Result<()> {
         show_error(
             result
                 .downcast::<anyhow::Error>()
@@ -87,11 +87,13 @@ impl Scene for BaseScene {
     fn render(&mut self, _tm: &mut TimeManager, _ui: &mut Ui) -> Result<()> {
         Ok(())
     }
-    fn next_scene(&mut self, _tm: &mut TimeManager) -> prpr::scene::NextScene {
+    fn next_scene(&mut self, _tm: &mut TimeManager) -> NextScene {
         self.0.take().unwrap_or_default()
     }
+    fn should_exit(&self) -> bool {
+        self.0.is_none()
+    }
 }
-
 pub async fn main() -> Result<()> {
     set_pc_assets_folder(&std::env::args().nth(2).unwrap());
 
@@ -126,7 +128,8 @@ pub async fn main() -> Result<()> {
     'app: loop {
         let frame_start = tm.real_time();
         scene_manager.update(&mut tm)?;
-        scene_manager.render(&mut tm, &mut painter)?;
+        let mut ui = Ui::new(&mut painter);
+        scene_manager.render(&mut tm, &mut ui)?;
         if scene_manager.should_exit() {
             break 'app;
         }
