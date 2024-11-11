@@ -10,7 +10,43 @@ use prpr::{
     Main,
 };
 use std::io::BufRead;
+use rayon::prelude::*;
+use std::any::Any;
+use std::collections::HashMap;
 
+impl SceneManager {
+    fn new() -> Self {
+        SceneManager {
+            scenes: HashMap::new(),
+            current_scene: None,
+        }
+    }
+
+    fn add_scene(&mut self, name: String, scene: Box<dyn Scene>) {
+        self.scenes.insert(name, scene);
+    }
+
+    fn switch_to(&mut self, name: String) {
+        self.current_scene = Some(name);
+    }
+
+    fn update(&mut self, tm: &mut TimeManager) -> Result<()> {
+        if let Some(ref name) = self.current_scene {
+            if let Some(scene) = self.scenes.get_mut(name) {
+                scene.update(tm)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn render(&mut self, tm: &mut TimeManager, ui: &mut Ui) -> Result<()> {
+        if let Some(ref name) = self.current_scene {
+            if let Some(scene) = self.scenes.get_mut(name) {
+                scene.render(tm, ui)?;
+            }
+        }
+    }
+}
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
     fn on_result(&mut self, _tm: &mut TimeManager, result: Box<dyn std::any::Any>) -> Result<()> {
@@ -61,26 +97,24 @@ pub async fn main() -> Result<()> {
     let player = build_player(&params.config).await?;
 
     let tm = TimeManager::default();
-    let ctm = TimeManager::from_config(&config); // strange variable name...
-    let mut main = Main::new(
-        Box::new(BaseScene(
-            Some(NextScene::Overlay(Box::new(
-                LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None)
-                    .await?,
-            ))),
-            false,
-        )),
-        ctm,
-        None,
-    )
-    .await?;
+    let ctm = TimeManager::from_config(&config);
+
+    let mut scenes = vec![
+        Box::new(BaseScene(Some(NextScene::Overlay(Box::new(
+            LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?,
+        ))), false)),
+        // Add more scenes if needed
+    ];
+
+    let mut scene_manager = SceneManager::new(scenes);
+
     let mut fps_time = -1;
 
     'app: loop {
         let frame_start = tm.real_time();
-        main.update()?;
-        main.render(&mut painter)?;
-        if main.should_exit() {
+        scene_manager.update(&mut tm)?;
+        scene_manager.render(&mut painter)?;
+        if scene_manager.should_exit() {
             break 'app;
         }
 
