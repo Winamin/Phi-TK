@@ -28,6 +28,12 @@ export type TaskStatus =
       estimate: number;
     }
   | {
+      type: 'batch_rendering';
+      progress: number;
+      fps: number;
+      estimate: number;
+  }
+  | {
       type: 'done';
       duration: number;
       output: string;
