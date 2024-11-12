@@ -94,7 +94,7 @@ impl Task {
 
     *self.status.lock().await = TaskStatus::Loading;
 
-    let mut children = Vec::new();
+    let mut child = Vec::new();
     let mut total_frames = Vec::new();
     let mut frame_counts = Vec::new();
     let mut frame_times_list = Vec::new();
@@ -197,7 +197,7 @@ impl Task {
 
         children.push(task);
     }
-    for child in children {
+    for child in child {
         child.await??;
     }
     Ok(())
