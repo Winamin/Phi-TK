@@ -60,7 +60,7 @@ pub struct Task {
     request_cancel: AtomicBool,
 }
 
-impl<E> Task {
+impl Task {
     async fn new(id: u32, params: RenderParams) -> Result<Self> {
         let mut fs = fs::fs_from_file(&params.path)?;
         let info = fs::load_info(fs.deref_mut()).await?;
@@ -94,7 +94,7 @@ impl<E> Task {
 
     *self.status.lock().await = TaskStatus::Loading;
 
-    let mut children: Vec<JoinHandle<Result<(), E>>> = Vec::new();
+    let mut children = Vec::new();
     let mut total_frames = Vec::new();
     let mut frame_counts = Vec::new();
     let mut frame_times_list = Vec::new();
