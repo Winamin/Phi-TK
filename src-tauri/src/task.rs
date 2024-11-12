@@ -94,7 +94,7 @@ impl Task {
 
     *self.status.lock().await = TaskStatus::Loading;
 
-    let mut child = Vec::new();
+    let mut children = Vec::new();
     let mut total_frames = Vec::new();
     let mut frame_counts = Vec::new();
     let mut frame_times_list = Vec::new();
@@ -197,11 +197,11 @@ impl Task {
 
         child.push(task);
     }
-    for child in child {
+    for child in children {
         child.await??;
     }
     Ok(())
-    }
+}
     
     pub fn cancel(&self) {
         self.request_cancel.store(true, Ordering::Relaxed);
@@ -217,6 +217,28 @@ impl Task {
             status: self.status.lock().await.clone(),
         }
     }
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let tasks: Vec<RenderParams> = vec![
+    ];
+
+    let max_concurrent_tasks = 4;
+    let semaphore = Arc::new(Semaphore::new(max_concurrent_tasks));
+    
+    let render_tasks: Vec<_> = tasks.into_iter().enumerate().map(|(id, params)| {
+        let semaphore = semaphore.clone();
+        tokio::spawn(async move {
+            let _permit = semaphore.acquire().await.expect("Failed to acquire semaphore");
+            let task = Task::new(id as u32, params).await.expect("Failed to create task");
+            task.run().await.expect("Rendering failed");
+        })
+    }).collect();
+
+    join_all(render_tasks).await;
+
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -271,6 +293,7 @@ impl TaskQueue {
         Ok(id)
     }
 
+    
     pub async fn tasks(&self) -> Vec<TaskView> {
         let guard = self.tasks.lock().await;
         let mut result = Vec::with_capacity(guard.capacity());
