@@ -86,7 +86,7 @@ impl RenderConfig {
     }
 }
 
-#[derive(Deserialize, Serialize， Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderParams {
     pub path: PathBuf,
