@@ -56,7 +56,7 @@ pub async fn main() -> Result<()> {
     config.mods |= Mods::AUTOPLAY;
 
     let font = FontArc::try_from_vec(load_file("font.ttf").await?)?;
-    let mut painter = TextPainter::new(font, None);
+    let mut painter = TextPainter::new(font);
 
     let player = build_player(&params.config).await?;
 
