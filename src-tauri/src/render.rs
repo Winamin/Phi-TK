@@ -28,7 +28,7 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 
-#[derive(Deserialize, Serialize， Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderConfig {
     resolution: (u32, u32),
