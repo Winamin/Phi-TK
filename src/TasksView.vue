@@ -3,10 +3,10 @@ en:
   empty: Nothing here
 
   status:
-    pending: Pending…
     loading: Loading…
     mixing: Mixing…
     rendering: Rendering ({ progress }%), { fps } FPS, estimated to end { estimate }
+    batch_rendering: Rendering ({ progress }%), { fps } FPS, estimated to end { estimate }
     done: Done, took { duration }
     canceled: Canceled
     failed: Failed
@@ -25,10 +25,10 @@ zh-CN:
   empty: 空空如也～
 
   status:
-    pending: 等待中…
     loading: 加载中…
     mixing: 混音中…
     rendering: 正在全力渲染中（{ progress }%），{ fps } FPS，预计 { estimate } 结束
+    batch_rendering: 批量渲染中，总任务 { total }，已完成 { completed }，进度 { progress }%
     done: ★成功完成了，耗时 { duration } ★
     canceled: 已取消
     failed: 失败
@@ -73,8 +73,6 @@ onUnmounted(() => clearInterval(updateTask));
 
 function describeStatus(status: TaskStatus): string {
   switch (status.type) {
-    case 'pending':
-      return t('status.pending');
     case 'loading':
       return t('status.loading');
     case 'mixing':
@@ -84,6 +82,12 @@ function describeStatus(status: TaskStatus): string {
         progress: (status.progress * 100).toFixed(2),
         fps: status.fps,
         estimate: status.estimate ? moment.duration(Math.ceil(status.estimate), 'seconds').humanize(true, { ss: 0, s: 60, m: 60 }) : '',
+      });
+    case 'batch_rendering':
+      return t('status.batch_rendering', {
+        total: status.total,
+        completed: status.completed,
+        progress: ((status.completed / status.total) * 100).toFixed(2),
       });
     case 'done':
       return t('status.done', {
