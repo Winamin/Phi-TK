@@ -195,7 +195,7 @@ impl Task {
             }
         });
 
-        children.push(task);
+        child.push(task);
     }
     for child in child {
         child.await??;
