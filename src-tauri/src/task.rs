@@ -93,7 +93,7 @@ impl Task {
 
     *self.status.lock().await = TaskStatus::Loading;
 
-    let mut children = Vec::new();
+    let mut children: Vec<TokioJoinHandle<Result<(), E>>> = Vec::new();
     let mut total_frames = Vec::new();
     let mut frame_counts = Vec::new();
     let mut frame_times_list = Vec::new();
