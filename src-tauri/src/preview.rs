@@ -13,6 +13,7 @@ use std::io::BufRead;
 use tokio::task;
 use futures::future::join_all;
 
+#[derive(Deserialize, Clone)]
 struct RenderTask {
     params: RenderParams,
     config: Config,
@@ -47,53 +48,73 @@ impl Scene for BaseScene {
     }
 }
 
-async fn render_task(task: RenderTask) -> Result<()> {
-    let fs = fs::fs_from_file(&task.params.path)?;
-    let info = task.params.info;
-    let mut config = task.config.to_config();
-    config.mods |= Mods::AUTOPLAY;
+impl RenderTask {
+    async fn run(&self) -> Result<()> {
+        let fs = fs::fs_from_file(&self.params.path)?;
+        let info = &self.params.info;
+        let config = &self.config;
+        let mut painter = TextPainter::new(load_font().await?);
+        let player = build_player(config).await?;
 
-    let font = FontArc::try_from_vec(load_file("font.ttf").await?)?;
-    let mut painter = TextPainter::new(font);
-    let player = build_player(&task.config).await?;
+        let tm = TimeManager::default();
+        let ctm = TimeManager::from_config(config); // strange variable name...
+        let mut main = Main::new(
+            Box::new(BaseScene(
+                Some(NextScene::Overlay(Box::new(
+                    LoadingScene::new(GameMode::Normal, info, config.clone(), fs, Some(player), None, None)
+                        .await?,
+                ))),
+                false,
+            )),
+            ctm,
+            None,
+        )
+        .await?;
+        let mut fps_time = -1;
 
-    let tm = TimeManager::default();
-    let ctm = TimeManager::from_config(&config);
-    let mut main = Main::new(
-        Box::new(BaseScene(
-            Some(NextScene::Overlay(Box::new(
-                LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?,
-            ))),
-            false,
-        )),
-        ctm,
-        None,
-    )
-    .await?;
+        'app: loop {
+            let frame_start = tm.real_time();
+            main.update()?;
+            main.render(&mut painter)?;
+            if main.should_exit() {
+                break 'app;
+            }
 
-    let mut fps_time = -1;
-    'app: loop {
-        let frame_start = tm.real_time();
-        main.update()?;
-        main.render(&mut painter)?;
-        if main.should_exit() {
-            break 'app;
+            let t = tm.real_time();
+            let fps_now = t as i32;
+            if fps_now != fps_time {
+                fps_time = fps_now;
+                info!("| {}", (1. / (t - frame_start)) as u32);
+            }
+
+            next_frame().await;
         }
 
-        let t = tm.real_time();
-        let fps_now = t as i32;
-        if fps_now != fps_time {
-            fps_time = fps_now;
-            info!("| {}", (1. / (t - frame_start)) as u32);
-        }
-
-        next_frame().await;
+        Ok(())
     }
+}
+
+async fn load_font() -> Result<FontArc> {
+    FontArc::try_from_vec(load_file("font.ttf").await?).context("Failed to load font")
+}
+
+async fn parallel_render_tasks(tasks: Vec<RenderTask>) -> Result<()> {
+    let handles: Vec<_> = tasks.into_iter().map(|task| {
+        task::spawn(async move {
+            task.run().await.context("Task failed")
+        })
+    }).collect();
+
+    let results = join_all(handles).await;
+
+    for result in results {
+        result??;
+    }
+
     Ok(())
 }
 
-#[tokio::main]
-pub async fn main() -> Result<()> {
+async fn main() -> Result<()> {
     set_pc_assets_folder(&std::env::args().nth(2).unwrap());
 
     let mut stdin = std::io::stdin().lock();
@@ -101,21 +122,14 @@ pub async fn main() -> Result<()> {
 
     let mut line = String::new();
     stdin.read_line(&mut line)?;
-    let params_list: Vec<RenderParams> = serde_json::from_str(line.trim())?;
+    let params: RenderParams = serde_json::from_str(line.trim())?;
 
-    let mut tasks = Vec::new();
-    for params in params_list {
-        let config = params.config.clone();
-        tasks.push(RenderTask { params, config });
-    }
+    let render_task = RenderTask {
+        params: params.clone(),
+        config: params.config.to_render_config(),
+    };
 
-    let futures: Vec<_> = tasks.into_iter().map(|task| {
-        task::spawn(async move {
-            render_task(task).await.unwrap();
-        })
-    }).collect();
-
-    join_all(futures).await;
+    parallel_render_tasks(vec![render_task]).await?;
 
     Ok(())
 }
