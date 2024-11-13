@@ -25,7 +25,6 @@ zh-CN:
   empty: 空空如也
 
   status:
-    pending: 等待中…
     loading: 加载中…
     mixing: 混音中…
     rendering: 渲染中（{ progress }%），{ fps } FPS，预计 { estimate } 结束
@@ -63,7 +62,9 @@ const tasks = ref<Task[]>();
 
 async function updateList() {
   tasks.value = await invoke<Task[]>('get_tasks');
-  console.log(tasks.value[0]);
+  tasks.value.forEach((task) => {
+    startRendering(task);
+  });
 }
 
 await updateList();
@@ -73,8 +74,6 @@ onUnmounted(() => clearInterval(updateTask));
 
 function describeStatus(status: TaskStatus): string {
   switch (status.type) {
-    case 'pending':
-      return t('status.pending');
     case 'loading':
       return t('status.loading');
     case 'mixing':
