@@ -195,8 +195,6 @@ impl Task {
                 Ok(())
             }
         });
-
-        child.push(task);
     }
     for child in children {
         child.await??;
