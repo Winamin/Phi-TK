@@ -95,22 +95,19 @@ impl Task {
 
         *self.status.lock().await = TaskStatus::Loading;
 
-        let mut child = tokio::process::Command::new(std::env::current_exe()?)
+        let mut child = Command::new(std::env::current_exe()?)
             .arg("render")
             .arg(ASSET_PATH.get().unwrap())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()?;
+
         let mut stdin = child.stdin.take().unwrap();
         let stdout = child.stdout.take().unwrap();
 
-        stdin
-            .write_all(format!("{}\n", serde_json::to_string(&self.params)?).as_bytes())
-            .await?;
-        stdin
-            .write_all(format!("{}\n", serde_json::to_string(&self.output)?).as_bytes())
-            .await?;
+        stdin.write_all(format!("{}\n", serde_json::to_string(&self.params)?).as_bytes()).await?;
+        stdin.write_all(format!("{}\n", serde_json::to_string(&self.output)?).as_bytes()).await?;
         stdin.flush().await?;
 
         let mut lines = BufReader::new(stdout).lines();
@@ -120,10 +117,12 @@ impl Task {
         let mut frame_times = VecDeque::new();
         let mut last_update_fps_sec: u32 = 0;
         let mut last_fps: usize = 0;
+
         loop {
             let line = lines.next_line().await?;
             let Some(line) = line else { break };
             let Ok(event): Result<IPCEvent, _> = serde_json::from_str(line.trim()) else { continue };
+
             match event {
                 IPCEvent::StartMixing => {
                     *self.status.lock().await = TaskStatus::Mixing;
@@ -148,8 +147,7 @@ impl Task {
                         last_fps = frame_times.len();
                         last_update_fps_sec = sec;
                     }
-                    let estimate =
-                        total.saturating_sub(frame_count).max(1) as f64 / last_fps as f64;
+                    let estimate = total.saturating_sub(frame_count).max(1) as f64 / last_fps as f64;
                     *self.status.lock().await = TaskStatus::Rendering {
                         progress: frame_count as f64 / total as f64,
                         fps: last_fps as u64,
@@ -158,10 +156,8 @@ impl Task {
                 }
                 IPCEvent::Done(duration) => {
                     let output = child.wait_with_output().await?;
-                    let stdout = String::from_utf8(output.stdout)
-                        .unwrap_or_else(|_| "Invalid output".to_owned());
-                    let stderr = String::from_utf8(output.stderr)
-                        .unwrap_or_else(|_| "Invalid output".to_owned());
+                    let stdout = String::from_utf8(output.stdout).unwrap_or_else(|_| "Invalid output".to_owned());
+                    let stderr = String::from_utf8(output.stderr).unwrap_or_else(|_| "Invalid output".to_owned());
                     *self.status.lock().await = TaskStatus::Done {
                         duration,
                         output: format!("[STDOUT]\n{stdout}\n\n[STDERR]\n{stderr}"),
@@ -175,7 +171,6 @@ impl Task {
                 return Ok(());
             }
         }
-
         let output = child.wait_with_output().await?;
         if !output.status.success() {
             *self.status.lock().await = TaskStatus::Failed {
@@ -187,7 +182,6 @@ impl Task {
             };
             return Ok(());
         }
-
         Ok(())
     }
     
@@ -228,7 +222,6 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-
 #[derive(Serialize)]
 pub struct TaskView {
     id: u32,
