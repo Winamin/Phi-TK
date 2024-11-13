@@ -17,7 +17,7 @@ futures = "0.3"
 rayon = "1.5"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.4.0", features = [ "dialog-message", "system-tray", "shell-open", "fs-read-file", "protocol-asset", "dialog-open", "window", "api-all"] }
+tauri = { version = "1.4.0", features = [ "dialog-message", "system-tray", "shell-open", "fs-read-file", "protocol-asset", "dialog-open", "api-all"] }
 
 anyhow = { version = "1.0.70", features = ["backtrace"] }
 macroquad = { git = "https://github.com/Mivik/prpr-macroquad", default-features = false }
