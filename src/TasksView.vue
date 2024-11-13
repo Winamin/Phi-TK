@@ -61,9 +61,7 @@ const tasks = ref<Task[]>();
 
 async function updateList() {
   tasks.value = await invoke<Task[]>('get_tasks');
-  tasks.value.forEach((task) => {
-    status.rendering(task);
-  });
+  console.log(tasks.value[0]);
 }
 
 await updateList();
