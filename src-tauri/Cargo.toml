@@ -13,10 +13,11 @@ rust-version = "1.60"
 tauri-build = { version = "1.4.0", features = [] }
 
 [dependencies]
+futures = "0.3"
 rayon = "1.5"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.4.0", features = [ "dialog-message", "system-tray", "shell-open", "fs-read-file", "protocol-asset", "dialog-open", "api-all"] }
+tauri = { version = "1.8.1", features = [ "dialog-message", "system-tray", "shell-open", "fs-read-file", "protocol-asset", "dialog-open"] }
 
 anyhow = { version = "1.0.70", features = ["backtrace"] }
 macroquad = { git = "https://github.com/Mivik/prpr-macroquad", default-features = false }
@@ -25,7 +26,7 @@ prpr = { git = "https://github.com/Winamin/phira-test.git", package = "prpr", br
 
 sasa = { git = "https://github.com/Mivik/sasa" }
 serde_yaml = "0.9"
-tokio = { version = "1.36.0", features = ["process", "rt-multi-thread", "fs"] }
+tokio = { version = "1.36.0", features = ["process", "rt-multi-thread", "fs", "full"] }
 tracing = "0.1.37"
 tempfile = "3.8.0"
 chrono = "0.4.28"
