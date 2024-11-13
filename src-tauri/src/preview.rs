@@ -12,6 +12,7 @@ use prpr::{
 use std::io::BufRead;
 use tokio::task;
 use futures::future::join_all;
+use serde::Deserialize;
 
 #[derive(Deserialize, Clone)]
 struct RenderTask {
@@ -46,6 +47,11 @@ impl Scene for BaseScene {
     fn next_scene(&mut self, _tm: &mut TimeManager) -> prpr::scene::NextScene {
         self.0.take().unwrap_or_default()
     }
+}
+
+struct RenderTask {
+    params: RenderParams,
+    config: RenderConfig,
 }
 
 impl RenderTask {
@@ -114,7 +120,7 @@ async fn parallel_render_tasks(tasks: Vec<RenderTask>) -> Result<()> {
     Ok(())
 }
 
-async fn main() -> Result<()> {
+pub async fn main() -> Result<()> {
     set_pc_assets_folder(&std::env::args().nth(2).unwrap());
 
     let mut stdin = std::io::stdin().lock();
@@ -126,7 +132,7 @@ async fn main() -> Result<()> {
 
     let render_task = RenderTask {
         params: params.clone(),
-        config: params.config.to_render_config(),
+        config: params.config.to_config(),
     };
 
     parallel_render_tasks(vec![render_task]).await?;
