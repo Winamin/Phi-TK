@@ -1,5 +1,5 @@
 use crate::render::{build_player, RenderParams};
-
+use crate::RenderConfig;
 use anyhow::Result;
 use anyhow::Context;
 use macroquad::prelude::*;
@@ -10,7 +10,6 @@ use prpr::{
     time::TimeManager,
     ui::{FontArc, TextPainter, Ui},
     Main,
-    core::RenderConfig as CoreRenderConfig;
 };
 use std::io::BufRead;
 use std::iter::IntoIterator;
