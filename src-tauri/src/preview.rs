@@ -1,5 +1,8 @@
 use crate::render::{build_player, RenderParams};
+use crate::RenderConfig;
+
 use anyhow::Result;
+use anyhow::Context;
 use macroquad::prelude::*;
 use prpr::{
     config::{Config, Mods},
@@ -8,8 +11,10 @@ use prpr::{
     time::TimeManager,
     ui::{FontArc, TextPainter, Ui},
     Main,
+    core::RenderConfig,
 };
 use std::io::BufRead;
+use std::iter::IntoIterator;
 use tokio::task;
 use futures::future::join_all;
 use serde::Deserialize;
@@ -49,11 +54,6 @@ impl Scene for BaseScene {
     }
 }
 
-struct RenderTask {
-    params: RenderParams,
-    config: RenderConfig,
-}
-
 impl RenderTask {
     async fn run(&self) -> Result<()> {
         let fs = fs::fs_from_file(&self.params.path)?;
@@ -67,7 +67,7 @@ impl RenderTask {
         let mut main = Main::new(
             Box::new(BaseScene(
                 Some(NextScene::Overlay(Box::new(
-                    LoadingScene::new(GameMode::Normal, info, config.clone(), fs, Some(player), None, None)
+                    LoadingScene::new(GameMode::Normal, info.clone(), config.clone(), fs, Some(player), None, None)
                         .await?,
                 ))),
                 false,
