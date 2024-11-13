@@ -11,7 +11,7 @@ use prpr::{
     time::TimeManager,
     ui::{FontArc, TextPainter, Ui},
     Main,
-    core::RenderConfig,
+    core::RenderConfig as CoreRenderConfig;
 };
 use std::io::BufRead;
 use std::iter::IntoIterator;
@@ -60,7 +60,8 @@ impl RenderTask {
         let info = &self.params.info;
         let config = &self.config;
         let mut painter = TextPainter::new(load_font().await?);
-        let player = build_player(config).await?;
+        let render_config: RenderConfig = config.into();
+        let player = build_player(&render_config).await?;
 
         let tm = TimeManager::default();
         let ctm = TimeManager::from_config(config); // strange variable name...
