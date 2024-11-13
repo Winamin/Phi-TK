@@ -5,8 +5,8 @@ use crate::{
 };
 
 use crate::Command;
-use std::process::Command;
-use tokio::process::Command;
+use std::process::Command as StdCommand;
+use tokio::process::Command as TokioCommand;
 
 use anyhow::Result;
 use chrono::Local;
@@ -111,8 +111,8 @@ impl Task {
         let mut stdin = child.stdin.take().unwrap();
         let stdout = child.stdout.take().unwrap();
 
-        stdin.write_all(format!("{}\n", serde_json::to_string(&self.params)?).as_bytes()).await?;
-        stdin.write_all(format!("{}\n", serde_json::to_string(&self.output)?).as_bytes()).await?;
+        stdin.write_all(format!("{}\n", serde_json::to_string(&self.params)?).as_bytes());
+        stdin.write_all(format!("{}\n", serde_json::to_string(&self.output)?).as_bytes());
         stdin.flush().await?;
 
         let mut lines = BufReader::new(stdout).lines();
