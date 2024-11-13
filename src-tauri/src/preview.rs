@@ -10,6 +10,13 @@ use prpr::{
     Main,
 };
 use std::io::BufRead;
+use tokio::task;
+use futures::future::join_all;
+
+struct RenderTask {
+    params: RenderParams,
+    config: Config,
+}
 
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
@@ -40,33 +47,22 @@ impl Scene for BaseScene {
     }
 }
 
-pub async fn main() -> Result<()> {
-    set_pc_assets_folder(&std::env::args().nth(2).unwrap());
-
-    let mut stdin = std::io::stdin().lock();
-    let stdin = &mut stdin;
-
-    let mut line = String::new();
-    stdin.read_line(&mut line)?;
-    let params: RenderParams = serde_json::from_str(line.trim())?;
-
-    let fs = fs::fs_from_file(&params.path)?;
-    let info = params.info;
-    let mut config: Config = params.config.to_config();
+async fn render_task(task: RenderTask) -> Result<()> {
+    let fs = fs::fs_from_file(&task.params.path)?;
+    let info = task.params.info;
+    let mut config = task.config.to_config();
     config.mods |= Mods::AUTOPLAY;
 
     let font = FontArc::try_from_vec(load_file("font.ttf").await?)?;
     let mut painter = TextPainter::new(font);
-
-    let player = build_player(&params.config).await?;
+    let player = build_player(&task.config).await?;
 
     let tm = TimeManager::default();
-    let ctm = TimeManager::from_config(&config); // strange variable name...
+    let ctm = TimeManager::from_config(&config);
     let mut main = Main::new(
         Box::new(BaseScene(
             Some(NextScene::Overlay(Box::new(
-                LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None)
-                    .await?,
+                LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?,
             ))),
             false,
         )),
@@ -74,8 +70,8 @@ pub async fn main() -> Result<()> {
         None,
     )
     .await?;
-    let mut fps_time = -1;
 
+    let mut fps_time = -1;
     'app: loop {
         let frame_start = tm.real_time();
         main.update()?;
@@ -93,6 +89,33 @@ pub async fn main() -> Result<()> {
 
         next_frame().await;
     }
+    Ok(())
+}
+
+#[tokio::main]
+pub async fn main() -> Result<()> {
+    set_pc_assets_folder(&std::env::args().nth(2).unwrap());
+
+    let mut stdin = std::io::stdin().lock();
+    let stdin = &mut stdin;
+
+    let mut line = String::new();
+    stdin.read_line(&mut line)?;
+    let params_list: Vec<RenderParams> = serde_json::from_str(line.trim())?;
+
+    let mut tasks = Vec::new();
+    for params in params_list {
+        let config = params.config.clone();
+        tasks.push(RenderTask { params, config });
+    }
+
+    let futures: Vec<_> = tasks.into_iter().map(|task| {
+        task::spawn(async move {
+            render_task(task).await.unwrap();
+        })
+    }).collect();
+
+    join_all(futures).await;
 
     Ok(())
 }
