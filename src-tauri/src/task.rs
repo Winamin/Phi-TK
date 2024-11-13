@@ -3,6 +3,11 @@ use crate::{
     render::{IPCEvent, RenderParams},
     ASSET_PATH,
 };
+
+use crate::Command;
+use std::process::Command;
+use tokio::process::Command;
+
 use anyhow::Result;
 use chrono::Local;
 use prpr::fs;
