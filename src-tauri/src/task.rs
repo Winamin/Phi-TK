@@ -203,7 +203,6 @@ impl Task {
 
         Ok(())
     }
-}
     
     pub fn cancel(&self) {
         self.request_cancel.store(true, Ordering::Relaxed);
