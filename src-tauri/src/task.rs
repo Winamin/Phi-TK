@@ -50,6 +50,7 @@ pub enum TaskStatus {
     },
 }
 
+#[derive(Clone)]
 pub struct Task {
     id: u32,
     name: String,
@@ -91,50 +92,50 @@ impl Task {
     }
 
     pub async fn run(&self) -> Result<()> {
-    info!("Task #{} started ({})", self.id, self.params.path.display());
+        info!("Task #{} started ({})", self.id, self.params.path.display());
 
-    *self.status.lock().await = TaskStatus::Loading;
+        *self.status.lock().await = TaskStatus::Loading;
 
-    let mut children = Vec::new();
-    let mut total_frames = Vec::new();
-    let mut frame_counts = Vec::new();
-    let mut frame_times_list = Vec::new();
-    let start = Instant::now();
+        let mut total_frames = Vec::new();
+        let mut frame_counts = Vec::new();
+        let mut frame_times_list = Vec::new();
+        let start = Instant::now();
 
-    let render_params_list: Vec<RenderParams> = vec![
-        self.params.clone(),
-        self.params.clone(),
-        self.params.clone(),
-    ];
+        let render_params_list: Vec<RenderParams> = vec![
+            self.params.clone(),
+            self.params.clone(),
+            self.params.clone(),
+        ];
 
-    for (idx, render_params) in render_params_list.iter().enumerate() {
-        let mut child = tokio::process::Command::new(std::env::current_exe()?)
-            .arg("render")
-            .arg(ASSET_PATH.get().unwrap())
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
+        let tasks: Vec<JoinHandle<Result<()>>> = render_params_list.iter().enumerate().map(|(idx, render_params)| {
+            let status = Arc::clone(&self.status);
+            let request_cancel = Arc::clone(&self.request_cancel);
+            let render_params = render_params.clone();
+            let start = start.clone();
 
-        let mut stdin = child.stdin.take().unwrap();
-        let stdout = child.stdout.take().unwrap();
-        let params_json = serde_json::to_string(render_params)?;
+            tokio::spawn(async move {
+                let mut child = Command::new(env::current_exe()?)
+                    .arg("render")
+                    .arg(ASSET_PATH.get().unwrap())
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()?;
 
-        stdin.write_all(format!("{}\n", params_json).as_bytes()).await?;
-        stdin.flush().await?;
+                let mut stdin = child.stdin.take().unwrap();
+                let stdout = child.stdout.take().unwrap();
+                let params_json = serde_json::to_string(&render_params)?;
 
-        total_frames.push(0);
-        frame_counts.push(0);
-        frame_times_list.push(VecDeque::new());
+                stdin.write_all(format!("{}\n", params_json).as_bytes()).await?;
+                stdin.flush().await?;
 
-        let task = tokio::spawn({
-            let idx = idx;
-            let mut total = 0;
-            let mut frame_count = 0;
-            let mut frame_times = frame_times_list[idx].clone();
-            let stdout = stdout;
+                total_frames.push(0);
+                frame_counts.push(0);
+                frame_times_list.push(VecDeque::new());
 
-            async move {
+                let mut total = 0;
+                let mut frame_count = 0;
+                let mut frame_times = frame_times_list[idx].clone();
                 let mut lines = BufReader::new(stdout).lines();
 
                 loop {
@@ -143,11 +144,11 @@ impl Task {
                     let Ok(event): Result<IPCEvent, _> = serde_json::from_str(line.trim()) else { continue };
                     match event {
                         IPCEvent::StartMixing => {
-                            *self.status.lock().await = TaskStatus::Mixing;
+                            *status.lock().await = TaskStatus::Mixing;
                         }
                         IPCEvent::StartRender(total_frame) => {
                             total = total_frame;
-                            *self.status.lock().await = TaskStatus::Rendering {
+                            *status.lock().await = TaskStatus::Rendering {
                                 progress: 0.,
                                 fps: 0,
                                 estimate: 0.,
@@ -165,7 +166,7 @@ impl Task {
                             let estimate =
                                 total.saturating_sub(frame_count).max(1) as f64 / fps as f64;
 
-                            *self.status.lock().await = TaskStatus::Rendering {
+                            *status.lock().await = TaskStatus::Rendering {
                                 progress: frame_count as f64 / total as f64,
                                 fps: fps as u64,
                                 estimate,
@@ -177,7 +178,7 @@ impl Task {
                                 .unwrap_or_else(|_| "Invalid output".to_owned());
                             let stderr = String::from_utf8(output.stderr)
                                 .unwrap_or_else(|_| "Invalid output".to_owned());
-                            *self.status.lock().await = TaskStatus::Done {
+                            *status.lock().await = TaskStatus::Done {
                                 duration,
                                 output: format!("[STDOUT]\n{stdout}\n\n[STDERR]\n{stderr}"),
                             };
@@ -185,21 +186,23 @@ impl Task {
                         }
                     }
 
-                    if self.request_cancel.load(Ordering::Relaxed) {
+                    if request_cancel.load(Ordering::Relaxed) {
                         child.kill().await?;
-                        *self.status.lock().await = TaskStatus::Canceled;
+                        *status.lock().await = TaskStatus::Canceled;
                         return Ok(());
                     }
                 }
 
                 Ok(())
-            }
-        });
+            })
+        }).collect();
+
+        for task in tasks {
+            task.await??;
+        }
+
+        Ok(())
     }
-    for child in children {
-        child.await??;
-    }
-    Ok(())
 }
     
     pub fn cancel(&self) {
