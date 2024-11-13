@@ -24,9 +24,10 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     sync::{mpsc, Mutex},
     task::JoinHandle,
+    sync::Semaphore,
 };
 use tracing::{error, info};
-use tauri::async_runtime::TokioJoinHandle;
+use futures::future::join_all;
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "snake_case", tag = "type")]
