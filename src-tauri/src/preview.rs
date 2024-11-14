@@ -9,8 +9,8 @@ use prpr::{
     ui::{FontArc, TextPainter, Ui},
     Main,
 };
-use std::io::BufRead;
-
+use std::io::{self, Read, BufRead};
+use std::fs::File;
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
     fn on_result(&mut self, _tm: &mut TimeManager, result: Box<dyn std::any::Any>) -> Result<()> {
@@ -40,7 +40,7 @@ impl Scene for BaseScene {
     }
 }
 
-pub fn main() -> Result<()> {
+pub async fn main() -> Result<()> {
     set_pc_assets_folder(&std::env::args().nth(2).unwrap());
 
     let stdin = io::stdin();
@@ -62,19 +62,17 @@ pub fn main() -> Result<()> {
     let player = build_player_sync(&params.config)?;
 
     let tm = TimeManager::default();
-    let ctm = TimeManager::from_config(&config); // strange variable name...
+    let ctm = TimeManager::from_config(&config);
+    let loading_scene = LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?;
     let mut main = Main::new(
         Box::new(BaseScene(
-            Some(NextScene::Overlay(Box::new(
-                LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None)
-                    .unwrap(), // Assuming .new() returns a Result, use .unwrap() or proper error handling
-            ))),
+            Some(NextScene::Overlay(Box::new(loading_scene))),
             false,
         )),
         ctm,
         None,
-    )
-    .unwrap(); // Assuming .new() returns a Result, use .unwrap() or proper error handling
+    ).await?;
+
     let mut fps_time = -1;
 
     'app: loop {
@@ -92,16 +90,13 @@ pub fn main() -> Result<()> {
             info!("| {}", (1. / (t - frame_start)) as u32);
         }
 
-        // simulate the async next_frame() with a sleep
-        std::thread::sleep(std::time::Duration::from_millis(16)); // assuming 60 FPS
-
+        std::thread::sleep(std::time::Duration::from_millis(16)); // simulate 60 FPS
     }
 
     Ok(())
 }
 
 fn load_file_sync(path: &str) -> Result<Vec<u8>> {
-    use std::io::Read;
     let mut file = File::open(path)?;
     let mut data = Vec::new();
     file.read_to_end(&mut data)?;
@@ -109,7 +104,6 @@ fn load_file_sync(path: &str) -> Result<Vec<u8>> {
 }
 
 fn build_player_sync(config: &Config) -> Result<Player> {
-    // Assuming build_player can be transformed into a sync function
-    // Placeholder implementation
+    // Assuming Player type is defined elsewhere
     Ok(Player::new(config))
 }
