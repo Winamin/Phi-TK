@@ -1,4 +1,4 @@
-use crate::render::{build_player, RenderParams};
+use crate::render::{build_player, RenderParams, from_config};
 use crate::RenderConfig;
 use anyhow::Result;
 use anyhow::Context;
