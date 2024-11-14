@@ -94,7 +94,6 @@ impl RenderTask {
         }
 
         Ok(())
-    }
 }
 
 async fn load_font() -> Result<FontArc> {
