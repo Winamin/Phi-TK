@@ -1,4 +1,4 @@
-use crate::render::{build_player, RenderParams, from_config};
+use crate::render::{build_player, RenderParams};
 use crate::RenderConfig;
 use anyhow::Result;
 use anyhow::Context;
@@ -54,6 +54,26 @@ impl Scene for BaseScene {
 
 impl RenderTask {
     async fn run(&self) -> Result<()> {
+        let render_config = RenderConfig {
+            aggressive: config.aggressive,
+            challenge_color: config.challenge_color.clone(),
+            challenge_rank: config.challenge_rank,
+            disable_effect: config.disable_effect,
+            double_hint: config.double_hint,
+            fxaa: config.fxaa,
+            note_scale: config.note_scale,
+            particle: config.particle,
+            player_name: config.player_name.clone(),
+            player_rks: config.player_rks,
+            sample_count: config.sample_count,
+            res_pack_path: config.res_pack_path.clone(),
+            speed: config.speed,
+            volume_music: config.volume_music,
+            volume_sfx: config.volume_sfx,
+            chart_debug: self.chart_debug,
+            chart_ratio: self.chart_ratio,
+            ..Default::default()
+};
         let fs = fs::fs_from_file(&self.params.path)?;
         let info = &self.params.info;
         let config = &self.config;
