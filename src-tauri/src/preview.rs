@@ -1,4 +1,4 @@
-use crate::render::{build_player, RenderParams, RenderConfig, main};
+use crate::render::{build_player, RenderParams};
 use anyhow::Result;
 use macroquad::prelude::*;
 use prpr::{
@@ -61,7 +61,7 @@ pub async fn main() -> Result<()> {
     let font = FontArc::try_from_vec(font_data)?;
     let mut painter = TextPainter::new(font);
 
-    let player = build_player_sync(&config)?;
+    let player = build_player(&params.config).await?;
 
     let tm = TimeManager::default();
     let ctm = TimeManager::from_config(&config);
@@ -104,24 +104,4 @@ fn load_file_sync(path: &str) -> Result<Vec<u8>> {
     let mut data = Vec::new();
     file.read_to_end(&mut data)?;
     Ok(data)
-}
-
-async fn build_player_sync(config: &RenderConfig) -> Result<BasicPlayer> {
-    Ok(BasicPlayer {
-        avatar: if let Some(path) = &config.player_avatar {
-            Some(
-                Texture2D::from_file_with_format(
-                    &tokio::fs::read(path)
-                        .await
-                        .with_context(|| "load-avatar-failed")?,
-                    None,
-                )
-                .into(),
-            )
-        } else {
-            None
-        },
-        id: 0,
-        rks: config.player_rks,
-    })
 }
