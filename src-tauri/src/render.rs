@@ -28,8 +28,6 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 
-#[derive(Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
 pub fn from_config(config: &Config) -> RenderConfig {
         RenderConfig {
             aggressive: config.aggressive,
