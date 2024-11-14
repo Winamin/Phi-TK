@@ -28,30 +28,6 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 
-pub fn from_config(config: &Config) -> RenderConfig {
-        RenderConfig {
-            aggressive: config.aggressive,
-            challenge_color: config.challenge_color.clone(),
-            challenge_rank: config.challenge_rank,
-            disable_effect: config.disable_effect,
-            double_hint: config.double_hint,
-            fxaa: config.fxaa,
-            note_scale: config.note_scale,
-            particle: config.particle,
-            player_name: config.player_name.clone(),
-            player_rks: config.player_rks,
-            sample_count: config.sample_count,
-            res_pack_path: config.res_pack_path.clone(),
-            speed: config.speed,
-            volume_music: config.volume_music,
-            volume_sfx: config.volume_sfx,
-            chart_debug: config.chart_debug,
-            chart_ratio: config.chart_ratio,
-    }
-}
-
-
-
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderConfig {
