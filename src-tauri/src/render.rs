@@ -61,9 +61,9 @@ pub struct RenderConfig {
     volume_sfx: f32,
 }
 
-impl From<&prpr::config::Config> for RenderConfig {
-    fn from(config: &prpr::config::Config) -> Self {
-        RenderConfig {
+impl RenderConfig {
+    pub fn to_config(&self) -> Config {
+        Config {
             aggressive: self.aggressive,
             challenge_color: self.challenge_color.clone(),
             challenge_rank: self.challenge_rank,
