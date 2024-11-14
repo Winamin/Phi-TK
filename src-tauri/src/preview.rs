@@ -1,4 +1,4 @@
-use crate::render::{build_player, RenderParams};
+use crate::render::{build_player, RenderParams, &RenderConfig};
 use anyhow::Result;
 use macroquad::prelude::*;
 use prpr::{
@@ -106,7 +106,22 @@ fn load_file_sync(path: &str) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-fn build_player_sync<player>(config: &Config) ->
-Result<player> {
-    Ok(player::new(config))
+async fn build_player_sync(config: &RenderConfig) -> Result<BasicPlayer> {
+    Ok(BasicPlayer {
+        avatar: if let Some(path) = &config.player_avatar {
+            Some(
+                Texture2D::from_file_with_format(
+                    &tokio::fs::read(path)
+                        .await
+                        .with_context(|| "load-avatar-failed")?,
+                    None,
+                )
+                .into(),
+            )
+        } else {
+            None
+        },
+        id: 0,
+        rks: config.player_rks,
+    })
 }
