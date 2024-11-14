@@ -1,4 +1,4 @@
-use crate::render::{build_player, RenderParams, &RenderConfig};
+use crate::render::{build_player, RenderParams, RenderConfig, main};
 use anyhow::Result;
 use macroquad::prelude::*;
 use prpr::{
