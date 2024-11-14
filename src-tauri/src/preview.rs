@@ -57,7 +57,8 @@ impl RenderTask {
         let info = &self.params.info;
         let config = &self.config;
         let mut painter = TextPainter::new(load_font().await?);
-        let render_config = RenderConfig {
+        pub fn from_config(config: &Config) -> Self {
+        RenderConfig {
             aggressive: config.aggressive,
             challenge_color: config.challenge_color.clone(),
             challenge_rank: config.challenge_rank,
@@ -76,7 +77,9 @@ impl RenderTask {
             chart_debug: config.chart_debug,
             chart_ratio: config.chart_ratio,
             ..Default::default()
+            }
         };
+        let render_config = config.to_config();
         let player = build_player(&render_config).await?;
 
         let tm = TimeManager::default();
