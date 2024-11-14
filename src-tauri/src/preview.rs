@@ -23,6 +23,29 @@ struct RenderTask {
     config: Config,
 }
 
+pub fn from_config(config: &Config) -> Self {
+        RenderConfig {
+            aggressive: config.aggressive,
+            challenge_color: config.challenge_color.clone(),
+            challenge_rank: config.challenge_rank,
+            disable_effect: config.disable_effect,
+            double_hint: config.double_hint,
+            fxaa: config.fxaa,
+            note_scale: config.note_scale,
+            particle: config.particle,
+            player_name: config.player_name.clone(),
+            player_rks: config.player_rks,
+            sample_count: config.sample_count,
+            res_pack_path: config.res_pack_path.clone(),
+            speed: config.speed,
+            volume_music: config.volume_music,
+            volume_sfx: config.volume_sfx,
+            chart_debug: config.chart_debug,
+            chart_ratio: config.chart_ratio,
+            ..Default::default()
+            }
+}
+
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
     fn on_result(&mut self, _tm: &mut TimeManager, result: Box<dyn std::any::Any>) -> Result<()> {
@@ -57,28 +80,6 @@ impl RenderTask {
         let info = &self.params.info;
         let config = &self.config;
         let mut painter = TextPainter::new(load_font().await?);
-        pub fn from_config(config: &Config) -> Self {
-        RenderConfig {
-            aggressive: config.aggressive,
-            challenge_color: config.challenge_color.clone(),
-            challenge_rank: config.challenge_rank,
-            disable_effect: config.disable_effect,
-            double_hint: config.double_hint,
-            fxaa: config.fxaa,
-            note_scale: config.note_scale,
-            particle: config.particle,
-            player_name: config.player_name.clone(),
-            player_rks: config.player_rks,
-            sample_count: config.sample_count,
-            res_pack_path: config.res_pack_path.clone(),
-            speed: config.speed,
-            volume_music: config.volume_music,
-            volume_sfx: config.volume_sfx,
-            chart_debug: config.chart_debug,
-            chart_ratio: config.chart_ratio,
-            ..Default::default()
-            }
-        };
         let render_config = config.to_config();
         let player = build_player(&render_config).await?;
 
