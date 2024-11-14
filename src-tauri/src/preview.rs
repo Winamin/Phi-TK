@@ -52,58 +52,58 @@ impl Scene for BaseScene {
     }
 }
 
-impl RenderTask {
-        let fs = fs::fs_from_file(&self.params.path)?;
-        let info = &self.params.info;
-        let config = &self.config;
-        let mut painter = TextPainter::new(load_font().await?);
-        let player = build_player(&render_config).await?;
+async fn render_task(params: RenderParams) -> Result<()> {
+    let fs = fs::fs_from_file(&params.path)?;
+    let info = params.info;
+    let mut config: Config = params.config.to_config();
+    config.mods |= Mods::AUTOPLAY;
 
-        let tm = TimeManager::default();
-        let ctm = TimeManager::from_config(config); // strange variable name...
-        let mut main = Main::new(
-            Box::new(BaseScene(
-                Some(NextScene::Overlay(Box::new(
-                    LoadingScene::new(GameMode::Normal, info.clone(), config.clone(), fs, Some(player), None, None)
-                        .await?,
-                ))),
-                false,
-            )),
-            ctm,
-            None,
-        )
-        .await?;
-        let mut fps_time = -1;
+    let font = FontArc::try_from_vec(load_file("font.ttf").await?)?;
+    let mut painter = TextPainter::new(font);
 
-        'app: loop {
-            let frame_start = tm.real_time();
-            main.update()?;
-            main.render(&mut painter)?;
-            if main.should_exit() {
-                break 'app;
-            }
+    let player = build_player(&params.config).await?;
 
-            let t = tm.real_time();
-            let fps_now = t as i32;
-            if fps_now != fps_time {
-                fps_time = fps_now;
-                info!("| {}", (1. / (t - frame_start)) as u32);
-            }
+    let tm = TimeManager::default();
+    let ctm = TimeManager::from_config(&config);
+    let mut main = Main::new(
+        Box::new(BaseScene(
+            Some(NextScene::Overlay(Box::new(
+                LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None)
+                    .await?,
+            ))),
+            false,
+        )),
+        ctm,
+        None,
+    )
+    .await?;
+    let mut fps_time = -1;
 
-            next_frame().await;
+    'app: loop {
+        let frame_start = tm.real_time();
+        main.update()?;
+        main.render(&mut painter)?;
+        if main.should_exit() {
+            break 'app;
         }
 
-        Ok(())
+        let t = tm.real_time();
+        let fps_now = t as i32;
+        if fps_now != fps_time {
+            fps_time = fps_now;
+            info!("| {}", (1. / (t - frame_start)) as u32);
+        }
+
+        next_frame().await;
+    }
+
+    Ok(())
 }
 
-async fn load_font() -> Result<FontArc> {
-    FontArc::try_from_vec(load_file("font.ttf").await?).context("Failed to load font")
-}
-
-async fn parallel_render_tasks(tasks: Vec<RenderTask>) -> Result<()> {
-    let handles: Vec<_> = tasks.into_iter().map(|task| {
+async fn parallel_render_tasks(task_params: Vec<RenderParams>) -> Result<()> {
+    let handles: Vec<_> = task_params.into_iter().map(|params| {
         task::spawn(async move {
-            task.run().await.context("Task failed")
+            render_task(params).await.context("Task failed")
         })
     }).collect();
 
@@ -116,7 +116,8 @@ async fn parallel_render_tasks(tasks: Vec<RenderTask>) -> Result<()> {
     Ok(())
 }
 
-pub async fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     set_pc_assets_folder(&std::env::args().nth(2).unwrap());
 
     let mut stdin = std::io::stdin().lock();
@@ -124,14 +125,7 @@ pub async fn main() -> Result<()> {
 
     let mut line = String::new();
     stdin.read_line(&mut line)?;
-    let params: RenderParams = serde_json::from_str(line.trim())?;
+    let params: Vec<RenderParams> = serde_json::from_str(line.trim())?;
 
-    let render_task = RenderTask {
-        params: params.clone(),
-        config: params.config.to_config(),
-    };
-
-    parallel_render_tasks(vec![render_task]).await?;
-
-    Ok(())
+    parallel_render_tasks(params).await
 }
