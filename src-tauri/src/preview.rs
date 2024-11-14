@@ -106,6 +106,7 @@ fn load_file_sync(path: &str) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-fn build_player_sync(config: &Config) -> Result<player> {
+fn build_player_sync<player>(config: &Config) ->
+Result<player> {
     Ok(Player::new(config))
 }
