@@ -11,6 +11,8 @@ use prpr::{
 };
 use std::io::{self, Read, BufRead};
 use std::fs::File;
+use crate::player::Player;
+
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
     fn on_result(&mut self, _tm: &mut TimeManager, result: Box<dyn std::any::Any>) -> Result<()> {
@@ -52,6 +54,7 @@ pub async fn main() -> Result<()> {
 
     let fs = fs::fs_from_file(&params.path)?;
     let info = params.info;
+    
     let mut config: Config = params.config.to_config();
     config.mods |= Mods::AUTOPLAY;
 
@@ -59,11 +62,12 @@ pub async fn main() -> Result<()> {
     let font = FontArc::try_from_vec(font_data)?;
     let mut painter = TextPainter::new(font);
 
-    let player = build_player_sync(&params.config)?;
+    let player = build_player_sync(&config)?;
 
     let tm = TimeManager::default();
     let ctm = TimeManager::from_config(&config);
     let loading_scene = LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?;
+    
     let mut main = Main::new(
         Box::new(BaseScene(
             Some(NextScene::Overlay(Box::new(loading_scene))),
@@ -104,6 +108,5 @@ fn load_file_sync(path: &str) -> Result<Vec<u8>> {
 }
 
 fn build_player_sync(config: &Config) -> Result<Player> {
-    // Assuming Player type is defined elsewhere
     Ok(Player::new(config))
 }
