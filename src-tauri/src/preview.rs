@@ -11,7 +11,6 @@ use prpr::{
 };
 use std::io::{self, Read, BufRead};
 use std::fs::File;
-use crate::player::Player;
 
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
@@ -107,6 +106,6 @@ fn load_file_sync(path: &str) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-fn build_player_sync(config: &Config) -> Result<Player> {
+fn build_player_sync(config: &Config) -> Result<player> {
     Ok(Player::new(config))
 }
