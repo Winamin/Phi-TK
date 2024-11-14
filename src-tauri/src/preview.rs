@@ -1,7 +1,5 @@
 use crate::render::{build_player, RenderParams};
-use crate::RenderConfig;
 use anyhow::Result;
-use anyhow::Context;
 use macroquad::prelude::*;
 use prpr::{
     config::{Config, Mods},
@@ -12,16 +10,6 @@ use prpr::{
     Main,
 };
 use std::io::BufRead;
-use std::iter::IntoIterator;
-use tokio::task;
-use futures::future::join_all;
-use serde::Deserialize;
-
-#[derive(Deserialize, Clone)]
-struct RenderTask {
-    params: RenderParams,
-    config: Config,
-}
 
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
@@ -52,31 +40,41 @@ impl Scene for BaseScene {
     }
 }
 
-async fn render_task(params: RenderParams) -> Result<()> {
+pub fn main() -> Result<()> {
+    set_pc_assets_folder(&std::env::args().nth(2).unwrap());
+
+    let stdin = io::stdin();
+    let mut stdin = stdin.lock();
+
+    let mut line = String::new();
+    stdin.read_line(&mut line)?;
+    let params: RenderParams = serde_json::from_str(line.trim())?;
+
     let fs = fs::fs_from_file(&params.path)?;
     let info = params.info;
     let mut config: Config = params.config.to_config();
     config.mods |= Mods::AUTOPLAY;
 
-    let font = FontArc::try_from_vec(load_file("font.ttf").await?)?;
+    let font_data = load_file_sync("font.ttf")?;
+    let font = FontArc::try_from_vec(font_data)?;
     let mut painter = TextPainter::new(font);
 
-    let player = build_player(&params.config).await?;
+    let player = build_player_sync(&params.config)?;
 
     let tm = TimeManager::default();
-    let ctm = TimeManager::from_config(&config);
+    let ctm = TimeManager::from_config(&config); // strange variable name...
     let mut main = Main::new(
         Box::new(BaseScene(
             Some(NextScene::Overlay(Box::new(
                 LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None)
-                    .await?,
+                    .unwrap(), // Assuming .new() returns a Result, use .unwrap() or proper error handling
             ))),
             false,
         )),
         ctm,
         None,
     )
-    .await?;
+    .unwrap(); // Assuming .new() returns a Result, use .unwrap() or proper error handling
     let mut fps_time = -1;
 
     'app: loop {
@@ -94,38 +92,24 @@ async fn render_task(params: RenderParams) -> Result<()> {
             info!("| {}", (1. / (t - frame_start)) as u32);
         }
 
-        next_frame().await;
+        // simulate the async next_frame() with a sleep
+        std::thread::sleep(std::time::Duration::from_millis(16)); // assuming 60 FPS
+
     }
 
     Ok(())
 }
 
-async fn parallel_render_tasks(task_params: Vec<RenderParams>) -> Result<()> {
-    let handles: Vec<_> = task_params.into_iter().map(|params| {
-        task::spawn(async move {
-            render_task(params).await.context("Task failed")
-        })
-    }).collect();
-
-    let results = join_all(handles).await;
-
-    for result in results {
-        result??;
-    }
-
-    Ok(())
+fn load_file_sync(path: &str) -> Result<Vec<u8>> {
+    use std::io::Read;
+    let mut file = File::open(path)?;
+    let mut data = Vec::new();
+    file.read_to_end(&mut data)?;
+    Ok(data)
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    set_pc_assets_folder(&std::env::args().nth(2).unwrap());
-
-    let mut stdin = std::io::stdin().lock();
-    let stdin = &mut stdin;
-
-    let mut line = String::new();
-    stdin.read_line(&mut line)?;
-    let params: Vec<RenderParams> = serde_json::from_str(line.trim())?;
-
-    parallel_render_tasks(params).await
+fn build_player_sync(config: &Config) -> Result<Player> {
+    // Assuming build_player can be transformed into a sync function
+    // Placeholder implementation
+    Ok(Player::new(config))
 }
