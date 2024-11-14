@@ -49,9 +49,10 @@ pub fn from_config(config: &Config) -> RenderConfig {
             volume_sfx: config.volume_sfx,
             chart_debug: config.chart_debug,
             chart_ratio: config.chart_ratio,
-        }
     }
 }
+
+
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
