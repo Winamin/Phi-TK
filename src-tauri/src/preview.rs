@@ -73,8 +73,8 @@ impl RenderTask {
             speed: config.speed,
             volume_music: config.volume_music,
             volume_sfx: config.volume_sfx,
-            chart_debug: self.chart_debug,
-            chart_ratio: self.chart_ratio,
+            chart_debug: config.chart_debug,
+            chart_ratio: config.chart_ratio,
             ..Default::default()
         };
         let player = build_player(&render_config).await?;
