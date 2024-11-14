@@ -108,5 +108,5 @@ fn load_file_sync(path: &str) -> Result<Vec<u8>> {
 
 fn build_player_sync<player>(config: &Config) ->
 Result<player> {
-    Ok(Player::new(config))
+    Ok(player::new(config))
 }
