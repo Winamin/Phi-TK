@@ -53,7 +53,10 @@ impl Scene for BaseScene {
 }
 
 impl RenderTask {
-    async fn run(&self) -> Result<()> {
+        let fs = fs::fs_from_file(&self.params.path)?;
+        let info = &self.params.info;
+        let config = &self.config;
+        let mut painter = TextPainter::new(load_font().await?);
         let render_config = RenderConfig {
             aggressive: config.aggressive,
             challenge_color: config.challenge_color.clone(),
@@ -73,12 +76,7 @@ impl RenderTask {
             chart_debug: self.chart_debug,
             chart_ratio: self.chart_ratio,
             ..Default::default()
-};
-        let fs = fs::fs_from_file(&self.params.path)?;
-        let info = &self.params.info;
-        let config = &self.config;
-        let mut painter = TextPainter::new(load_font().await?);
-        let render_config = RenderConfig::from_config(&config);
+        };
         let player = build_player(&render_config).await?;
 
         let tm = TimeManager::default();
