@@ -58,7 +58,7 @@ impl RenderTask {
         let info = &self.params.info;
         let config = &self.config;
         let mut painter = TextPainter::new(load_font().await?);
-        let render_config: RenderConfig = config.into();
+        let render_config = RenderConfig::from_config(&config);
         let player = build_player(&render_config).await?;
 
         let tm = TimeManager::default();
