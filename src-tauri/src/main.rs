@@ -312,7 +312,7 @@ async fn post_render(params: RenderParams) -> Result<(), InvokeError> {
         let mut stdin = child.stdin.take().unwrap();
         stdin
             .write_all(format!("{}\n", serde_json::to_string(&params).unwrap()).as_bytes())
-            .unwrap();
+            .await?;
     });
     Ok(())
 }
