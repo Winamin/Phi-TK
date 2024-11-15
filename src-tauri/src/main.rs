@@ -36,7 +36,7 @@ use tauri::{
     SystemTrayMenuItem, WindowEvent,
 };
 use tokio::{io::AsyncWriteExt, process::Command};
-use tokio::spawn
+use tokio::spawn;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
