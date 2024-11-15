@@ -36,6 +36,7 @@ use tauri::{
     SystemTrayMenuItem, WindowEvent,
 };
 use tokio::{io::AsyncWriteExt, process::Command};
+use tokio::spawn
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
@@ -300,11 +301,12 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
 
 #[tauri::command]
 async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
-    wrap_async(async move {
-        queue.post(params);
-        Ok(())
-    })
-    .await
+    tokio::spawn(async move {
+        if let Err(e) = queue.post(params).await {
+            eprintln!("Failed to post render task: {:?}", e);
+        }
+    });
+    Ok(())
 }
 
 #[tauri::command]
