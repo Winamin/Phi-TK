@@ -36,6 +36,7 @@ use tauri::{
     SystemTrayMenuItem, WindowEvent,
 };
 use tokio::{io::AsyncWriteExt, process::Command};
+ues tokio::task
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
@@ -58,12 +59,17 @@ pub fn build_conf() -> macroquad::window::Conf {
     }
 }
 
-async fn run_wrapped(f: impl Future<Output = Result<()>>) -> ! {
-    if let Err(err) = f.await {
-        eprintln!("{err:?}");
-        std::process::exit(1);
+fn run_wrapped(f: impl Future<Output = Result<()>> + Send + 'static) -> ! {
+    task::spawn(async {
+        if let Err(err) = f.await {
+            eprintln!("{err:?}");
+            std::process::exit(1);
+        }
+        std::process::exit(0);
+    });
+    loop {
+        std::thread::park();
     }
-    std::process::exit(0);
 }
 
 #[macroquad::main(build_conf)]
@@ -78,10 +84,10 @@ async fn main() -> Result<()> {
     if std::env::args().len() > 1 {
         match std::env::args().skip(1).next().as_deref() {
             Some("render") => {
-                run_wrapped(render::main()).await;
+                tokio::spawn(render::main());
             }
             Some("preview") => {
-                run_wrapped(preview::main()).await;
+                tokio::spawn(preview::main());
             }
             cmd => {
                 eprintln!("Unknown subcommand: {cmd:?}");
@@ -89,7 +95,6 @@ async fn main() -> Result<()> {
             }
         }
     }
-
     let tray_menu = SystemTrayMenu::new()
         .add_item(CustomMenuItem::new("toggle".to_owned(), mtl!("tray-hide")))
         .add_item(CustomMenuItem::new("tasks".to_owned(), mtl!("tray-tasks")))
