@@ -298,7 +298,7 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
     .await
 }
 
-#[tauri::command]
+/*#[tauri::command]
 async fn post_render(params: RenderParams) -> Result<(), InvokeError> {
     tokio::task::spawn_blocking(move || {
         let mut child = Command::new(std::env::current_exe().unwrap())
@@ -318,6 +318,16 @@ async fn post_render(params: RenderParams) -> Result<(), InvokeError> {
         });
     });
     Ok(())
+}
+*/
+
+#[tauri::command]
+async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
+    wrap_async(async move {
+        queue.post(params).await?;
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
