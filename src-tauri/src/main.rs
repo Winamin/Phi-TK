@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
     if std::env::args().len() > 1 {
     match std::env::args().skip(1).next().as_deref() {
         Some("render") => {
-            run_wrapped(render::main());
+            run_wrapped(render::main()).await;
         }
         Some("preview") => {
             run_wrapped(preview::main());
