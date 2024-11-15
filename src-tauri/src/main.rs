@@ -72,6 +72,15 @@ fn run_wrapped(f: impl Future<Output = Result<()>> + Send + 'static) -> ! {
 }
 
 #[macroquad::main(build_conf)]
+async fn run_wrapped(f: impl Future<Output = Result<()>>) -> ! {
+    if let Err(err) = f.await {
+        eprintln!("{err:?}");
+        std::process::exit(1);
+    }
+    std::process::exit(0);
+}
+
+#[macroquad::main(build_conf)]
 async fn main() -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
@@ -81,16 +90,16 @@ async fn main() -> Result<()> {
     let _guard = rt.enter();
 
     if std::env::args().len() > 1 {
-        match std::env::args().skip(1).next().as_deref() {
-            Some("render") => {
-                tokio::spawn(render::main());
-            }
-            Some("preview") => {
-                tokio::spawn(preview::main());
-            }
-            cmd => {
-                eprintln!("Unknown subcommand: {cmd:?}");
-                std::process::exit(1);
+    match std::env::args().skip(1).next().as_deref() {
+        Some("render") => {
+            run_wrapped(render::main());
+        }
+        Some("preview") => {
+            run_wrapped(preview::main());
+        }
+        cmd => {
+            eprintln!("Unknown subcommand: {cmd:?}");
+            std::process::exit(1);
             }
         }
     }
