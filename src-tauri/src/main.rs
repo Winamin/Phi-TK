@@ -301,7 +301,7 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
 #[tauri::command]
 async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
     wrap_async(async move {
-        queue.post(params)await?;
+        queue.post(params).await?;
         Ok(())
     })
 }
