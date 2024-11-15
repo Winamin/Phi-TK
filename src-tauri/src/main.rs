@@ -37,6 +37,8 @@ use tauri::{
 };
 use tokio::{io::AsyncWriteExt, process::Command};
 use tokio::spawn
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
@@ -300,8 +302,10 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
 }
 
 #[tauri::command]
-async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
+async fn post_render(queue: State<'_, Arc<Mutex<TaskQueue>>>, params: RenderParams) -> Result<(), InvokeError> {
+    let queue = Arc::clone(&queue.inner());
     tokio::spawn(async move {
+        let mut queue = queue.lock().await;
         if let Err(e) = queue.post(params).await {
             eprintln!("Failed to post render task: {:?}", e);
         }
