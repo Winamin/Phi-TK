@@ -9,8 +9,7 @@ use prpr::{
     ui::{FontArc, TextPainter, Ui},
     Main,
 };
-use std::io::{self, Read, BufRead};
-use std::fs::File;
+use std::io::BufRead;
 
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
@@ -44,8 +43,8 @@ impl Scene for BaseScene {
 pub async fn main() -> Result<()> {
     set_pc_assets_folder(&std::env::args().nth(2).unwrap());
 
-    let stdin = io::stdin();
-    let mut stdin = stdin.lock();
+    let mut stdin = std::io::stdin().lock();
+    let stdin = &mut stdin;
 
     let mut line = String::new();
     stdin.read_line(&mut line)?;
@@ -53,29 +52,28 @@ pub async fn main() -> Result<()> {
 
     let fs = fs::fs_from_file(&params.path)?;
     let info = params.info;
-    
     let mut config: Config = params.config.to_config();
     config.mods |= Mods::AUTOPLAY;
 
-    let font_data = load_file_sync("font.ttf")?;
-    let font = FontArc::try_from_vec(font_data)?;
+    let font = FontArc::try_from_vec(load_file("font.ttf").await?)?;
     let mut painter = TextPainter::new(font);
 
     let player = build_player(&params.config).await?;
 
     let tm = TimeManager::default();
-    let ctm = TimeManager::from_config(&config);
-    let loading_scene = LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?;
-    
+    let ctm = TimeManager::from_config(&config); // strange variable name...
     let mut main = Main::new(
         Box::new(BaseScene(
-            Some(NextScene::Overlay(Box::new(loading_scene))),
+            Some(NextScene::Overlay(Box::new(
+                LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None)
+                    .await?,
+            ))),
             false,
         )),
         ctm,
         None,
-    ).await?;
-
+    )
+    .await?;
     let mut fps_time = -1;
 
     'app: loop {
@@ -93,15 +91,8 @@ pub async fn main() -> Result<()> {
             info!("| {}", (1. / (t - frame_start)) as u32);
         }
 
-        std::thread::sleep(std::time::Duration::from_millis(16)); // simulate 60 FPS
+        next_frame().await;
     }
 
     Ok(())
-}
-
-fn load_file_sync(path: &str) -> Result<Vec<u8>> {
-    let mut file = File::open(path)?;
-    let mut data = Vec::new();
-    file.read_to_end(&mut data)?;
-    Ok(data)
 }
