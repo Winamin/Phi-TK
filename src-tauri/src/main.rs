@@ -58,15 +58,6 @@ pub fn build_conf() -> macroquad::window::Conf {
     }
 }
 
-fn run_wrapped(f: impl FnOnce() -> Result<()>) -> ! {
-    if let Err(err) = f() {
-        eprintln!("{err:?}");
-        std::process::exit(1);
-    }
-    std::process::exit(0);
-}
-
-#[macroquad::main(build_conf)]
 async fn run_wrapped(f: impl Future<Output = Result<()>>) -> ! {
     if let Err(err) = f.await {
         eprintln!("{err:?}");
@@ -98,6 +89,7 @@ async fn main() -> Result<()> {
             }
         }
     }
+
     let tray_menu = SystemTrayMenu::new()
         .add_item(CustomMenuItem::new("toggle".to_owned(), mtl!("tray-hide")))
         .add_item(CustomMenuItem::new("tasks".to_owned(), mtl!("tray-tasks")))
