@@ -36,9 +36,6 @@ use tauri::{
     SystemTrayMenuItem, WindowEvent,
 };
 use tokio::{io::AsyncWriteExt, process::Command};
-use tokio::spawn;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
@@ -81,10 +78,10 @@ async fn main() -> Result<()> {
     if std::env::args().len() > 1 {
     match std::env::args().skip(1).next().as_deref() {
         Some("render") => {
-            run_wrapped(render::main()).await;
+            run_wrapped(render::main());
         }
         Some("preview") => {
-            run_wrapped(preview::main());
+            run_wrapped(preview::main()).await;
         }
         cmd => {
             eprintln!("Unknown subcommand: {cmd:?}");
@@ -302,15 +299,12 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
 }
 
 #[tauri::command]
-async fn post_render(queue: State<'_, Arc<Mutex<TaskQueue>>>, params: RenderParams) -> Result<(), InvokeError> {
-    let queue = Arc::clone(&queue.inner());
-    tokio::spawn(async move {
-        let mut queue = queue.lock().await;
-        if let Err(e) = queue.post(params).await {
-            eprintln!("Failed to post render task: {:?}", e);
-        }
-    });
-    Ok(())
+async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
+    wrap_async(async move {
+        queue.post(params).await?;
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
