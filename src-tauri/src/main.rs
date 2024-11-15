@@ -35,7 +35,7 @@ use tauri::{
     CustomMenuItem, InvokeError, Manager, State, SystemTray, SystemTrayEvent, SystemTrayMenu,
     SystemTrayMenuItem, WindowEvent,
 };
-use tokio::{io::AsyncWriteExt, process::Command};
+use tokio::{io::AsyncWriteExt, process::Command, task::spawn_blocking};
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
@@ -300,7 +300,7 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
 
 #[tauri::command]
 async fn post_render(params: RenderParams) -> Result<(), InvokeError> {
-    std::thread::spawn(move || {
+    tokio::task::spawn_blocking(move || {
         let mut child = Command::new(std::env::current_exe().unwrap())
             .arg("preview")
             .arg(ASSET_PATH.get().unwrap())
@@ -310,9 +310,12 @@ async fn post_render(params: RenderParams) -> Result<(), InvokeError> {
             .spawn()
             .unwrap();
         let mut stdin = child.stdin.take().unwrap();
-        stdin
-            .write_all(format!("{}\n", serde_json::to_string(&params).unwrap()).as_bytes())
-            .await?;
+        tokio::runtime::Handle::current().block_on(async {
+            stdin
+                .write_all(format!("{}\n", serde_json::to_string(&params).unwrap()).as_bytes())
+                .await
+                .unwrap();
+        });
     });
     Ok(())
 }
