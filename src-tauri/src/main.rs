@@ -301,9 +301,10 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
 #[tauri::command]
 async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
     wrap_async(async move {
-        queue.post(params).await?;
+        queue.post(params);
         Ok(())
     })
+    .await
 }
 
 #[tauri::command]
@@ -388,6 +389,7 @@ async fn add_preset(name: String, config: RenderConfig) -> Result<(), InvokeErro
         save_presets(&presets).await?;
         Ok(())
     })
+    .await
 }
 
 #[tauri::command]
