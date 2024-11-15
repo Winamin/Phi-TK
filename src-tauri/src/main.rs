@@ -299,12 +299,22 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
 }
 
 #[tauri::command]
-async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
-    wrap_async(async move {
-        queue.post(params).await?;
-        Ok(())
-    })
-    .await
+async fn post_render(params: RenderParams) -> Result<(), InvokeError> {
+    std::thread::spawn(move || {
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .arg("preview")
+            .arg(ASSET_PATH.get().unwrap())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap();
+        let mut stdin = child.stdin.take().unwrap();
+        stdin
+            .write_all(format!("{}\n", serde_json::to_string(&params).unwrap()).as_bytes())
+            .unwrap();
+    });
+    Ok(())
 }
 
 #[tauri::command]
