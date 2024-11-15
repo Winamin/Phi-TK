@@ -58,17 +58,12 @@ pub fn build_conf() -> macroquad::window::Conf {
     }
 }
 
-fn run_wrapped(f: impl Future<Output = Result<()>> + Send + 'static) -> ! {
-    task::spawn(async {
-        if let Err(err) = f.await {
-            eprintln!("{err:?}");
-            std::process::exit(1);
-        }
-        std::process::exit(0);
-    });
-    loop {
-        std::thread::park();
+fn run_wrapped(f: impl FnOnce() -> Result<()>) -> ! {
+    if let Err(err) = f() {
+        eprintln!("{err:?}");
+        std::process::exit(1);
     }
+    std::process::exit(0);
 }
 
 #[macroquad::main(build_conf)]
