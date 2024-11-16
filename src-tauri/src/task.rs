@@ -212,7 +212,7 @@ impl Task {
     }
 }
 
-/*#[tokio::main]
+#[tokio::main]
 async fn main() -> Result<()> {
     let tasks: Vec<RenderParams> = vec![
     ];
@@ -233,7 +233,7 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-*/
+
 #[derive(Serialize)]
 pub struct TaskView {
     id: u32,
