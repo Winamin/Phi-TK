@@ -303,12 +303,12 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
 async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
     wrap_async(async move {
         let task1 = tokio::spawn(async move {
-            queue.post(params.clone()).await?;
+            queue.post(params.clone()).await;
             Ok::<(), ()>(())
         });
 
         let task2 = tokio::spawn(async move {
-            queue.post(params).await?;
+            queue.post(params).await;
             Ok::<(), ()>(())
         });
 
