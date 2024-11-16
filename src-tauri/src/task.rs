@@ -244,6 +244,8 @@ pub struct TaskView {
     status: TaskStatus,
 }
 
+
+#[derive(Clone)]
 pub struct TaskQueue {
     sender: mpsc::UnboundedSender<Arc<Task>>,
     worker: JoinHandle<()>,
