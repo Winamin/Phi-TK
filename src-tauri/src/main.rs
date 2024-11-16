@@ -36,9 +36,7 @@ use tauri::{
     SystemTrayMenuItem, WindowEvent,
 };
 use tokio::{io::AsyncWriteExt, process::Command, task::spawn_blocking};
-use tokio::sync::RwLock;
-use tokio::select;
-use std::sync::Arc;
+use tokio::task;
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
@@ -70,6 +68,7 @@ async fn run_wrapped(f: impl Future<Output = Result<()>>) -> ! {
 }
 
 #[macroquad::main(build_conf)]
+#[tokio::main]
 async fn main() -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
@@ -81,14 +80,16 @@ async fn main() -> Result<()> {
     if std::env::args().len() > 1 {
     match std::env::args().skip(1).next().as_deref() {
         Some("render") => {
-            run_wrapped(render::main()).await;
-        }
-        Some("preview") => {
-            run_wrapped(preview::main()).await;
-        }
-        cmd => {
-            eprintln!("Unknown subcommand: {cmd:?}");
-            std::process::exit(1);
+                let handle = task::spawn(run_wrapped(render::main()));
+                handle.await.unwrap();
+            }
+            Some("preview") => {
+                let handle = task::spawn(run_wrapped(preview::main()));
+                handle.await.unwrap();
+            }
+            cmd => {
+                eprintln!("Unknown subcommand: {cmd:?}");
+                std::process::exit(1);
             }
         }
     }
@@ -301,31 +302,7 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
     .await
 }
 
-async fn post_render(queue: Arc<RwLock<TaskQueue>>, params: RenderParams) -> Result<(), InvokeError> {
-    let queue1 = queue.clone();
-    let params1 = params.clone();
-    let task1 = tokio::spawn(async move {
-        let queue = queue1.read().await;
-        queue.post(params1).await;
-    });
-
-    let queue2 = queue.clone();
-    let params2 = params.clone();
-    let task2 = tokio::spawn(async move {
-        let queue = queue2.read().await;
-        queue.post(params2).await;
-    });
-    select! {
-        _ = task1 => {
-            println!("Task 1 completed");
-        }
-        _ = task2 => {
-            println!("Task 2 completed");
-        }
-    }
-    Ok(())
-}
-/*#[tauri::command]
+#[tauri::command]
 async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
     wrap_async(async move {
         queue.post(params).await?;
@@ -333,7 +310,7 @@ async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Resul
     })
     .await
 }
-*/
+
 #[tauri::command]
 async fn get_tasks(queue: State<'_, TaskQueue>) -> Result<Vec<TaskView>, InvokeError> {
     wrap_async(async move { Ok(queue.tasks().await) }).await
