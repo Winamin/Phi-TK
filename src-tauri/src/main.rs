@@ -36,7 +36,8 @@ use tauri::{
     SystemTrayMenuItem, WindowEvent,
 };
 use tokio::{io::AsyncWriteExt, process::Command, task::spawn_blocking};
-use std::sync::Arc;
+use tokio::sync::{Arc, RwLock};
+use tokio::select;
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
@@ -299,26 +300,30 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
     .await
 }
 
-#[tauri::command]
-async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
-    wrap_async(async move {
-        let task1 = tokio::spawn(async move {
-            queue.post(params.clone()).await;
-            Ok::<(), ()>(())
-        });
+async fn post_render(queue: Arc<RwLock<TaskQueue>>, params: RenderParams) -> Result<(), InvokeError> {
+    let queue1 = queue.clone();
+    let params1 = params.clone();
+    let task1 = tokio::spawn(async move {
+        let queue = queue1.read().await;
+        queue.post(params1).await;
+    });
 
-        let task2 = tokio::spawn(async move {
-            queue.post(params).await;
-            Ok::<(), ()>(())
-        });
-
-        let _ = tokio::try_join!(task1, task2)?;
-
-        Ok(())
-    })
-    .await
+    let queue2 = queue.clone();
+    let params2 = params.clone();
+    let task2 = tokio::spawn(async move {
+        let queue = queue2.read().await;
+        queue.post(params2).await;
+    });
+    select! {
+        _ = task1 => {
+            println!("Task 1 completed");
+        }
+        _ = task2 => {
+            println!("Task 2 completed");
+        }
+    }
+    Ok(())
 }
-
 /*#[tauri::command]
 async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
     wrap_async(async move {
