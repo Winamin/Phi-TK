@@ -17,7 +17,7 @@ use sasa::AudioClip;
 use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
-    io::{BufRead, BufWriter, Write},
+    io::{BufRead, BufWriter, Write, self},
     ops::DerefMut,
     path::PathBuf,
     process::{Command, Stdio},
@@ -27,6 +27,7 @@ use std::{
 };
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
+use tokio::task;
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -162,13 +163,13 @@ pub async fn main() -> Result<()> {
 
     set_pc_assets_folder(&std::env::args().nth(2).unwrap());
 
-    let mut stdin = std::io::stdin().lock();
+    let mut stdin = io::stdin().lock();
     let stdin = &mut stdin;
 
     let mut line = String::new();
     stdin.read_line(&mut line)?;
     let params: RenderParams = serde_json::from_str(line.trim())?;
-    let path = params.path;
+    let path = params.path.clone(); // Clone the path for each task
 
     line.clear();
     stdin.read_line(&mut line)?;
@@ -188,17 +189,24 @@ pub async fn main() -> Result<()> {
     let mut config = params.config.to_config();
     config.mods = Mods::AUTOPLAY;
 
-    let info = params.info;
+    let info = params.info.clone(); // Clone the info for each task
 
-    let (chart, ..) = GameScene::load_chart(fs.deref_mut(), &info)
-        .await
-        .with_context(|| tl!("load-chart-failed"))?;
-    macro_rules! ld {
-            ($path:literal) => {
-                AudioClip::new(load_file($path).await?)
-                    .with_context(|| tl!("load-sfx-failed", "name" => $path))?
-            };
-        }
+    // Spawn multiple rendering tasks
+    let tasks: Vec<_> = (0..NUM_TASKS).map(|_| {
+        let path = path.clone();
+        let output_path = output_path.clone();
+        let info = info.clone();
+        let config = config.clone();
+
+        task::spawn(async move {
+            render_task(path, output_path, info, config, &mut painter).await
+        })
+    }).collect();
+
+    // Wait for all tasks to complete
+    for task in tasks {
+        task.await??;
+    }
     let music: Result<_> = async { AudioClip::new(fs.load_file(&info.music).await?) }.await;
     let music = music.with_context(|| tl!("load-music-failed"))?;
     let ending = ld!("ending.ogg");
