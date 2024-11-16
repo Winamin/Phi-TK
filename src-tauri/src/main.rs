@@ -304,7 +304,7 @@ async fn post_render(queue: State<'_, Arc<TaskQueue>>, params: RenderParams) -> 
     let queue_clone = Arc::clone(&queue);
     tokio::spawn(async move {
         if let Err(err) = queue_clone.post(params).await {
-            error!("Failed to post render: {err:?}");
+            return Err("Failed to post render: {err:?}");
         }
     });
     Ok(())
