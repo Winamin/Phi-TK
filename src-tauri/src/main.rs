@@ -300,9 +300,23 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
 }
 
 #[tauri::command]
-fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
-    queue.post(params);
-    Ok(())
+async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
+    wrap_async(async move {
+        let task1 = tokio::spawn(async move {
+            queue.post(params.clone()).await?;
+            Ok::<(), ()>(())
+        });
+
+        let task2 = tokio::spawn(async move {
+            queue.post(params).await?;
+            Ok::<(), ()>(())
+        });
+
+        let _ = tokio::try_join!(task1, task2)?;
+
+        Ok(())
+    })
+    .await
 }
 
 /*#[tauri::command]
