@@ -301,6 +301,7 @@ impl Clone for TaskQueue {
     fn clone(&self) -> Self {
         TaskQueue {
             sender: self.sender.clone(),
+            worker:self.work.clone(),
             tasks: Mutex::new(self.tasks.blocking_lock().clone()),
         }
     }
