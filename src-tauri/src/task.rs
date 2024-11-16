@@ -55,6 +55,7 @@ pub enum TaskStatus {
     },
 }
 
+#[derive(Clone)]
 pub struct Task {
     id: u32,
     name: String,
