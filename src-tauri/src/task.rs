@@ -246,7 +246,7 @@ pub struct TaskView {
 
 pub struct TaskQueue {
     sender: mpsc::UnboundedSender<Arc<Task>>,
-    worker: JoinHandle<()>,
+    worker: Arc<JoinHandle<()>>,
     tasks: Mutex<Vec<Arc<Task>>>,
 }
 
@@ -301,7 +301,7 @@ impl Clone for TaskQueue {
     fn clone(&self) -> Self {
         TaskQueue {
             sender: self.sender.clone(),
-            worker: self.worker.clone(),
+            worker: Arc::clone(&self.worker),
             tasks: Mutex::new(self.tasks.blocking_lock().clone()),
         }
     }
