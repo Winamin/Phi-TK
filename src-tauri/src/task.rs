@@ -55,7 +55,6 @@ pub enum TaskStatus {
     },
 }
 
-#[derive(Clone)]
 pub struct Task {
     id: u32,
     name: String,
@@ -245,14 +244,12 @@ pub struct TaskView {
     status: TaskStatus,
 }
 
-
-#[derive(Clone)]
 pub struct TaskQueue {
     sender: mpsc::UnboundedSender<Arc<Task>>,
     worker: JoinHandle<()>,
-
     tasks: Mutex<Vec<Arc<Task>>>,
 }
+
 impl TaskQueue {
     pub fn new() -> Self {
         let (sender, mut receiver) = mpsc::unbounded_channel::<Arc<Task>>();
@@ -274,13 +271,12 @@ impl TaskQueue {
         Self {
             sender,
             worker: task,
-
-            tasks: Mutex::default(),
+            tasks: Mutex::new(Vec::new()),
         }
     }
 
     pub async fn post(&self, params: RenderParams) -> Result<u32> {
-        let mut guard = self.tasks.lock().await;
+        let mut guard = self.tasks.lock().unwrap();
         let id = guard.len() as u32;
         let task = Arc::new(Task::new(id, params).await?);
         guard.push(Arc::clone(&task));
@@ -289,10 +285,9 @@ impl TaskQueue {
         Ok(id)
     }
 
-    
     pub async fn tasks(&self) -> Vec<TaskView> {
-        let guard = self.tasks.lock().await;
-        let mut result = Vec::with_capacity(guard.capacity());
+        let guard = self.tasks.lock().unwrap();
+        let mut result = Vec::with_capacity(guard.len());
         for task in guard.iter() {
             result.push(task.to_view().await);
         }
@@ -301,7 +296,17 @@ impl TaskQueue {
     }
 
     pub async fn cancel(&self, id: u32) {
-        self.tasks.lock().await[id as usize].cancel();
+        self.tasks.lock().unwrap()[id as usize].cancel();
+    }
+}
+
+impl Clone for TaskQueue {
+    fn clone(&self) -> Self {
+        TaskQueue {
+            sender: self.sender.clone(),
+            worker: self.worker.clone(),
+            tasks: Mutex::new(self.tasks.lock().unwrap().clone()),
+        }
     }
 }
 
