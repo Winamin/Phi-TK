@@ -37,6 +37,8 @@ use tauri::{
 };
 use tokio::{io::AsyncWriteExt, process::Command, task::spawn_blocking};
 use std::sync::Arc;
+use tracing::error;
+use macroquad::logging::error;
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
