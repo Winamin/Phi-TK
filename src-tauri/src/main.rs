@@ -36,8 +36,9 @@ use tauri::{
     SystemTrayMenuItem, WindowEvent,
 };
 use tokio::{io::AsyncWriteExt, process::Command, task::spawn_blocking};
-use tokio::sync::{Arc, RwLock};
+use tokio::sync::RwLock;
 use tokio::select;
+use std::sync::Arc;
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
