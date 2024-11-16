@@ -257,13 +257,10 @@ impl TaskQueue {
             loop {
                 let Ok(task) = receiver.try_recv() else {
                     std::thread::sleep(std::time::Duration::from_millis(200));
-                    continue
+                    continue;
                 };
                 if let Err(err) = task.run().await {
                     error!("Failed to render: {err:?}");
-                    *task.status.lock().await = TaskStatus::Failed {
-                        error: format!("{err:?}"),
-                    };
                 }
             }
         });
@@ -276,7 +273,7 @@ impl TaskQueue {
     }
 
     pub async fn post(&self, params: RenderParams) -> Result<u32> {
-        let mut guard = self.tasks.lock().unwrap();
+        let mut guard = self.tasks.lock().await;
         let id = guard.len() as u32;
         let task = Arc::new(Task::new(id, params).await?);
         guard.push(Arc::clone(&task));
@@ -286,8 +283,8 @@ impl TaskQueue {
     }
 
     pub async fn tasks(&self) -> Vec<TaskView> {
-        let guard = self.tasks.lock().unwrap();
-        let mut result = Vec::with_capacity(guard.len());
+        let guard = self.tasks.lock().await;
+        let mut result = Vec::with_capacity(guard.capacity());
         for task in guard.iter() {
             result.push(task.to_view().await);
         }
@@ -296,7 +293,7 @@ impl TaskQueue {
     }
 
     pub async fn cancel(&self, id: u32) {
-        self.tasks.lock().unwrap()[id as usize].cancel();
+        self.tasks.lock().await[id as usize].cancel();
     }
 }
 
@@ -305,7 +302,7 @@ impl Clone for TaskQueue {
         TaskQueue {
             sender: self.sender.clone(),
             worker: self.worker.clone(),
-            tasks: Mutex::new(self.tasks.lock().unwrap().clone()),
+            tasks: Mutex::new(self.tasks.blocking_lock().clone()),
         }
     }
 }
