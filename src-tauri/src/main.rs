@@ -303,11 +303,9 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
 async fn post_render(queue: State<'_, Arc<TaskQueue>>, params: RenderParams) -> Result<(), InvokeError> {
     let queue_clone = Arc::clone(&queue);
     tokio::spawn(async move {
-        if let Err(e) = queue_clone.post(params).await {
-            eprintln!("Failed to post render task: {:?}", e);
-        }
-    });
-    Ok(())
+        queue.post(params).await? 
+        Ok(())
+    })
 }
 
 /*#[tauri::command]
