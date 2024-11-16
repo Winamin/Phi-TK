@@ -308,7 +308,7 @@ async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Resul
     Ok(())
 }
 
-/"#[tauri::command]
+/*#[tauri::command]
 async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
     wrap_async(async move {
         queue.post(params).await?;
