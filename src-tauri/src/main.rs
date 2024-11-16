@@ -37,6 +37,10 @@ use tauri::{
 };
 use tokio::{io::AsyncWriteExt, process::Command, task::spawn_blocking};
 use tokio::task;
+use std::thread::spawn;
+use rayon::spawn;
+use std::thread::spawn;
+use tauri::async_runtime::spawn;
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
