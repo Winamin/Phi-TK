@@ -298,30 +298,17 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
     .await
 }
 
-/*#[tauri::command]
-async fn post_render(params: RenderParams) -> Result<(), InvokeError> {
-    tokio::task::spawn_blocking(move || {
-        let mut child = Command::new(std::env::current_exe().unwrap())
-            .arg("preview")
-            .arg(ASSET_PATH.get().unwrap())
-            .stdin(Stdio::piped())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .unwrap();
-        let mut stdin = child.stdin.take().unwrap();
-        tokio::runtime::Handle::current().block_on(async {
-            stdin
-                .write_all(format!("{}\n", serde_json::to_string(&params).unwrap()).as_bytes())
-                .await
-                .unwrap();
-        });
+#[tauri::command]
+async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
+    tokio::spawn(async move {
+        if let Err(e) = queue.post(params).await {
+            eprintln!("Failed to post render task: {:?}", e);
+        }
     });
     Ok(())
 }
-*/
 
-#[tauri::command]
+/"#[tauri::command]
 async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
     wrap_async(async move {
         queue.post(params).await?;
@@ -329,7 +316,7 @@ async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Resul
     })
     .await
 }
-
+*/
 #[tauri::command]
 async fn get_tasks(queue: State<'_, TaskQueue>) -> Result<Vec<TaskView>, InvokeError> {
     wrap_async(async move { Ok(queue.tasks().await) }).await
