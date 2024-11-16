@@ -267,7 +267,7 @@ impl TaskQueue {
 
         Self {
             sender,
-            worker: task,
+            worker: task.into(),
             tasks: Mutex::new(Vec::new()),
         }
     }
