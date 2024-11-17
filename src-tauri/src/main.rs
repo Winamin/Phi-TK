@@ -118,61 +118,56 @@ async fn main() -> Result<()> {
             test_ffmpeg,
             open_app_folder,
         ])
-        match id.as_str() {
-            "toggle" => {
-                submit_batch_tasks(|| {
-                    app.tray_handle()
-                        .get_item(&id)
-                        .set_title(if visible {
-                            mtl!("tray-show")
+        .on_system_tray_event(|app, event| match event {
+            SystemTrayEvent::MenuItemClick { id, .. } => {
+                let window = app.get_window("main").unwrap();
+                let visible = window.is_visible().unwrap();
+                match id.as_str() {
+                    "toggle" => {
+                        app.tray_handle()
+                            .get_item(&id)
+                            .set_title(if visible {
+                                mtl!("tray-show")
+                            } else {
+                                mtl!("tray-hide")
+                            })
+                            .unwrap();
+                        if visible {
+                            window.hide().unwrap();
                         } else {
-                            mtl!("tray-hide")
-                        })
-                        .unwrap();
-                    if visible {
-                        window.hide().unwrap();
-                    } else {
-                        window.show().unwrap();
+                            window.show().unwrap();
+                        }
                     }
-                });
-            }
-            "tasks" => {
-                submit_batch_tasks(|| {
-                    if !visible {
-                        window.show().unwrap();
+                    "tasks" => {
+                        if !visible {
+                            window.show().unwrap();
+                        }
+                        window.eval("window.goto('tasks')").unwrap();
                     }
-                    window.eval("window.goto('tasks')").unwrap();
-                });
-            }
-            "quit" => {
-                submit_batch_tasks(|| {
-                    std::process::exit(0);
-                });
+                    "quit" => {
+                        std::process::exit(0);
+                    }
+                    _ => {}
+                }
             }
             _ => {}
-        }
-    }
-    _ => {}
-})；
-.on_window_event(|event| match event.event() {
-    WindowEvent::CloseRequested { api, .. } => {
-        let window = event.window();
-        let app_handle = event.window().app_handle();
-
-        submit_batch_tasks(|| {
-            app_handle
-                .tray_handle()
-                .get_item("toggle")
-                .set_title(mtl!("tray-show"))
-                .unwrap();
-            window.hide().unwrap();
-            api.prevent_close();
-        });
-    }
-    _ => {}
-})
-.build(tauri::generate_context!())
-.expect("error while running tauri application");
+        })
+        .on_window_event(|event| match event.event() {
+            WindowEvent::CloseRequested { api, .. } => {
+                event
+                    .window()
+                    .app_handle()
+                    .tray_handle()
+                    .get_item("toggle")
+                    .set_title(mtl!("tray-show"))
+                    .unwrap();
+                event.window().hide().unwrap();
+                api.prevent_close();
+            }
+            _ => {}
+        })
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application");
 
 #[tauri::command]
 fn is_the_only_instance() -> bool {
