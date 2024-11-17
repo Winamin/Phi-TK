@@ -126,7 +126,6 @@ const choosingChart = ref(false),
 async function chooseChart(folder?: boolean) {
   if (choosingChart.value) return;
   choosingChart.value = true;
-
   let files = folder
     ? await dialog.open({ directory: true, multiple: true })
     : await dialog.open({
@@ -139,32 +138,13 @@ async function chooseChart(folder?: boolean) {
           anyFilter(),
         ],
       });
-
-  if (!files || files.length === 0) {
-    choosingChart.value = false;
-    return;
-  }
+  if (!file) return;
 
   // noexcept
-  await loadCharts(files as string[]);
+  await loadChart(file as string);
 
   choosingChart.value = false;
 }
-
-async function loadCharts(files: string[]) {
-  try {
-    parsingChart.value = true;
-
-    for (const file of files) {
-      await loadChart(file);
-    }
-  } catch (e) {
-    toastError(e);
-  } finally {
-    parsingChart.value = false;
-  }
-}
-
 async function loadChart(file: string) {
   try {
     parsingChart.value = true;
@@ -195,12 +175,13 @@ async function loadChart(file: string) {
 const aspectWidth = ref('0'),
   aspectHeight = ref('0');
 
+const fileHovering = ref(false);
 event.listen('tauri://file-drop-hover', (_event) => (fileHovering.value = step.value === 'choose'));
 event.listen('tauri://file-drop-cancelled', (_event) => (fileHovering.value = false));
 event.listen('tauri://file-drop', async (event) => {
   if (step.value === 'choose') {
     fileHovering.value = false;
-    await loadCharts(event.payload as string[]);
+    await loadChart((event.payload as string[])[0]);
   }
 });
 
