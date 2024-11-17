@@ -121,9 +121,6 @@ const chartInfo = ref<ChartInfo>();
 
 let chartPath = '';
 
-const choosingChart = ref(false),
-  parsingChart = ref(false);
-
 async function chooseChart(folder = false) {
   if (choosingChart.value) return;
   choosingChart.value = true;
@@ -145,9 +142,25 @@ async function chooseChart(folder = false) {
     choosingChart.value = false;
     return;
   }
+
+  // noexcept
   await loadCharts(files as string[]);
 
   choosingChart.value = false;
+}
+
+async function loadCharts(files: string[]) {
+  try {
+    parsingChart.value = true;
+
+    for (const file of files) {
+      await loadChart(file);
+    }
+  } catch (e) {
+    toastError(e);
+  } finally {
+    parsingChart.value = false;
+  }
 }
 
 async function loadChart(file: string) {
@@ -180,15 +193,15 @@ async function loadChart(file: string) {
 const aspectWidth = ref('0'),
   aspectHeight = ref('0');
 
-const fileHovering = ref(false);
 event.listen('tauri://file-drop-hover', (_event) => (fileHovering.value = step.value === 'choose'));
 event.listen('tauri://file-drop-cancelled', (_event) => (fileHovering.value = false));
 event.listen('tauri://file-drop', async (event) => {
   if (step.value === 'choose') {
     fileHovering.value = false;
-    await loadChart((event.payload as string[])[0]);
+    await loadCharts(event.payload as string[]);
   }
 });
+
 
 const form = ref<VForm>();
 
