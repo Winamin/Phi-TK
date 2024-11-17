@@ -153,7 +153,7 @@ async fn main() -> Result<()> {
         }
     }
     _ => {}
-})
+})；
 .on_window_event(|event| match event.event() {
     WindowEvent::CloseRequested { api, .. } => {
         let window = event.window();
