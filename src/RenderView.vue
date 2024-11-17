@@ -123,12 +123,15 @@ let chartPath = '';
 
 const choosingChart = ref(false),
   parsingChart = ref(false);
-async function chooseChart(folder?: boolean) {
+
+async function chooseChart(folder = false) {
   if (choosingChart.value) return;
   choosingChart.value = true;
-  let file = folder
-    ? await dialog.open({ directory: true })
+
+  let files = folder
+    ? await dialog.open({ directory: true, multiple: true })
     : await dialog.open({
+        multiple: true,
         filters: [
           {
             name: t('choose.filter-name'),
@@ -137,13 +140,16 @@ async function chooseChart(folder?: boolean) {
           anyFilter(),
         ],
       });
-  if (!file) return;
 
-  // noexcept
-  await loadChart(file as string);
+  if (!files || files.length === 0) {
+    choosingChart.value = false;
+    return;
+  }
+  await loadCharts(files as string[]);
 
   choosingChart.value = false;
 }
+
 async function loadChart(file: string) {
   try {
     parsingChart.value = true;
@@ -206,9 +212,14 @@ async function postRender() {
       await shell.open('https://mivik.moe/ffmpeg-windows/');
       return false;
     }
-    let params = await buildParams();
-    if (!params) return false;
-    await invoke('post_render', { params });
+
+    let paramsList = await buildParams();
+    if (!paramsList || paramsList.length === 0) return false;
+
+    for (const params of paramsList) {
+      await invoke('post_render', { params });
+    }
+
     return true;
   } catch (e) {
     toastError(e);
