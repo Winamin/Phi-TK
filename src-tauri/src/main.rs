@@ -219,17 +219,25 @@ fn show_in_folder(path: &Path) -> Result<(), InvokeError> {
     .map_err(InvokeError::from_anyhow)
 }
 
-#[tauri::command]
-async fn parse_chart(path: &Path) -> Result<ChartInfo, InvokeError> {
-    wrap_async(async move {
-        let mut fs: Box<dyn FileSystem + Send + Sync + 'static> =
-            fs::fs_from_file(path).with_context(|| mtl!("read-chart-failed"))?;
-        let info = fs::load_info(fs.deref_mut())
-            .await
-            .with_context(|| mtl!("load-info-failed"))?;
-        Ok(info)
-    })
-    .await
+async fn parse_charts(paths: Vec<String>) -> Result<Vec<Result<ChartInfo, String>>, InvokeError> {
+    let mut results = Vec::new();
+
+    for path in paths {
+        let result = wrap_async(async move {
+            let mut fs: Box<dyn FileSystem + Send + Sync + 'static> =
+                fs::fs_from_file(Path::new(&path)).with_context(|| mtl!("read-chart-failed"))?;
+            let info = fs::load_info(fs.deref_mut())
+                .await
+                .with_context(|| mtl!("load-info-failed"))?;
+            Ok(info)
+        }).await;
+
+        results.push(match result {
+            Ok(info) => Ok(info),
+            Err(err) => Err(err.to_string()),
+        });
+    }
+    Ok(results)
 }
 
 #[tauri::command]
