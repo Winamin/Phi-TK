@@ -126,7 +126,7 @@ zh-CN:
   volume-sfx: 音效音量
 
   ending-length: 结算画面时长
-  disable-loading: 禁用UI加载
+  disable-loading: 启用UI加载
   chart_debug: 调试模式
   chart_ratio: 谱面缩放
 
