@@ -126,10 +126,9 @@ const choosingChart = ref(false),
 async function chooseChart(folder?: boolean) {
   if (choosingChart.value) return;
   choosingChart.value = true;
-  let files = folder
-    ? await dialog.open({ directory: true, multiple: true })
+  let file = folder
+    ? await dialog.open({ directory: true })
     : await dialog.open({
-        multiple: true,
         filters: [
           {
             name: t('choose.filter-name'),
