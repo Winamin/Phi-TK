@@ -184,7 +184,6 @@ event.listen('tauri://file-drop', async (event) => {
   }
 });
 
-
 const form = ref<VForm>();
 
 const configView = ref<typeof ConfigView>();
@@ -207,14 +206,9 @@ async function postRender() {
       await shell.open('https://mivik.moe/ffmpeg-windows/');
       return false;
     }
-
-    let paramsList = await buildParams();
-    if (!paramsList || paramsList.length === 0) return false;
-
-    for (const params of paramsList) {
-      await invoke('post_render', { params });
-    }
-
+    let params = await buildParams();
+    if (!params) return false;
+    await invoke('post_render', { params });
     return true;
   } catch (e) {
     toastError(e);
@@ -318,16 +312,16 @@ function tryParseAspect(): number | undefined {
         <v-form ref="form" v-if="chartInfo">
           <v-row no-gutters class="mx-n2">
             <v-col cols="8">
-              <v-text-field class="mx-2" :label="t('chart-name')" v-model="chartInfo.name"></v-text-field>
+              <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="chartInfo.name"></v-text-field>
             </v-col>
             <v-col cols="4">
-              <v-text-field class="mx-2" :label="t('level')" v-model="chartInfo.level"></v-text-field>
+              <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]" v-model="chartInfo.level"></v-text-field>
             </v-col>
           </v-row>
 
           <v-row no-gutters class="mx-n2 mt-1">
             <v-col cols="12" sm="4">
-              <v-text-field class="mx-2" :label="t('charter')" v-model="chartInfo.charter"></v-text-field>
+              <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]" v-model="chartInfo.charter"></v-text-field>
             </v-col>
             <v-col cols="12" sm="4">
               <v-text-field class="mx-2" :label="t('composer')" v-model="chartInfo.composer"></v-text-field>
@@ -367,7 +361,7 @@ function tryParseAspect(): number | undefined {
 
       <template v-slot:item.4>
         <div class="d-flex flex-column justify-center align-center mb-2" style="gap: 1rem">
-          <span style="font-size: 84px">🏳️‍⚧️</span>
+          <span style="font-size: 84px">😎</span>
           <h2>{{ t('render-started') }}</h2>
           <v-btn @click="router.push({ name: 'tasks' })" v-t="'see-tasks'"></v-btn>
         </div>
@@ -386,3 +380,4 @@ function tryParseAspect(): number | undefined {
 }
 </style>
 }
+
