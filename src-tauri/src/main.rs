@@ -118,101 +118,61 @@ async fn main() -> Result<()> {
             test_ffmpeg,
             open_app_folder,
         ])
-        .on_system_tray_event(|app, event| match event {
-            SystemTrayEvent::MenuItemClick { id, .. } => {
-                let window = app.get_window("main").unwrap();
-                let visible = window.is_visible().unwrap();
-                match id.as_str() {
-                    "toggle" => {
-                        app.tray_handle()
-                            .get_item(&id)
-                            .set_title(if visible {
-                                mtl!("tray-show")
-                            } else {
-                                mtl!("tray-hide")
-                            })
-                            .unwrap();
-                        if visible {
-                            window.hide().unwrap();
+        match id.as_str() {
+            "toggle" => {
+                submit_batch_tasks(|| {
+                    app.tray_handle()
+                        .get_item(&id)
+                        .set_title(if visible {
+                            mtl!("tray-show")
                         } else {
-                            window.show().unwrap();
-                        }
+                            mtl!("tray-hide")
+                        })
+                        .unwrap();
+                    if visible {
+                        window.hide().unwrap();
+                    } else {
+                        window.show().unwrap();
                     }
-                    "tasks" => {
-                        if !visible {
-                            window.show().unwrap();
-                        }
-                        window.eval("window.goto('tasks')").unwrap();
+                });
+            }
+            "tasks" => {
+                submit_batch_tasks(|| {
+                    if !visible {
+                        window.show().unwrap();
                     }
-                    "quit" => {
-                        std::process::exit(0);
-                    }
-                    _ => {}
-                }
+                    window.eval("window.goto('tasks')").unwrap();
+                });
+            }
+            "quit" => {
+                submit_batch_tasks(|| {
+                    std::process::exit(0);
+                });
             }
             _ => {}
-        })
-        .on_window_event(|event| match event.event() {
-            WindowEvent::CloseRequested { api, .. } => {
-                event
-                    .window()
-                    .app_handle()
-                    .tray_handle()
-                    .get_item("toggle")
-                    .set_title(mtl!("tray-show"))
-                    .unwrap();
-                event.window().hide().unwrap();
-                api.prevent_close();
-            }
-            _ => {}
-        })
-        .build(tauri::generate_context!())
-        .expect("error while running tauri application");
-
-    let resolver = app.path_resolver();
-    let exe = std::env::current_exe()?;
-    let exe_dir = exe.parent().unwrap();
-
-    let cache_dir = ensure_dir(
-        resolver
-            .app_cache_dir()
-            .unwrap_or_else(|| exe_dir.to_owned()),
-    );
-    let lock_file = tokio::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(cache_dir.join("app.lock"))
-        .await?;
-    if lock_file.try_lock_exclusive().is_ok() {
-        LOCK_FILE.set(lock_file).unwrap();
-    } else {
-        eprintln!("Lock failed");
+        }
     }
+    _ => {}
+})
+.on_window_event(|event| match event.event() {
+    WindowEvent::CloseRequested { api, .. } => {
+        let window = event.window();
+        let app_handle = event.window().app_handle();
 
-    CONFIG_DIR
-        .set(ensure_dir(
-            resolver
-                .app_config_dir()
-                .unwrap_or_else(|| exe_dir.to_owned()),
-        ))
-        .unwrap();
-    DATA_DIR
-        .set(ensure_dir(
-            resolver
-                .app_data_dir()
-                .unwrap_or_else(|| exe_dir.to_owned()),
-        ))
-        .unwrap();
-
-    let asset_dir = resolver.resolve_resource("assets").unwrap();
-    ASSET_PATH.set(asset_dir.clone()).unwrap();
-    set_pc_assets_folder(&asset_dir.display().to_string());
-
-    app.run(|_, _| {});
-
-    Ok(())
-}
+        submit_batch_tasks(|| {
+            app_handle
+                .tray_handle()
+                .get_item("toggle")
+                .set_title(mtl!("tray-show"))
+                .unwrap();
+            window.hide().unwrap();
+            api.prevent_close();
+        });
+    }
+    _ => {}
+})
+.build(tauri::generate_context!())
+.expect("error while running tauri application");
 
 #[tauri::command]
 fn is_the_only_instance() -> bool {
