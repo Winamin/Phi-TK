@@ -121,7 +121,9 @@ const chartInfo = ref<ChartInfo>();
 
 let chartPath = '';
 
-async function chooseChart(folder = false) {
+const choosingChart = ref(false),
+  parsingChart = ref(false);
+async function chooseChart(folder?: boolean) {
   if (choosingChart.value) return;
   choosingChart.value = true;
 
