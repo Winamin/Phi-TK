@@ -1,11 +1,11 @@
 [package]
-name = "phira-render"
+name = "Phigros-TK
 version = "0.1.4"
 description = "Phigros-TK"
 authors = ["Mivik", "HLMC", "Beks"]
 license = ""
 repository = ""
-default-run = "phira-render"
+default-run = "Phigros-TK"
 edition = "2021"
 rust-version = "1.60"
 
