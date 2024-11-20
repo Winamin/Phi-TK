@@ -35,7 +35,7 @@ use tauri::{
     CustomMenuItem, InvokeError, Manager, State, SystemTray, SystemTrayEvent, SystemTrayMenu,
     SystemTrayMenuItem, WindowEvent,
 };
-use tokio::{io::AsyncWriteExt, process::Command, task::spawn_blocking};
+use tokio::{io::AsyncWriteExt, process::Command};
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
@@ -50,9 +50,9 @@ async fn wrap_async<R>(f: impl Future<Output = Result<R>>) -> Result<R, InvokeEr
 
 pub fn build_conf() -> macroquad::window::Conf {
     macroquad::window::Conf {
-        window_title: "Phira".to_string(),
-        window_width: 1080,
-        window_height: 608,
+        window_title: "Phigros".to_string(),
+        window_width: 1280,
+        window_height: 720,
         headless: std::env::args().skip(1).next().as_deref() != Some("preview"),
         ..Default::default()
     }
@@ -76,16 +76,16 @@ async fn main() -> Result<()> {
     let _guard = rt.enter();
 
     if std::env::args().len() > 1 {
-    match std::env::args().skip(1).next().as_deref() {
-        Some("render") => {
-            run_wrapped(render::main()).await;
-        }
-        Some("preview") => {
-            run_wrapped(preview::main()).await;
-        }
-        cmd => {
-            eprintln!("Unknown subcommand: {cmd:?}");
-            std::process::exit(1);
+        match std::env::args().skip(1).next().as_deref() {
+            Some("render") => {
+                run_wrapped(render::main()).await;
+            }
+            Some("preview") => {
+                run_wrapped(preview::main()).await;
+            }
+            cmd => {
+                eprintln!("Unknown subcommand: {cmd:?}");
+                std::process::exit(1);
             }
         }
     }
@@ -169,6 +169,51 @@ async fn main() -> Result<()> {
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
 
+    let resolver = app.path_resolver();
+    let exe = std::env::current_exe()?;
+    let exe_dir = exe.parent().unwrap();
+
+    let cache_dir = ensure_dir(
+        resolver
+            .app_cache_dir()
+            .unwrap_or_else(|| exe_dir.to_owned()),
+    );
+    let lock_file = tokio::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(cache_dir.join("app.lock"))
+        .await?;
+    if lock_file.try_lock_exclusive().is_ok() {
+        LOCK_FILE.set(lock_file).unwrap();
+    } else {
+        eprintln!("Lock failed");
+    }
+
+    CONFIG_DIR
+        .set(ensure_dir(
+            resolver
+                .app_config_dir()
+                .unwrap_or_else(|| exe_dir.to_owned()),
+        ))
+        .unwrap();
+    DATA_DIR
+        .set(ensure_dir(
+            resolver
+                .app_data_dir()
+                .unwrap_or_else(|| exe_dir.to_owned()),
+        ))
+        .unwrap();
+
+    let asset_dir = resolver.resolve_resource("assets").unwrap();
+    ASSET_PATH.set(asset_dir.clone()).unwrap();
+    set_pc_assets_folder(&asset_dir.display().to_string());
+
+    app.run(|_, _| {});
+
+    Ok(())
+}
+
 #[tauri::command]
 fn is_the_only_instance() -> bool {
     LOCK_FILE.get().is_some()
@@ -219,25 +264,17 @@ fn show_in_folder(path: &Path) -> Result<(), InvokeError> {
     .map_err(InvokeError::from_anyhow)
 }
 
-async fn parse_charts(paths: Vec<String>) -> Result<Vec<Result<ChartInfo, String>>, InvokeError> {
-    let mut results = Vec::new();
-
-    for path in paths {
-        let result = wrap_async(async move {
-            let mut fs: Box<dyn FileSystem + Send + Sync + 'static> =
-                fs::fs_from_file(Path::new(&path)).with_context(|| mtl!("read-chart-failed"))?;
-            let info = fs::load_info(fs.deref_mut())
-                .await
-                .with_context(|| mtl!("load-info-failed"))?;
-            Ok(info)
-        }).await;
-
-        results.push(match result {
-            Ok(info) => Ok(info),
-            Err(err) => Err(err.to_string()),
-        });
-    }
-    Ok(results)
+#[tauri::command]
+async fn parse_chart(path: &Path) -> Result<ChartInfo, InvokeError> {
+    wrap_async(async move {
+        let mut fs: Box<dyn FileSystem + Send + Sync + 'static> =
+            fs::fs_from_file(path).with_context(|| mtl!("read-chart-failed"))?;
+        let info = fs::load_info(fs.deref_mut())
+            .await
+            .with_context(|| mtl!("load-info-failed"))?;
+        Ok(info)
+    })
+    .await
 }
 
 #[tauri::command]
