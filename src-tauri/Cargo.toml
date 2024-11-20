@@ -1,7 +1,7 @@
 [package]
 name = "phira-render"
 version = "0.1.4"
-description = "Phira render"
+description = "Phigros-TK"
 authors = ["Mivik", "HLMC", "Beks"]
 license = ""
 repository = ""
