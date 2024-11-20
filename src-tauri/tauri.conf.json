@@ -6,7 +6,7 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "phira-render",
+    "productName": "Phigros-TK",
     "version": "0.1.4"
   },
   "tauri": {
@@ -46,7 +46,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "org.flos.phira.render",
+      "identifier": "com.sc.Phigros-TK",
       "longDescription": "",
       "macOS": {
         "entitlements": null,
@@ -78,7 +78,7 @@
         "fullscreen": false,
         "height": 660,
         "resizable": true,
-        "title": "phira-render",
+        "title": "Phigros-TK",
         "width": 880,
         "fileDropEnabled": true
       }
