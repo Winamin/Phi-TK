@@ -1,11 +1,11 @@
 [package]
-name = "Phigros-TK
+name = "phigros-tk"
 version = "0.1.4"
 description = "Phigros-TK"
 authors = ["Mivik", "HLMC", "Beks"]
 license = ""
 repository = ""
-default-run = "Phigros-TK"
+default-run = "phigros-tk"
 edition = "2021"
 rust-version = "1.60"
 
