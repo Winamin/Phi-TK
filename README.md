@@ -1,7 +1,9 @@
 
-# phira-render
+# Phigros TK
 
-这是从phira render那Import repository来的，修复了一些问题与优化，并添加了一些功能
+Modification based on phira-render 基于phira-render修改
+More features 更多的功能
+To fix errors in pavement rendering 修复铺面渲染的错误
 
 ## Features
 
