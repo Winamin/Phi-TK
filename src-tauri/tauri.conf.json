@@ -46,7 +46,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "com.sc.Phigros-TK",
+      "identifier": "com.sc.phigros.tk",
       "longDescription": "",
       "macOS": {
         "entitlements": null,
