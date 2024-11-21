@@ -38,6 +38,7 @@ pub struct RenderConfig {
     disable_loading: bool,
     chart_debug: bool,
     chart_ratio: f32,
+    buffer_size: f32
     fps: u32,
     hardware_accel: bool,
     hevc: bool,
@@ -82,6 +83,7 @@ impl RenderConfig {
             volume_sfx: self.volume_sfx,
             chart_debug: self.chart_debug,
             chart_ratio: self.chart_ratio,
+            debuff_size: self.debuff_size,
             ..Default::default()
         }
     }
