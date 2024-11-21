@@ -83,7 +83,7 @@ impl RenderConfig {
             volume_sfx: self.volume_sfx,
             chart_debug: self.chart_debug,
             chart_ratio: self.chart_ratio,
-            debuff_size: self.debuff_size,
+            buffer_size: self.buffer_size,
             ..Default::default()
         }
     }
