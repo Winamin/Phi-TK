@@ -613,6 +613,7 @@ async function replacePreset() {
           <v-slider :label="t('chart_ratio')" thumb-label="always" :min="0.05" :max="1" :step="0.05" v-model="chartRatio"> </v-slider>
         </v-col>
       </v-row>
+      <v-row no-gutters class="mx-n2 mt-2 align-center px-6">
         <v-col cols="12">
           <v-slider :label="t('buffer_size')" thumb-label="always" :min="128" :max="2048" :step="256" v-model="bufferSize"> </v-slider>
         </v-col>
