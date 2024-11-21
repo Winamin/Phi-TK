@@ -56,6 +56,7 @@ en:
   disable-loading: Remove loading screen
   chart_debug: Debug Mode
   chart_ratio: Chart Zoom
+  buffer_size: Adjust buffer_size
 
   presets: Presets
   preset-refresh: Refresh
@@ -129,6 +130,7 @@ zh-CN:
   disable-loading: 启用UI加载
   chart_debug: 调试模式
   chart_ratio: 谱面缩放
+  buffer_size: 调节buffer_size
 
   presets: 预设配置
   preset-refresh: 刷新
@@ -257,6 +259,7 @@ const disableLoading = ref(false)
 
 const chartDebug = ref(false)
 const chartRatio = ref(1.0)
+const bufferSize = ref(256)
 
 const STD_CHALLENGE_COLORS = ['white', 'green', 'blue', 'red', 'golden', 'rainbow'];
 
@@ -275,6 +278,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
     disableLoading: disableLoading.value,
     chartDebug: chartDebug.value,
     chartRatio: chartRatio.value,
+    bufferSize: bufferSize.value,
     fps: parseInt(fps.value),
     hardwareAccel: hwAccel.value,
     hevc: hevc.value,
@@ -327,6 +331,7 @@ function applyConfig(config: RenderConfig) {
   disableLoading.value = config.disableLoading;
   chartDebug.value = config.chartDebug;
   chartRatio.value = config.chartRatio;
+  bufferSize.value = config.bufferSize;
   fps.value = String(config.fps);
   hwAccel.value = config.hardwareAccel;
   hevc.value = config.hevc;
@@ -357,6 +362,7 @@ const DEFAULT_CONFIG: RenderConfig = {
   disableLoading: true,
   chartDebug: false,
   chartRatio: 1,
+  bufferSize: 256,
   fps: 60,
   hardwareAccel: true,
   hevc: false,
@@ -605,6 +611,10 @@ async function replacePreset() {
       <v-row no-gutters class="mx-n2 mt-2 align-center px-6">
         <v-col cols="6">
           <v-slider :label="t('chart_ratio')" thumb-label="always" :min="0.05" :max="1" :step="0.05" v-model="chartRatio"> </v-slider>
+        </v-col>
+      </v-row>
+        <v-col cols="12">
+          <v-slider :label="t('buffer_size')" thumb-label="always" :min="128" :max="2048" :step="256" v-model="bufferSize"> </v-slider>
         </v-col>
       </v-row>
     </div>
