@@ -3,11 +3,6 @@ use crate::{
     render::{IPCEvent, RenderParams},
     ASSET_PATH,
 };
-
-use crate::Command;
-use std::process::Command as StdCommand;
-use tokio::process::Command as TokioCommand;
-
 use anyhow::Result;
 use chrono::Local;
 use prpr::fs;
@@ -29,10 +24,8 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     sync::{mpsc, Mutex},
     task::JoinHandle,
-    sync::Semaphore,
 };
 use tracing::{error, info};
-use futures::future::join_all;
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "snake_case", tag = "type")]
@@ -73,13 +66,14 @@ impl Task {
         let mut cover = NamedTempFile::new()?;
         cover.write_all(&fs.load_file(&info.illustration).await?)?;
 
+        let level: String = info.level.split_whitespace().next().unwrap_or_default().to_string();
         let safe_name: String = info
             .name
             .chars()
             .filter(|&it| it == '-' || it == '_' || it == ' ' || it.is_alphanumeric())
             .collect();
         let output = output_dir()?.join(format!(
-            "{} {safe_name}.mov",
+            "{} {safe_name}_{level}.mov",
             Local::now().format("%Y-%m-%d %H-%M-%S")
         ));
 
@@ -96,106 +90,106 @@ impl Task {
     }
 
     pub async fn run(&self) -> Result<()> {
-    info!("Task #{} started ({})", self.id, self.params.path.display());
+        info!("Task #{} started ({})", self.id, self.params.path.display());
 
-    *self.status.lock().await = TaskStatus::Loading;
+        *self.status.lock().await = TaskStatus::Loading;
 
-    let mut child = tokio::process::Command::new(std::env::current_exe()?)
-        .arg("render")
-        .arg(ASSET_PATH.get().unwrap())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    let mut stdin = child.stdin.take().unwrap();
-    let stdout = child.stdout.take().unwrap();
+        let mut child = tokio::process::Command::new(std::env::current_exe()?)
+            .arg("render")
+            .arg(ASSET_PATH.get().unwrap())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        let mut stdin = child.stdin.take().unwrap();
+        let stdout = child.stdout.take().unwrap();
 
-    stdin
-        .write_all(format!("{}\n", serde_json::to_string(&self.params)?).as_bytes())
-        .await?;
-    stdin
-        .write_all(format!("{}\n", serde_json::to_string(&self.output)?).as_bytes())
-        .await?;
-    stdin.flush().await?;
+        stdin
+            .write_all(format!("{}\n", serde_json::to_string(&self.params)?).as_bytes())
+            .await?;
+        stdin
+            .write_all(format!("{}\n", serde_json::to_string(&self.output)?).as_bytes())
+            .await?;
+        stdin.flush().await?;
 
-    let mut lines = BufReader::new(stdout).lines();
-    let mut total = 0;
-    let mut frame_count: u64 = 0;
-    let start = Instant::now();
-    let mut frame_times = VecDeque::new();
-    let mut last_update_fps_sec: u32 = 0;
-    let mut last_fps: usize = 0;
-    loop {
-        let line = lines.next_line().await?;
-        let Some(line) = line else { break };
-        let Ok(event): Result<IPCEvent, _> = serde_json::from_str(line.trim()) else { continue };
-        match event {
-            IPCEvent::StartMixing => {
-                *self.status.lock().await = TaskStatus::Mixing;
-            }
-            IPCEvent::StartRender(total_frame) => {
-                *self.status.lock().await = TaskStatus::Rendering {
-                    progress: 0.,
-                    fps: 0,
-                    estimate: 0.,
-                };
-                total = total_frame;
-            }
-            IPCEvent::Frame => {
-                frame_count += 1;
-                let cur = start.elapsed().as_secs_f64();
-                let sec = cur as u32;
-                frame_times.push_back(cur);
-                while frame_times.front().is_some_and(|it| cur - *it > 1.) {
-                    frame_times.pop_front();
+        let mut lines = BufReader::new(stdout).lines();
+        let mut total = 0;
+        let mut frame_count: u64 = 0;
+        let start = Instant::now();
+        let mut frame_times = VecDeque::new();
+        let mut last_update_fps_sec: u32 = 0;
+        let mut last_fps: usize = 0;
+        loop {
+            let line = lines.next_line().await?;
+            let Some(line) = line else { break };
+            let Ok(event): Result<IPCEvent, _> = serde_json::from_str(line.trim()) else { continue };
+            match event {
+                IPCEvent::StartMixing => {
+                    *self.status.lock().await = TaskStatus::Mixing;
                 }
-                if last_update_fps_sec != sec {
-                    last_fps = frame_times.len();
-                    last_update_fps_sec = sec;
+                IPCEvent::StartRender(total_frame) => {
+                    *self.status.lock().await = TaskStatus::Rendering {
+                        progress: 0.,
+                        fps: 0,
+                        estimate: 0.,
+                    };
+                    total = total_frame;
                 }
-                let estimate =
-                    total.saturating_sub(frame_count).max(1) as f64 / last_fps as f64;
-                *self.status.lock().await = TaskStatus::Rendering {
-                    progress: frame_count as f64 / total as f64,
-                    fps: last_fps as u64,
-                    estimate,
-                };
+                IPCEvent::Frame => {
+                    frame_count += 1;
+                    let cur = start.elapsed().as_secs_f64();
+                    let sec = cur as u32;
+                    frame_times.push_back(cur);
+                    while frame_times.front().is_some_and(|it| cur - *it > 1.) {
+                        frame_times.pop_front();
+                    }
+                    if last_update_fps_sec != sec {
+                        last_fps = frame_times.len();
+                        last_update_fps_sec = sec;
+                    }
+                    let estimate =
+                        total.saturating_sub(frame_count).max(1) as f64 / last_fps as f64;
+                    *self.status.lock().await = TaskStatus::Rendering {
+                        progress: frame_count as f64 / total as f64,
+                        fps: last_fps as u64,
+                        estimate,
+                    };
+                }
+                IPCEvent::Done(duration) => {
+                    let output = child.wait_with_output().await?;
+                    let stdout = String::from_utf8(output.stdout)
+                        .unwrap_or_else(|_| "Invalid output".to_owned());
+                    let stderr = String::from_utf8(output.stderr)
+                        .unwrap_or_else(|_| "Invalid output".to_owned());
+                    *self.status.lock().await = TaskStatus::Done {
+                        duration,
+                        output: format!("[STDOUT]\n{stdout}\n\n[STDERR]\n{stderr}"),
+                    };
+                    return Ok(());
+                }
             }
-            IPCEvent::Done(duration) => {
-                let output = child.wait_with_output().await?;
-                let stdout = String::from_utf8(output.stdout)
-                    .unwrap_or_else(|_| "Invalid output".to_owned());
-                let stderr = String::from_utf8(output.stderr)
-                    .unwrap_or_else(|_| "Invalid output".to_owned());
-                *self.status.lock().await = TaskStatus::Done {
-                    duration,
-                    output: format!("[STDOUT]\n{stdout}\n\n[STDERR]\n{stderr}"),
-                };
+            if self.request_cancel.load(Ordering::Relaxed) {
+                child.kill().await?;
+                *self.status.lock().await = TaskStatus::Canceled;
                 return Ok(());
             }
         }
-        if self.request_cancel.load(Ordering::Relaxed) {
-            child.kill().await?;
-            *self.status.lock().await = TaskStatus::Canceled;
+
+        let output = child.wait_with_output().await?;
+        if !output.status.success() {
+            *self.status.lock().await = TaskStatus::Failed {
+                error: format!(
+                    "Child process exited abnormally ({:?})\n\n{}",
+                    output.status.code(),
+                    String::from_utf8(output.stderr)?
+                ),
+            };
             return Ok(());
         }
+
+        Ok(())
     }
 
-    let output = child.wait_with_output().await?;
-    if !output.status.success() {
-        *self.status.lock().await = TaskStatus::Failed {
-            error: format!(
-                "Child process exited abnormally ({:?})\n\n{}",
-                output.status.code(),
-                String::from_utf8(output.stderr)?
-            ),
-        };
-        return Ok(());
-    }
-
-    Ok(())
-    }
-    
     pub fn cancel(&self) {
         self.request_cancel.store(true, Ordering::Relaxed);
     }
@@ -212,28 +206,6 @@ impl Task {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let tasks: Vec<RenderParams> = vec![
-    ];
-
-    let max_concurrent_tasks = 4;
-    let semaphore = Arc::new(Semaphore::new(max_concurrent_tasks));
-    
-    let render_tasks: Vec<_> = tasks.into_iter().enumerate().map(|(id, params)| {
-        let semaphore = semaphore.clone();
-        tokio::spawn(async move {
-            let _permit = semaphore.acquire().await.expect("Failed to acquire semaphore");
-            let task = Task::new(id as u32, params).await.expect("Failed to create task");
-            task.run().await.expect("Rendering failed");
-        })
-    }).collect();
-
-    join_all(render_tasks).await;
-
-    Ok(())
-}
-
 #[derive(Serialize)]
 pub struct TaskView {
     id: u32,
@@ -246,10 +218,10 @@ pub struct TaskView {
 
 pub struct TaskQueue {
     sender: mpsc::UnboundedSender<Arc<Task>>,
-    worker: Arc<JoinHandle<()>>,
+    worker: JoinHandle<()>,
+
     tasks: Mutex<Vec<Arc<Task>>>,
 }
-
 impl TaskQueue {
     pub fn new() -> Self {
         let (sender, mut receiver) = mpsc::unbounded_channel::<Arc<Task>>();
@@ -257,18 +229,22 @@ impl TaskQueue {
             loop {
                 let Ok(task) = receiver.try_recv() else {
                     std::thread::sleep(std::time::Duration::from_millis(200));
-                    continue;
+                    continue
                 };
                 if let Err(err) = task.run().await {
                     error!("Failed to render: {err:?}");
+                    *task.status.lock().await = TaskStatus::Failed {
+                        error: format!("{err:?}"),
+                    };
                 }
             }
         });
 
         Self {
             sender,
-            worker: task.into(),
-            tasks: Mutex::new(Vec::new()),
+            worker: task,
+
+            tasks: Mutex::default(),
         }
     }
 
@@ -294,16 +270,6 @@ impl TaskQueue {
 
     pub async fn cancel(&self, id: u32) {
         self.tasks.lock().await[id as usize].cancel();
-    }
-}
-
-impl Clone for TaskQueue {
-    fn clone(&self) -> Self {
-        TaskQueue {
-            sender: self.sender.clone(),
-            worker: Arc::clone(&self.worker),
-            tasks: Mutex::new(self.tasks.blocking_lock().clone()),
-        }
     }
 }
 
