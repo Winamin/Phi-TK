@@ -130,7 +130,7 @@ zh-CN:
   disable-loading: 启用UI加载
   chart_debug: 调试模式
   chart_ratio: 谱面缩放
-  buffer_size: 调节buffer_size
+  buffer_size: 调节音频Buffer_size
 
   presets: 预设配置
   preset-refresh: 刷新
@@ -165,7 +165,7 @@ import TipTextField from './TipTextField.vue';
 
 const props = defineProps<{ initAspectRatio?: number }>();
 
-const RESOLUTIONS = [ '1280x720','1920x1080', '2560x1440', '3840x2160', '2844x1600', '2388x1668', '1600x1080'];
+const RESOLUTIONS = [ '1280x720','1920x1080', '2560x1440', '3840x2160', '2844x1600', '2388x1668', '1600x1080', '7680x4320'];
 const ffmpegPresetPresetList = ['veryfast p1 speed', 'faster p2 speed','fast p3 balanced', 'medium p4 balanced', 'slow p5 balanced', 'slower p6 quality', 'veryslow p7 quality'];
 const bitrateControlList = ['CRF','CBR'];
 
