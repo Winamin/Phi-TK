@@ -1,9 +1,9 @@
 <i18n>
 en:
-  app: phira-render
+  app: phigros TK
 
 zh-CN:
-  app: phira-render
+  app: Phigros TK
 
 </i18n>
 
