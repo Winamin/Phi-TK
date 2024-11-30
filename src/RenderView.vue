@@ -1,6 +1,6 @@
 <i18n>
 en:
-  already-running: phira-render is already running
+  already-running: Phigros TK is already running
 
   prev-step: Previous
   next-step: Next
