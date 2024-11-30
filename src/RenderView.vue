@@ -46,7 +46,7 @@ en:
   ffmpeg-not-found: You haven't installed ffmpeg yet. Please download FFmpeg.exe and put it in the specific folder.
 
 zh-CN:
-  already-running: phira-render 已经在运行
+  already-running: Phigros TK 已经在运行
 
   prev-step: 上一步
   next-step: 下一步
