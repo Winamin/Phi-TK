@@ -1,9 +1,8 @@
-
 # Phigros TK
 
-Modification based on phira-render 基于phira-render修改
-More features 更多的功能
-To fix errors in pavement rendering 修复铺面渲染的错误
+Modification based on phira-render
+More features
+To fix errors in pavement rendering
 
 ## Features
 
