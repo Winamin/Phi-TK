@@ -38,7 +38,7 @@ pub struct RenderConfig {
     disable_loading: bool,
     chart_debug: bool,
     chart_ratio: f32,
-    qbuffer_size: f32,
+    buffer_size: f32,
     fps: u32,
     hardware_accel: bool,
     hevc: bool,
