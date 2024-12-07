@@ -56,7 +56,7 @@ en:
   disable-loading: Remove loading screen
   chart_debug: Debug Mode
   chart_ratio: Chart Zoom
-  buffer_size: Adjust buffer_size
+  qbuffer_size: Adjust buffer_size
 
   presets: Presets
   preset-refresh: Refresh
@@ -130,7 +130,7 @@ zh-CN:
   disable-loading: 启用UI加载
   chart_debug: 调试模式
   chart_ratio: 谱面缩放
-  buffer_size: 调节音频Buffer_size
+  qbuffer_size: 调节音频Buffer_size
 
   presets: 预设配置
   preset-refresh: 刷新
@@ -615,7 +615,7 @@ async function replacePreset() {
       </v-row>
       <v-row no-gutters class="mx-n2 mt-2 align-center px-6">
         <v-col cols="12">
-          <v-slider :label="t('buffer_size')" thumb-label="always" :min="128" :max="2048" :step="2" v-model="bufferSize"> </v-slider>
+          <v-slider :label="t('qbuffer_size')" thumb-label="always" :min="128" :max="2048" :step="1" v-model="bufferSize"> </v-slider>
         </v-col>
       </v-row>
     </div>
