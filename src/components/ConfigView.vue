@@ -202,7 +202,7 @@ const playerAvatar = ref<string>(),
   playerName = ref(''),
   playerRks = ref('15.0');
 
-const combo_name = { value: '' };
+const combo_name = ref('AUTOPLAY')
 
 async function chooseAvatar() {
   let file = await open({
@@ -391,7 +391,7 @@ const DEFAULT_CONFIG: RenderConfig = {
   speed: 1,
   volumeMusic: 1,
   volumeSfx: 1,
-  combo_name: 'COMBO',
+  combo_name: 'AUTOPLAY',
 };
 interface Preset {
   name: string;
