@@ -316,7 +316,7 @@ pub async fn main() -> Result<()> {
     let player = build_player(&params.config).await?;
     let mut main = Main::new(
         Box::new(
-            LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?,
+            LoadingScene::new(GameMode::Normal, info, &config, fs, Some(player), None, None).await?,
         ),
         tm,
         {
@@ -399,8 +399,8 @@ pub async fn main() -> Result<()> {
         params.config.bitrate,
         ffmpeg_preset,
         ffmpeg_preset_name.unwrap(),
-        if params.config.disable_loading{"-ss 00:00:03.5"}
-        else{"-ss 00:00:00"},
+        if params.config.disable_loading{format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)}
+        else{"-ss 0.1".to_string()},
     );
 
     let mut proc = cmd_hidden(&ffmpeg)
