@@ -39,7 +39,7 @@ pub struct RenderConfig {
     chart_debug: bool,
     chart_ratio: f32,
     buffer_size: f32,
-    combo_name: String
+    combo_name: String,
     fps: u32,
     hardware_accel: bool,
     hevc: bool,
