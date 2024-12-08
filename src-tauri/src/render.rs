@@ -64,7 +64,6 @@ pub struct RenderConfig {
     volume_sfx: f32,
 }
 
-#[derive(Clone)]
 impl RenderConfig {
     pub fn to_config(&self) -> Config {
         Config {
