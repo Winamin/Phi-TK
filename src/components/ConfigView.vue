@@ -305,7 +305,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
     speed: 1,
     volumeMusic: volumeMusic.value,
     volumeSfx: volumeSfx.value,
-    combo_name: combo_name.vaule,
+    combo_name: combo_name.value,
   };
 }
 
@@ -358,7 +358,7 @@ function applyConfig(config: RenderConfig) {
   respack.value = respacks.value.find((x) => x.path === config.resPackPath) || respacks.value[0];
   volumeMusic.value = config.volumeMusic;
   volumeSfx.value = config.volumeSfx;
-  combo_name.vaule = config.combo_name;
+  combo_name.value = config.combo_name;
 }
 
 const DEFAULT_CONFIG: RenderConfig = {
