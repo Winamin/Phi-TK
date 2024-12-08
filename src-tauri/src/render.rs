@@ -64,6 +64,7 @@ pub struct RenderConfig {
     volume_sfx: f32,
 }
 
+#[derive(Clone)]
 impl RenderConfig {
     pub fn to_config(&self) -> Config {
         Config {
@@ -85,7 +86,7 @@ impl RenderConfig {
             chart_debug: self.chart_debug,
             chart_ratio: self.chart_ratio,
             buffer_size: self.buffer_size,
-            combo_name: self.combo_name,
+            combo_name: self.combo_name.clone(),
             ..Default::default()
         }
     }
