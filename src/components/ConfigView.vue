@@ -130,7 +130,7 @@ zh-CN:
   disable-loading: 启用UI加载
   chart_debug: 调试模式
   chart_ratio: 谱面缩放
-  buffer_size: 调节音频Buffer_size
+  buffer_size: 音频Buffer Size
 
   presets: 预设配置
   preset-refresh: 刷新
