@@ -85,7 +85,7 @@ impl RenderConfig {
             chart_debug: self.chart_debug,
             chart_ratio: self.chart_ratio,
             buffer_size: self.buffer_size,
-            combo_name: selg.combo_name,
+            combo_name: self.combo_name,
             ..Default::default()
         }
     }
@@ -316,7 +316,7 @@ pub async fn main() -> Result<()> {
     let player = build_player(&params.config).await?;
     let mut main = Main::new(
         Box::new(
-            LoadingScene::new(GameMode::Normal, info, &config, fs, Some(player), None, None).await?,
+            LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?,
         ),
         tm,
         {
