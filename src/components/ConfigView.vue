@@ -202,7 +202,7 @@ const playerAvatar = ref<string>(),
   playerName = ref(''),
   playerRks = ref('15.0');
 
-const combo_name = ('');
+const combo_name = { value: '' };
 
 async function chooseAvatar() {
   let file = await open({
