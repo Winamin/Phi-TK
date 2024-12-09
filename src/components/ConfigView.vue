@@ -57,7 +57,7 @@ en:
   chart_debug: Debug Mode
   chart_ratio: Chart Zoom
   buffer_size: Adjust buffer_size
-  combo_name: customize COMBO text
+  combo: customize COMBO text
 
   presets: Presets
   preset-refresh: Refresh
@@ -132,7 +132,7 @@ zh-CN:
   chart_debug: 调试模式
   chart_ratio: 谱面缩放
   buffer_size: 音频Buffer Size
-  combo_name: 自定义COMBO名称
+  combo: 自定义COMBO名称
 
   presets: 预设配置
   preset-refresh: 刷新
@@ -202,7 +202,7 @@ const playerAvatar = ref<string>(),
   playerName = ref(''),
   playerRks = ref('15.0');
 
-const combo_name = ref('AUTOPLAY')
+const combo = ref('AUTOPLAY')
 
 async function chooseAvatar() {
   let file = await open({
@@ -305,7 +305,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
     speed: 1,
     volumeMusic: volumeMusic.value,
     volumeSfx: volumeSfx.value,
-    combo_name: combo_name.value,
+    combo: combo.value,
   };
 }
 
@@ -358,7 +358,7 @@ function applyConfig(config: RenderConfig) {
   respack.value = respacks.value.find((x) => x.path === config.resPackPath) || respacks.value[0];
   volumeMusic.value = config.volumeMusic;
   volumeSfx.value = config.volumeSfx;
-  combo_name.value = config.combo_name;
+  combo.value = config.combo;
 }
 
 const DEFAULT_CONFIG: RenderConfig = {
@@ -391,7 +391,7 @@ const DEFAULT_CONFIG: RenderConfig = {
   speed: 1,
   volumeMusic: 1,
   volumeSfx: 1,
-  combo_name: 'AUTOPLAY',
+  combo: 'AUTOPLAY',
 };
 interface Preset {
   name: string;
@@ -625,7 +625,7 @@ async function replacePreset() {
           <v-slider :label="t('buffer_size')" thumb-label="always" :min="128" :max="2048" :step="1" v-model="bufferSize"> </v-slider>
         </v-col>
       <v-col cols="6">
-          <v-text-field class="mx-2" :label="t('combo_name')" v-model="combo_name"></v-text-field>
+          <v-text-field class="mx-2" :label="t('combo')" v-model="combo"></v-text-field>
         </v-col>
       </v-row>
     </div>
