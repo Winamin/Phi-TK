@@ -57,7 +57,7 @@ export interface RenderConfig {
   chartDebug: boolean;
   chartRatio: number;
   bufferSize: number;
-  combo_name: string;
+  combo: string;
   fps: number;
   hardwareAccel: boolean;
   hevc: boolean;
