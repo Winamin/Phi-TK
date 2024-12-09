@@ -85,7 +85,7 @@ impl RenderConfig {
             chart_debug: self.chart_debug,
             chart_ratio: self.chart_ratio,
             buffer_size: self.buffer_size,
-            combo_name: self.combo_name.clone(),
+            combo: self.combo.clone(),
             ..Default::default()
         }
     }
