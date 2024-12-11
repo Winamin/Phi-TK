@@ -134,7 +134,7 @@ zh-CN:
   chart_ratio: 谱面缩放
   buffer_size: 音频Buffer Size
   combo: 自定义COMBO名称
-  fild_x: 镜像模式
+  flid_x: 镜像模式
 
   presets: 预设配置
   preset-refresh: 刷新
