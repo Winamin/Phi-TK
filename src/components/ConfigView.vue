@@ -617,7 +617,7 @@ async function replacePreset() {
           <TipSwitch :label="t('chart_debug')" v-model="chartDebug"></TipSwitch>
         </v-col>
         <v-col cols="3">
-          <TipSwitch :label="t('flid_x')" v-model="FlidX"></TipSwitch>
+          <TipSwitch :label="t('flid_x')" v-model="flidX"></TipSwitch>
         </v-col>
         <v-col cols="3">
           <TipSwitch :label="t('hevc')" :tooltip="t('hevc-tips')" v-model="hevc"></TipSwitch>
