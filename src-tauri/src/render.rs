@@ -37,6 +37,7 @@ pub struct RenderConfig {
     ending_length: f64,
     disable_loading: bool,
     chart_debug: bool,
+    flid_x: bool,
     chart_ratio: f32,
     buffer_size: f32,
     combo: String,
@@ -86,6 +87,7 @@ impl RenderConfig {
             chart_ratio: self.chart_ratio,
             buffer_size: self.buffer_size,
             combo: self.combo.clone(),
+            flid_x: self.flid_x,
             ..Default::default()
         }
     }
