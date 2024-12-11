@@ -37,7 +37,7 @@ pub struct RenderConfig {
     ending_length: f64,
     disable_loading: bool,
     chart_debug: bool,
-    flid_x: bool,
+    flid_x: Option<bool>,
     chart_ratio: f32,
     buffer_size: f32,
     combo: String,
