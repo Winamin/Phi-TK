@@ -73,4 +73,4 @@ jobs:
           releaseName: 'Phigros-TK v__VERSION__' # tauri-action replaces \_\_VERSION\_\_ with the app version.
           releaseBody: 'From GitHub Action'
           releaseDraft: true
-          prerelease: false
+          prerelease: true
