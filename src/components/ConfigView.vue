@@ -56,8 +56,9 @@ en:
   disable-loading: Remove loading screen
   chart_debug: Debug Mode
   chart_ratio: Chart Zoom
-  buffer_size: Adjust buffer_size
-  combo: customize COMBO text
+  buffer_size: Adjust Buffer Size
+  combo: Customize COMBO Text
+  flid_x: Mirror Mode
 
   presets: Presets
   preset-refresh: Refresh
@@ -133,6 +134,7 @@ zh-CN:
   chart_ratio: 谱面缩放
   buffer_size: 音频Buffer Size
   combo: 自定义COMBO名称
+  fild_x: 镜像模式
 
   presets: 预设配置
   preset-refresh: 刷新
@@ -260,7 +262,7 @@ const volumeMusic = ref(1),
 const endingLength = ref('-2.0');
 
 const disableLoading = ref(false)
-
+const flidX = ref(false)
 const chartDebug = ref(false)
 const chartRatio = ref(1.0)
 const bufferSize = ref(256)
@@ -281,6 +283,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
     endingLength: parseFloat(endingLength.value),
     disableLoading: disableLoading.value,
     chartDebug: chartDebug.value,
+    flidX: flidX.value,
     chartRatio: chartRatio.value,
     bufferSize: bufferSize.value,
     fps: parseInt(fps.value),
@@ -335,6 +338,7 @@ function applyConfig(config: RenderConfig) {
   endingLength.value = String(config.endingLength);
   disableLoading.value = config.disableLoading;
   chartDebug.value = config.chartDebug;
+  flidX.value = config.fildX;
   chartRatio.value = config.chartRatio;
   bufferSize.value = config.bufferSize;
   fps.value = String(config.fps);
@@ -367,6 +371,7 @@ const DEFAULT_CONFIG: RenderConfig = {
   endingLength: -2.0,
   disableLoading: true,
   chartDebug: false,
+  flidX: false,
   chartRatio: 1,
   bufferSize: 256,
   fps: 60,
@@ -611,6 +616,8 @@ async function replacePreset() {
         <v-col cols="3">
           <TipSwitch :label="t('chart_debug')" v-model="chartDebug"></TipSwitch>
         </v-col>
+        <v-col cols="3">
+          <TipSwitch :label="t('flid_x')" v-model="FlidX"></TipSwitch>
         <v-col cols="3">
           <TipSwitch :label="t('hevc')" :tooltip="t('hevc-tips')" v-model="hevc"></TipSwitch>
         </v-col>
