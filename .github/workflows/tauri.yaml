@@ -1,4 +1,4 @@
-name: Release
+name: Phigros TK
 on:
   push:
     tags:
