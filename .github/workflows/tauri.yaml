@@ -74,3 +74,5 @@ jobs:
           releaseBody: 'From GitHub Action'
           releaseDraft: true
           prerelease: false
+          artifactName: 'phigros-tk_0.1.4_x64-setup.exe'
+          artifactPath: './src-tauri/target/release/bundle/nsis'
