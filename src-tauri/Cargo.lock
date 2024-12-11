@@ -3019,7 +3019,7 @@ dependencies = [
 [[package]]
 name = "prpr"
 version = "0.4.0"
-source = "git+https://github.com/Winamin/phira-test?branch=render-lib#bb9328d67659b2b542e50b0d1d73423c9354c0c7"
+source = "git+https://github.com/Winamin/phira-test?branch=render-lib#e0820e34812ba48cdb90da9e1360ebe5277db253"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3086,7 +3086,7 @@ dependencies = [
 [[package]]
 name = "prpr-avc"
 version = "0.1.0"
-source = "git+https://github.com/Winamin/phira-test?branch=render-lib#bb9328d67659b2b542e50b0d1d73423c9354c0c7"
+source = "git+https://github.com/Winamin/phira-test?branch=render-lib#e0820e34812ba48cdb90da9e1360ebe5277db253"
 dependencies = [
  "anyhow",
  "tracing",
