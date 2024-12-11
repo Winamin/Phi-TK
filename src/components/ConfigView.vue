@@ -338,7 +338,7 @@ function applyConfig(config: RenderConfig) {
   endingLength.value = String(config.endingLength);
   disableLoading.value = config.disableLoading;
   chartDebug.value = config.chartDebug;
-  flidX.value = config.fildX;
+  flidX.value = config.flidX;
   chartRatio.value = config.chartRatio;
   bufferSize.value = config.bufferSize;
   fps.value = String(config.fps);
