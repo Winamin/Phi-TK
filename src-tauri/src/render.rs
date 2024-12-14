@@ -87,7 +87,7 @@ impl RenderConfig {
             chart_ratio: self.chart_ratio,
             buffer_size: self.buffer_size,
             combo: self.combo.clone(),
-            flid_x: self.flid_x,
+            flid_x: self.flid_x.unwrap_or(false),
             ..Default::default()
         }
     }
