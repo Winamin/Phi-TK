@@ -6,8 +6,8 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "phigros-tk",
-    "version": "0.1.4"
+    "productName": "Phigros-TK",
+    "version": "0.1.5"
   },
   "tauri": {
     "allowlist": {
@@ -78,7 +78,7 @@
         "fullscreen": false,
         "height": 660,
         "resizable": true,
-        "title": "phigros-tk",
+        "title": "Phigros-Tk",
         "width": 880,
         "fileDropEnabled": true
       }
