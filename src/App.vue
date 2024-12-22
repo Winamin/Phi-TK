@@ -10,19 +10,16 @@ zh-CN:
   rpe: RPE
   tasks: 任务列表
   about: 关于
-
 </i18n>
 
 <script lang="ts">
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-
 import { useI18n } from 'vue-i18n';
-
-import { VSonner } from 'vuetify-sonner';
 
 const onLoaded = ref<() => void>();
 const component = ref();
+const drawer = ref(false);
 
 watch(component, (comp) => {
   if (comp && onLoaded.value) onLoaded.value();
@@ -61,9 +58,7 @@ window.goto = (name: string) => {
 
 <template>
   <v-app id="Phigros TK">
-    <v-sonner position="top-center" />
-    <v-app-bar title="phigros TK"></v-app-bar>
-    <v-navigation-drawer expand-on-hover rail permanent>
+    <v-navigation-drawer v-model="drawer" absolute temporary>
       <v-list density="compact" nav>
         <v-list-item
           v-for="key in ['render', 'rpe', 'tasks', 'about']"
@@ -71,9 +66,14 @@ window.goto = (name: string) => {
           :key="key"
           :prepend-icon="icons[key as keyof typeof icons]"
           :title="t(key)"
-          @click="router.push({ name: key })"></v-list-item>
+          @click="router.push({ name: key }); drawer = false"></v-list-item>
       </v-list>
     </v-navigation-drawer>
+
+    <v-app-bar title="phigros TK">
+      <v-app-bar-nav-icon @click="drawer = true"></v-app-bar-nav-icon>
+      <v-toolbar-title>phigros TK</v-toolbar-title>
+    </v-app-bar>
 
     <v-main class="d-flex justify-center">
       <router-view v-slot="{ Component }">
