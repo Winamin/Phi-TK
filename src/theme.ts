@@ -3,6 +3,12 @@
 import { createVuetify } from 'vuetify';
 import 'vuetify/styles';
 import { aliases, mdi } from 'vuetify/iconsets/mdi';
+import { watchEffect } from 'vue';
+
+watchEffect(() => {
+  const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  vuetify.framework.theme.global.name.value = prefersDarkMode ? 'myCustomDarkTheme' : 'myCustomLightTheme';
+});
 
 const myCustomLightTheme = {
   dark: false,
