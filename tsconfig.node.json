@@ -1,6 +1,10 @@
 {
   "extends": "@tsconfig/node18/tsconfig.json",
   "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue",
     "vite.config.*",
     "vitest.config.*",
     "cypress.config.*",
@@ -11,6 +15,21 @@
     "composite": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "types": ["node"]
-  }
+    "types": ["node"],
+    "target": "esnext",
+    "strict": true,
+    "jsx": "preserve",
+    "importHelpers": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "lib": ["esnext", "dom"]
+  },
+  "exclude": [
+    "node_modules"
+  ]
 }
