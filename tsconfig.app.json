@@ -16,15 +16,5 @@
         "./src/*"
       ]
     },
-    "target": "esnext",
-    "module": "esnext",
-    "moduleResolution": "node",
-    "strict": true,
-    "jsx": "preserve",
-    "importHelpers": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "sourceMap": true,
-    "lib": ["esnext", "dom"]
   }
 }
