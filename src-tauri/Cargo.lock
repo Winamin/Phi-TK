@@ -2870,8 +2870,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "phigros-recorder"
-version = "0.1.6"
+name = "phigros-tk"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3019,7 +3019,7 @@ dependencies = [
 [[package]]
 name = "prpr"
 version = "0.4.0"
-source = "git+https://github.com/Winamin/Phigros-TK-render-lib?branch=render-lib#a948932859435a959dd880a8fe54232e9089b85ef"
+source = "git+https://github.com/Winamin/Phigros-TK-render-lib?branch=render-lib#948932859435a959dd880a8fe54232e9089b85ef"
 dependencies = [
  "anyhow",
  "async-trait",
