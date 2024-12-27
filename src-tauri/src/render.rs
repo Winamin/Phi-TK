@@ -278,11 +278,11 @@ pub async fn main() -> Result<()> {
                         NoteKind::Click | NoteKind::Hold { .. } => &sfx_click,
                         NoteKind::Drag => &sfx_drag,
                         NoteKind::Flick => &sfx_flick,
-
-                    };
+                        };
                     place(O + note.time as f64 + offset as f64, sfx, volume_sfx);
-                }
+                    }
             info!("sfx Time:{:?}", start_time.elapsed())
+            }
         }
     }
     let mut pos = O + length + A;
