@@ -12,10 +12,10 @@ export interface ChartInfo {
 }
 
 export type TaskStatus =
-/*  | {
+  | {
       type: 'pending';
     }
-*/  | {
+  | {
       type: 'loading';
     }
   | {
