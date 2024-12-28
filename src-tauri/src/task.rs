@@ -149,12 +149,20 @@ impl Task {
                     }
                     let estimate =
                         total.saturating_sub(frame_count).max(1) as f64 / last_fps as f64;
-                    *self.status.lock().await = TaskStatus::Rendering {
-                        progress: frame_count as f64 / total as f64,
-                        fps: last_fps as u64,
-                        estimate,
-                    };
-                }
+                    if frame_count as f64 / total as f64 >= 1.0 {
+                        *self.status.lock().await = TaskStatus::Done {
+                            duration: cur,
+                            output: "Rendering completed immediately at 100%".to_string(),
+                        };
+                        return Ok(());
+                    } else {
+                        *self.status.lock().await = TaskStatus::Rendering {
+                           progress: frame_count as f64 / total as f64,
+                           fps: last_fps as u64,
+                           estimate,
+                       };
+                  }
+              }
                 IPCEvent::Done(duration) => {
                     let output = child.wait_with_output().await?;
                     let stdout = String::from_utf8(output.stdout)
