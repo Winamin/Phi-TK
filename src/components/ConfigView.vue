@@ -133,6 +133,7 @@ zh-CN:
   chart_debug: 调试模式
   chart_ratio: 谱面缩放
   buffer_size: 音频Buffer Size
+  buffer_size-tips: 用处不大
   combo: 自定义COMBO名称
   flid_x: 镜像模式
 
