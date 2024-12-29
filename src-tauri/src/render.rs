@@ -354,7 +354,6 @@ pub async fn main() -> Result<()> {
             .with_context(|| tl!("run-ffmpeg-failed"))?
             .stdout,
     )?;
-
     let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
     let has_qsv = params.config.hardware_accel && codecs.contains("h264_qsv");
     let has_amf = params.config.hardware_accel && codecs.contains("h264_amf");
@@ -381,9 +380,11 @@ pub async fn main() -> Result<()> {
     let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
     if use_cuda {
         args += " -hwaccel_output_format cuda";
+    } else if has_qsv {
+        args += " -hwaccel_output_format qsv";
     }
     write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
-
+    
     let args2 = format!(
         "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
         if use_cuda {nvenc} 
