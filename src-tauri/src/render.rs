@@ -354,6 +354,7 @@ pub async fn main() -> Result<()> {
             .with_context(|| tl!("run-ffmpeg-failed"))?
             .stdout,
     )?;
+    
     let hardware_accel = params.config.hardware_accel;
 
     let use_cuda = hardware_accel && codecs.contains("h264_nvenc");
@@ -367,10 +368,26 @@ pub async fn main() -> Result<()> {
     let ffmpeg_preset = if use_amf { "-quality" } else { "-preset" };
     let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
 
-    let (nvenc, qsv, amf, cpu) = if params.config.hevc {
-        ("hevc_nvenc", "hevc_qsv", "hevc_amf", "libx265")
+    let ffmpeg_111 = 
+    if use_cuda_hevc {
+        "hevc_nvenc"
+    } else if use_cuda {
+        "h264_nvenc"
+    } else if use_qsv_hevc {
+        "hevc_qsv"
+    } else if use_qsv {
+        "h264_qsv"
+    } else if use_amf_hevc {
+        "hevc_amf"
+    } else if use_amf {
+        "h264_amf"
     } else {
-        ("h264_nvenc", "h264_qsv", "h264_amf", "libx264")
+        warn!("Warinig:No hardware acceleration available, using software encoding");
+        if params.config.hevc {
+            "libx265"
+        } else {
+            "libx264"
+        }
     };
 
     if hardware_accel && !use_cuda_hevc && !use_qsv_hevc && !use_amf_hevc {
@@ -399,11 +416,7 @@ pub async fn main() -> Result<()> {
 
     let args2 = format!(
         "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
-        if use_cuda { nvenc }
-        else if use_qsv { qsv }
-        else if use_amf { amf }
-        else if hardware_accel { bail!(tl!("no-hwacc")); }
-        else { cpu },
+        ffmpeg_111,
         if params.config.bitrate_control == "CRF" {
             if use_cuda { "-cq" }
             else if use_qsv { "-q" }
@@ -471,15 +484,15 @@ pub async fn main() -> Result<()> {
         }
         unsafe {
             use miniquad::gl::*;
-            let tex = mst.output().texture.raw_miniquad_texture_handle();
+            //let tex = mst.output().texture.raw_miniquad_texture_handle();
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
 
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[frame as usize % N]);
             glReadPixels(
                 0,
                 0,
-                tex.width as _,
-                tex.height as _,
+                vw as _,
+                vh as _,
                 GL_RGBA,
                 GL_UNSIGNED_BYTE,
                 std::ptr::null_mut(),
