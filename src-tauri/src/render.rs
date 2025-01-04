@@ -455,7 +455,7 @@ pub async fn main() -> Result<()> {
 
     send(IPCEvent::StartRender(frames));
 
-    for frame in 0..frames {
+    for frame in N as u64..(frames + N as u64 - 1) {
         *my_time.borrow_mut() = (frame as f32 * frame_delta).max(0.) as f64;
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
         clear_background(BLACK);
