@@ -430,7 +430,9 @@ pub async fn main() -> Result<()> {
         .with_context(|| tl!("run-ffmpeg-failed"))?;
     let mut input = proc.stdin.take().unwrap();
 
-    let byte_size = vw as usize * vh as usize * 4;
+    let vw_usize = vw as usize;
+    let vh_usize = vh as usize;
+    let byte_size = vw_usize * vh_usize * 4;
 
     let frames = (video_length / frame_delta as f64).ceil() as u64;
 
