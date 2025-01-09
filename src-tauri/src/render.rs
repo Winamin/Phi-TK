@@ -253,8 +253,8 @@ pub async fn main() -> Result<()> {
         }       
     }
     
-    let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
-        let position = (pos * sample_rate_f64).round() as usize * 2;
+        let mut place = |pos: f64, clip: &AudioClip, volume: f32, stereo: bool| {
+        let position = (pos * sample_rate_f64).round() as usize;
         if position >= output.len() {
             return 0;
         }
@@ -262,13 +262,18 @@ pub async fn main() -> Result<()> {
         let len = (slice.len() / 2).min(clip.frame_count());
         let frames = clip.frames();
         for i in 0..len {
-            slice[i * 2] += frames[i].0 * volume;
-            slice[i * 2 + 1] += frames[i].1 * volume;
+            if stereo {
+                slice[i * 2] += frames[i].0 * volume;
+                slice[i * 2 + 1] += frames[i].1 * volume;
+           } else {
+                let mono = (frames[i].0 + frames[i].1) / 2.0;
+                slice[i * 2] += mono * volume;
+                slice[i * 2 + 1] += mono * volume;
+            }
         }
         return len;
     };
 
-    // 尝试在volume_sfx=0时不处理音效
     if volume_sfx != 0.0 {
         let start_time = Instant::now();
         for line in &chart.lines {
