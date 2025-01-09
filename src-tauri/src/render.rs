@@ -235,22 +235,23 @@ pub async fn main() -> Result<()> {
     assert_eq!(sample_rate, sfx_flick.sample_rate());
     
     let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
-    {
-        if volume_music != 0.0 {
+    if volume_music != 0.0 {
         let start_time = Instant::now();
         let pos = O - chart.offset.min(0.) as f64;
         let count = (music.length() as f64 * sample_rate_f64) as usize;
         let start_index = (pos * sample_rate_f64).round() as usize * 2;
-        let ratio = 1.0 / sample_rate_f64;
-        for i in 0..count {
-            let position = i as f64 * ratio;
-
+        
+        output.par_iter_mut().enumerate().for_each(|(i, sample)| {
+            let position = i as f64 / sample_rate_f64;
             let frame = music.sample(position as f32).unwrap_or_default();
-            output[start_index + i * 2] += frame.0 * volume_music;
-            output[start_index + i * 2 + 1] += frame.1 * volume_music;
-        }
-        info!("music Time:{:?}", start_time.elapsed())
-        }       
+            if i % 2 == 0 {
+                *sample += frame.0 * volume_music;
+            } else {
+                *sample += frame.1 * volume_music;
+            }
+        });
+
+        info!("music Time:{:?}", start_time.elapsed());
     }
     
         let mut place = |pos: f64, clip: &AudioClip, volume: f32, stereo: bool| {
