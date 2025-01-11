@@ -1,8 +1,6 @@
 # Phigros TK
 
-Modification based on phira-render
-More features
-To fix errors in pavement rendering
+Replaced Phigros Spectral Surface renderer
 
 ## Features
 
