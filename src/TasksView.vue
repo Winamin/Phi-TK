@@ -126,10 +126,16 @@ async function showInFolder(path: string) {
           <v-card-subtitle class="mt-n2">{{ task.path }}</v-card-subtitle>
           <div class="w-100 pa-4 pb-2 pr-2 mt-2">
             <p class="mb-2 text-medium-emphasis">{{ describeStatus(task.status) }}</p>
-            <template v-if="['loading', 'mixing', 'rendering'].includes(task.status.type)">
+            <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
+              <v-progress-circular
+                v-if="task.status.type !== 'rendering'"
+                :indeterminate="true"
+                color="primary">
+              </v-progress-circular>
               <v-progress-linear
-                :indeterminate="task.status.type !== 'rendering'"
-                :model-value="task.status.type === 'rendering' ? task.status.progress * 100 : 0"></v-progress-linear>
+                v-else
+                :model-value="task.status.progress * 100">
+              </v-progress-linear>
               <div class="pt-4 d-flex justify-end">
                 <v-btn variant="text" @click="invoke('cancel_task', { id: task.id })" v-t="'cancel'"></v-btn>
               </div>
