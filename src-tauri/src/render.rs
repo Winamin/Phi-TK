@@ -8,7 +8,7 @@ use prpr::{
     core::{internal_id, MSRenderTarget, NoteKind},
     fs,
     info::ChartInfo,
-    scene::{BasicPlayer, GameMode, GameScene, LoadingScene},
+    scene::{BasicPlayer, GameMode, GameScene, LoadingScene, EndingScene},
     time::TimeManager,
     ui::{FontArc, TextPainter},
     Main,
@@ -27,7 +27,6 @@ use std::{
 };
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
-use tokio::task;
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -219,6 +218,14 @@ pub async fn main() -> Result<()> {
     let volume_music = std::mem::take(&mut config.volume_music);
     let volume_sfx = std::mem::take(&mut config.volume_sfx);
 
+    let O: f64 = if params.config.disable_loading {
+        GameScene::BEFORE_TIME as f64
+    } else {
+        LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64
+    };
+    let A: f64 = -0.5; // fade out time
+    let musica: f64 = 0.7 + 0.3 + EndingScene::BPM_WAIT_TIME;
+
     let length = track_length - chart.offset.min(0.) as f64 + 1.;
     let video_length = O + length + A + params.config.ending_length;
     let offset = chart.offset.max(0.);
@@ -235,48 +242,53 @@ pub async fn main() -> Result<()> {
     assert_eq!(sample_rate, sfx_flick.sample_rate());
     
     let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
-    if volume_music != 0.0 {
-        let start_time = Instant::now();
-        let pos = O - chart.offset.min(0.) as f64;
-        let count = (music.length() as f64 * sample_rate_f64) as usize;
-        let start_index = (pos * sample_rate_f64).round() as usize * 2;
-        
-        output.par_iter_mut().enumerate().for_each(|(i, sample)| {
-            let position = i as f64 / sample_rate_f64;
-            let frame = music.sample(position as f32).unwrap_or_default();
-            if i % 2 == 0 {
-                *sample += frame.0 * volume_music;
-            } else {
-                *sample += frame.1 * volume_music;
-            }
-        });
+    let mut output2 = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize];
 
-        info!("music Time:{:?}", start_time.elapsed());
-    }
-    
-        let mut place = |pos: f64, clip: &AudioClip, volume: f32, stereo: bool| {
+    let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
         let position = (pos * sample_rate_f64).round() as usize;
-        if position >= output.len() {
+        if position >= output2.len() {
             return 0;
         }
-        let slice = &mut output[position..];
-        let len = (slice.len() / 2).min(clip.frame_count());
+        let slice = &mut output2[position..];
+        let len = (slice.len()).min(clip.frame_count());
+
         let frames = clip.frames();
         for i in 0..len {
-            if stereo {
-                slice[i * 2] += frames[i].0 * volume;
-                slice[i * 2 + 1] += frames[i].1 * volume;
-           } else {
-                let mono = (frames[i].0 + frames[i].1) / 2.0;
-                slice[i * 2] += mono * volume;
-                slice[i * 2 + 1] += mono * volume;
-            }
+            slice[i] += frames[i].0 * volume;
         }
+
         return len;
     };
 
+    if volume_music != 0.0 {
+        let music_time = Instant::now();
+        let pos = O - chart.offset.min(0.) as f64;
+        let len = ((music.length() as f64 + 1. + A + params.config.ending_length) * sample_rate_f64) as usize;
+        let start_index = (pos * sample_rate_f64).round() as usize * 2;
+        let ratio = 1.0 / sample_rate_f64;
+        for i in 0..len {
+            let position = i as f64 * ratio;
+            let frame = music.sample(position as f32).unwrap_or_default();
+            output[start_index + i * 2] += frame.0 * volume_music;
+            output[start_index + i * 2 + 1] += frame.1 * volume_music;
+        }
+        //ending
+        let mut pos = O + length;
+        while pos < video_length && params.config.ending_length > EndingScene::BPM_WAIT_TIME {
+            let start_index = (pos * sample_rate_f64).round() as usize * 2;
+            let slice = &mut output[start_index..];
+            let len = (slice.len() / 2).min(ending.frame_count());
+            let frames = &ending.frames();
+            for i in 0..len {
+                slice[i * 2] += frames[i].0 * volume_music;
+                slice[i * 2 + 1] += frames[i].1 * volume_music;
+            }
+            pos += ending.frame_count() as f64 / sample_rate_f64;
+        }
+    }
     if volume_sfx != 0.0 {
-        let start_time = Instant::now();
+        let sfx_time = Instant::now();
+        let offset = offset as f64;
         for line in &chart.lines {
             for note in &line.notes {
                 if !note.fake {
@@ -284,16 +296,16 @@ pub async fn main() -> Result<()> {
                         NoteKind::Click | NoteKind::Hold { .. } => &sfx_click,
                         NoteKind::Drag => &sfx_drag,
                         NoteKind::Flick => &sfx_flick,
-                        };
-                    place(O + note.time as f64 + offset as f64, sfx, volume_sfx);
-                    }
-            info!("sfx Time:{:?}", start_time.elapsed())
+                    };
+                    place(O + note.time as f64 + offset, sfx, volume_sfx);
+                }
             }
         }
+        info!("Render Hit Effects Time:{:?}", sfx_time.elapsed())
     }
-    let mut pos = O + length + A;
-    while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
-        pos += ending.frame_count() as f64 / sample_rate_f64;
+    for i in 0..output2.len() {
+            output[i * 2] += output2[i];
+            output[i * 2 + 1] += output2[i];
     }
     let mut proc = cmd_hidden(&ffmpeg)
         .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
@@ -343,9 +355,6 @@ pub async fn main() -> Result<()> {
     .await?;
     main.top_level = false;
     main.viewport = Some((0, 0, vw as _, vh as _));
-
-    const O: f64 = LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64;
-    const A: f64 = 0.7 + 0.3 + 0.4;
 
     let fps = params.config.fps;
     let frame_delta = 1. / fps as f32;
@@ -453,9 +462,7 @@ pub async fn main() -> Result<()> {
     let vh_usize = vh as usize;
     let byte_size = vw_usize * vh_usize * 4;
 
-    let frames = (video_length / frame_delta as f64).ceil() as u64;
-
-    const N: usize = 3;
+    const N: usize = 30;
     let mut pbos: [GLuint; N] = [0; N];
     unsafe {
         use miniquad::gl::*;
@@ -472,17 +479,14 @@ pub async fn main() -> Result<()> {
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
 
-    send(IPCEvent::StartRender(frames));
-
-    for frame in N as u64..(frames + N as u64 - 1) {
-        *my_time.borrow_mut() = (frame as f32 * frame_delta).max(0.) as f64;
+    for frame in 0..N {
+        *my_time.borrow_mut() = (frame as f64 / fps as f64).max(0.);
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
-        clear_background(BLACK);
-        main.viewport = Some((0, 0, vw as _, vh as _));
         main.update()?;
         main.render(&mut painter)?;
-        // TODO magic. can't remove this line.
-        draw_rectangle(0., 0., 0., 0., Color::default());
+        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 {
+            draw_rectangle(0., 0., 0., 0., Color::default());
+        }
         gl.flush();
 
         if MSAA.load(Ordering::SeqCst) {
