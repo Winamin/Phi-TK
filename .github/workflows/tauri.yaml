@@ -1,4 +1,4 @@
-name: Phigros TK
+name: Build Phigros TK
 on:
   push:
     tags:
@@ -28,7 +28,7 @@ jobs:
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable-x86_64-gnu
+          toolchain: beta-x86_64-gnu
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -48,7 +48,8 @@ jobs:
         uses: suisei-cn/actions-download-file@v1.3.0
         id: downlod-static-lib
         with:
-          url: "https://files-cf.phira.cn/prpr-avc-static-lib.tar.gz"
+          # url: "https://files-cf.phira.cn/prpr-avc-static-lib.tar.gz"
+          url: "https://raw.githubusercontent.com/Winamin/Phigros-TK/main/prpr-avc-static-"
           target: ./
 
       - name: Mkdir static-lib
@@ -70,9 +71,7 @@ jobs:
           PRPR_AVC_LIBS: ${{ github.workspace }}/static-lib
         with:
           tagName: ${{ github.ref_name }} # This only works if your workflow triggers on new tags.
-          releaseName: 'Phigros-TK v__VERSION__' # tauri-action replaces \_\_VERSION\_\_ with the app version.
+          releaseName: 'Phigross TK v__VERSION__' # tauri-action replaces \_\_VERSION\_\_ with the app version.
           releaseBody: 'From GitHub Action'
           releaseDraft: true
           prerelease: false
-          artifactName: 'phigros-tk_0.1.4_x64-setup.exe'
-          artifactPath: './src-tauri/target/release/bundle/nsis'
