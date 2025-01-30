@@ -3019,7 +3019,7 @@ dependencies = [
 [[package]]
 name = "prpr"
 version = "0.4.0"
-source = "git+https://github.com/Winamin/Phigros-TK-render-lib?branch=render-lib#58c6fe80e61e6a53482ff4634f6086eecfa2fb31"
+source = "git+https://github.com/Winamin/Phigros-TK-render-lib?branch=render-lib#e1d89f7f4dc8ccab782c24e2dbe77ef26e38abda"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3086,7 +3086,7 @@ dependencies = [
 [[package]]
 name = "prpr-avc"
 version = "0.1.0"
-source = "git+https://github.com/Winamin/Phigros-TK-render-lib?branch=render-lib#58c6fe80e61e6a53482ff4634f6086eecfa2fb31"
+source = "git+https://github.com/Winamin/Phigros-TK-render-lib?branch=render-lib#e1d89f7f4dc8ccab782c24e2dbe77ef26e38abda"
 dependencies = [
  "anyhow",
  "tracing",
