@@ -480,7 +480,8 @@ pub async fn main() -> Result<()> {
     }
 
     for frame in 0..N {
-        *my_time.borrow_mut() = (frame as f64 / fps as f64).max(0.);
+        let real_time = O + (frame as f64 * frame_delta as f64);
+        *my_time.borrow_mut() = real_time;
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
         main.update()?;
         main.render(&mut painter)?;
