@@ -458,9 +458,7 @@ pub async fn main() -> Result<()> {
         .with_context(|| tl!("run-ffmpeg-failed"))?;
     let mut input = proc.stdin.take().unwrap();
 
-    let vw_usize = vw as usize;
-    let vh_usize = vh as usize;
-    let byte_size = vw_usize * vh_usize * 4;
+    let byte_size = vw as usize * vh as usize * 4;
 
     const N: usize = 30;
     let mut pbos: [GLuint; N] = [0; N];
@@ -479,7 +477,7 @@ pub async fn main() -> Result<()> {
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
 
-    for frame in 0..N {
+    for frame in N as u64..(frames + N as u64 - 1) {
         let real_time = O + (frame as f64 * frame_delta as f64);
         *my_time.borrow_mut() = real_time;
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
@@ -502,8 +500,8 @@ pub async fn main() -> Result<()> {
             glReadPixels(
                 0,
                 0,
-                vw as _,
-                vh as _,
+                tex.width as _,
+                tex.height as _,
                 GL_RGBA,
                 GL_UNSIGNED_BYTE,
                 std::ptr::null_mut(),
