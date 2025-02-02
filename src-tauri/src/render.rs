@@ -224,14 +224,6 @@ pub async fn main() -> Result<()> {
     let volume_music = std::mem::take(&mut config.volume_music);
     let volume_sfx = std::mem::take(&mut config.volume_sfx);
 
-    let O: f64 = if params.config.disable_loading {
-        GameScene::BEFORE_TIME as f64
-    } else {
-        LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64
-    };
-    let A: f64 = -0.5; // fade out time
-    let musica: f64 = 0.7 + 0.3 + EndingScene::BPM_WAIT_TIME;
-
     let length = track_length - chart.offset.min(0.) as f64 + 1.;
     let video_length = O + length + A + params.config.ending_length;
     let offset = chart.offset.max(0.);
@@ -248,66 +240,42 @@ pub async fn main() -> Result<()> {
     assert_eq!(sample_rate, sfx_flick.sample_rate());
     
     let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
-    let mut output2 = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize];
+    if volume_music != 0.0 {
+        let start_time = Instant::now();
+        let pos = O - chart.offset.min(0.) as f64;
+        let count = (music.length() as f64 * sample_rate_f64) as usize;
+        let start_index = (pos * sample_rate_f64).round() as usize * 2;
+        let ratio = 1.0 / sample_rate_f64;
+        for i in 0..count {
+            let position = i as f64 * ratio;
+            let frame = music.sample(position as f32).unwrap_or_default();
+            output[start_index + i * 2] += frame.0 * volume_music;
+            output[start_index + i * 2 + 1] += frame.1 * volume_music;
+        }
+        info!("music Time:{:?}", start_time.elapsed())
 
+    }
+    
     let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
-        let position = (pos * sample_rate_f64).round() as usize;
-        if position >= output2.len() {
+        let position = (pos * sample_rate_f64).round() as usize * 2;
+        if position >= output.len() {
             return 0;
         }
-        let remaining = output2.len() - position;
-        let len = clip.frame_count().min(remaining);
+        let slice = &mut output[position..];
+        let len = (slice.len() / 2).min(clip.frame_count());
 
-        let slice = &mut output2[position..position + len];
         let frames = clip.frames();
-
         for i in 0..len {
-            slice[i] += frames[i].0 * volume;
+            slice[i * 2] += frames[i].0 * volume;
+            slice[i * 2 + 1] += frames[i].1 * volume;
         }
-       return len
+    
+        return len;
     };
-  
-    if volume_music != 0.0 {
-        let music_time = Instant::now();
-        let pos = O - chart.offset.min(0.) as f64;
-        let start_index = (pos * sample_rate_f64).round() as usize * 2;
-        let max_samples = (output.len().saturating_sub(start_index)) / 2;
-        let len = ((music.length() as f64 + 1. + A + params.config.ending_length) * sample_rate_f64) as usize;
-        let len = len.min(max_samples);
-        if len > 0 {
-            let ratio = 1.0 / sample_rate_f64;
-            for i in 0..len {
-                let position = i as f64 * ratio;
-                let frame = music.sample(position as f32).unwrap_or_default();
-                let index = start_index + i * 2;
-                output[index] += frame.0 * volume_music;
-                output[index + 1] += frame.1 * volume_music;
-            }
-        }
-        let mut pos = O + length;
-        while pos < video_length && params.config.ending_length > EndingScene::BPM_WAIT_TIME {
-            let start_index = (pos * sample_rate_f64).round() as usize * 2;
-            if start_index >= output.len() {
-                break;
-            }
-            let max_samples = (output.len() - start_index) / 2;
-            let slice = &mut output[start_index..];
-            let len = (slice.len() / 2).min(ending.frame_count()).min(max_samples);
-        
-            if len > 0 {
-                let frames = &ending.frames();
-                for i in 0..len {
-                    let index = i * 2;
-                    slice[index] += frames[i].0 * volume_music;
-                    slice[index + 1] += frames[i].1 * volume_music;
-                }
-            }
-          pos += ending.frame_count() as f64 / sample_rate_f64;
-        }
-    }
+    
+
     if volume_sfx != 0.0 {
-        let sfx_time = Instant::now();
-        let offset = offset as f64;
+        let start_time = Instant::now();
         for line in &chart.lines {
             for note in &line.notes {
                 if !note.fake {
@@ -316,34 +284,35 @@ pub async fn main() -> Result<()> {
                         NoteKind::Drag => &sfx_drag,
                         NoteKind::Flick => &sfx_flick,
                     };
-                    place(O + note.time as f64 + offset, sfx, volume_sfx);
+                    place(O + note.time as f64 + offset as f64, sfx, volume_sfx);
                 }
             }
         }
-        info!("Render Hit Effects Time:{:?}", sfx_time.elapsed())
+        info!("sfx Time:{:?}", start_time.elapsed())
+        
     }
-    output.chunks_exact_mut(2)
-        .zip(output2.iter())
-        .for_each(|(ch, &val)| {
-            ch[0] += val;
-            ch[1] += val;
-    });
+
+    //ending
+    let mut pos = O + length + A;
+    while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
+        pos += ending.frame_count() as f64 / sample_rate_f64;
+    }
+
     let mut proc = cmd_hidden(&ffmpeg)
         .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
         .arg(mixing_output.path())
+        .arg("-loglevel")
+        .arg("warning")
         .stdin(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
         .with_context(|| tl!("run-ffmpeg-failed"))?;
-    let mut writer = BufWriter::new(
-        proc.stdin
-            .take()
-            .ok_or_else(|| anyhow::anyhow!(tl!("failed-get-stdin")))?
-    );
+    let input = proc.stdin.as_mut().unwrap();
+    let mut writer = BufWriter::new(input);
     for sample in output.into_iter() {
         writer.write_all(&sample.to_le_bytes())?;
     }
-    writer.flush()?;
+    drop(writer);
     proc.wait()?;
 
     let (vw, vh) = params.config.resolution;
@@ -355,10 +324,9 @@ pub async fn main() -> Result<()> {
     }));
     static MSAA: AtomicBool = AtomicBool::new(false);
     let player = build_player(&params.config).await?;
-    let config_ref = &config;
     let mut main = Main::new(
         Box::new(
-            LoadingScene::new(GameMode::Normal, info, &config_ref.clone(), fs, Some(player), None, None).await?,
+            LoadingScene::new(GameMode::Normal, info, &config, fs, Some(player), None, None).await?,
         ),
         tm,
         {
@@ -380,8 +348,13 @@ pub async fn main() -> Result<()> {
     main.top_level = false;
     main.viewport = Some((0, 0, vw as _, vh as _));
 
+    const O: f64 = LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64;
+    const A: f64 = 0.7 + 0.3 + 0.4 - 0.4;
+
     let fps = params.config.fps;
     let frame_delta = 1. / fps as f32;
+    let frames = (video_length / frame_delta as f64).ceil() as u64;
+    send(IPCEvent::StartRender(frames));
 
     let codecs = String::from_utf8(
         cmd_hidden(&ffmpeg)
@@ -390,98 +363,73 @@ pub async fn main() -> Result<()> {
             .with_context(|| tl!("run-ffmpeg-failed"))?
             .stdout,
     )?;
-    let supports_hevc = codecs.contains("hevc");
-    let hardware_accel = params.config.hardware_accel;
-    
-    let use_cuda = hardware_accel && codecs.contains("h264_nvenc");
-    let use_qsv = hardware_accel && codecs.contains("h264_qsv");
-    let use_amf = hardware_accel && codecs.contains("h264_amf");
 
-    let use_cuda_hevc = hardware_accel && codecs.contains("hevc_nvenc");
-    let use_qsv_hevc = hardware_accel && codecs.contains("hevc_qsv");
-    let use_amf_hevc = hardware_accel && codecs.contains("hevc_amf");
+    let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
+    let has_qsv = params.config.hardware_accel && codecs.contains("h264_qsv");
+    let has_amf = params.config.hardware_accel && codecs.contains("h264_amf");
 
-    let ffmpeg_preset = if use_amf { "-quality" } else { "-preset" };
+    let use_cuda_hevc = params.config.hardware_accel && codecs.contains("hevc_nvenc");
+    let has_qsv_hevc = params.config.hardware_accel && codecs.contains("hevc_qsv");
+    let has_amf_hevc = params.config.hardware_accel && codecs.contains("hevc_amf");
+
+    let ffmpeg_preset =  if !use_cuda && !has_qsv && has_amf {"-quality"} else {"-preset"};
     let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
 
-    let ffmpeg_111 = 
-    if use_cuda_hevc {
-        "hevc_nvenc"
-    } else if use_cuda {
-        "h264_nvenc"
-    } else if use_qsv_hevc {
-        "hevc_qsv"
-    } else if use_qsv {
-        "h264_qsv"
-    } else if use_amf_hevc {
-        "hevc_amf"
-    } else if use_amf {
-        "h264_amf"
+    let (nvenc, qsv, _amf, cpu) = if params.config.hevc {
+        ("hevc_nvenc", "hevc_qsv", "hevc_amf", "libx265")
     } else {
-        warn!("Warinig:No hardware acceleration available, using software encoding");
-        if params.config.hevc {
-            "libx265"
-        } else {
-            "libx264"
-        }
+        ("h264_nvenc", "h264_qsv", "h264_amf", "libx264")
     };
+    if params.config.hardware_accel && !use_cuda_hevc && !has_qsv_hevc && !has_amf_hevc {bail!(tl!("no-hwacc"));}
 
-    if hardware_accel && !use_cuda_hevc && !use_qsv_hevc && !use_amf_hevc {
-        bail!(tl!("no-hwacc"));
-    }
+    let ffmpeg_preset_name = if use_cuda {ffmpeg_preset_name_list.nth(1)
+    } else if has_qsv {ffmpeg_preset_name_list.nth(0)
+    } else if has_amf {ffmpeg_preset_name_list.nth(2)
+    } else {ffmpeg_preset_name_list.nth(0)};
 
-    let ffmpeg_preset_name = ffmpeg_preset_name_list
-    .nth(match (use_cuda, use_qsv, use_amf) {
-        (true, _, _) => 1,
-        (_, true, _) => 0,
-        (_, _, true) => 2,
-        _ => 0,
-    })
-    .unwrap_or("medium");
     let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
-     if use_cuda {
+    if use_cuda {
         args += " -hwaccel_output_format cuda";
-    } else if use_qsv {
-        args += " -hwaccel_output_format qsv";
-    } else if use_amf {
-        args += " -hwaccel_output_format d3d11va";
     }
     write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
-    let ss_arg = if params.config.disable_loading {
-        format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
-    } else {
-        "-ss 0.1".to_string()
-    };
-    
     let args2 = format!(
         "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
-        ffmpeg_111,
+        if use_cuda {nvenc} 
+        else if has_qsv {qsv} 
+        //else if has_amf {amf}
+        else if params.config.hardware_accel {bail!(tl!("no-hwacc"));} 
+        else {cpu},
         if params.config.bitrate_control == "CRF" {
-            if use_cuda { "-cq" }
-            else if use_qsv { "-q" }
-            else if use_amf { "-qp_p" }
-            else { "-crf" }
-        }else {
+            if use_cuda {"-cq"}
+            else if has_qsv {"-q"}
+            //else if has_amf {"-qp_p"}
+            else {"-crf"}
+        } else {
             "-b:v"
         },
         params.config.bitrate,
         ffmpeg_preset,
-        ffmpeg_preset_name,
-        ss_arg,
+        ffmpeg_preset_name.unwrap(),
+        if params.config.disable_loading{format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)}
+        else{"-ss 0.1".to_string()},
     );
+
     let mut proc = cmd_hidden(&ffmpeg)
         .args(args.split_whitespace())
         .arg(mixing_output.path())
         .args(args2.split_whitespace())
         .arg(output_path)
+        .arg("-loglevel")
+        .arg("warning")
         .stdin(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
         .with_context(|| tl!("run-ffmpeg-failed"))?;
+    let mut input = proc.stdin.take().unwrap();
+
     let byte_size = vw as usize * vh as usize * 4;
 
-    let frames = (video_length / frame_delta as f64).ceil() as u64;
 
     const N: usize = 3;
     let mut pbos: [GLuint; N] = [0; N];
@@ -500,12 +448,11 @@ pub async fn main() -> Result<()> {
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
 
-    send(IPCEvent::StartRender(frames));
 
     for frame in 0..frames {
         *my_time.borrow_mut() = (frame as f32 * frame_delta).max(0.) as f64;
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
-        clear_background(BLACK);
+        //clear_background(BLACK);
         main.viewport = Some((0, 0, vw as _, vh as _));
         main.update()?;
         main.render(&mut painter)?;
@@ -535,13 +482,13 @@ pub async fn main() -> Result<()> {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[(frame + 1) as usize % N]);
             let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
             if !src.is_null() {
-                //input.write_all(&std::slice::from_raw_parts(src as *const u8, byte_size))?;
+                input.write_all(&std::slice::from_raw_parts(src as *const u8, byte_size))?;
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
             }
         }
         send(IPCEvent::Frame);
     }
-    //drop(input);
+    drop(input);
     proc.wait()?;
 
     send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
