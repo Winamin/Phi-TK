@@ -245,7 +245,9 @@ pub async fn main() -> Result<()> {
     
     let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
     let mut output2 = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize];
-
+    fn time_to_samples(t: f64, sr: f64) -> usize {
+        (t * sr).round() as usize
+    }
     let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
         let position = (pos * sample_rate_f64).round() as usize;
             if position >= output2.len() {
@@ -265,42 +267,43 @@ pub async fn main() -> Result<()> {
  
     if volume_music != 0.0 {
         let music_time = Instant::now();
-        let pos = O - chart.offset.min(0.) as f64;
-        let start_index = (pos * sample_rate_f64).round() as usize * 2;
-        let max_samples = (output.len().saturating_sub(start_index)) / 2;
-        let len = ((music.length() as f64 + 1. + A + params.config.ending_length) * sample_rate_f64) as usize;
-        let len = len.min(max_samples);
+        let music_start_time = O + chart.offset;
+        let video_start_time = music_start_time.max(0.0);
+        let music_skip_time = (-music_start_time).max(0.0);
+    
+        let start_index = time_to_samples(video_start_time, sample_rate_f64) * 2;
+        let skip_samples = time_to_samples(music_skip_time, sample_rate_f64);
+    
+        let max_samples = (output.len() - start_index) / 2;
+        let music_total = time_to_samples(music.length() as f64, sample_rate_f64);
+        let len = (music_total - skip_samples).min(max_samples);
     
         if len > 0 {
-            let ratio = 1.0 / sample_rate_f64;
             for i in 0..len {
-                let position = i as f64 * ratio;
-                let frame = music.sample(position as f32).unwrap_or_default();
-                let index = start_index + i * 2;
-                output[index] += frame.0 * volume_music;
-                output[index + 1] += frame.1 * volume_music;
+                let music_sample = skip_samples + i;
+                let frame = music.sample_at(music_sample).unwrap_or_default();
+                let idx = start_index + i * 2;
+                output[idx] += frame.0 * volume_music;
+                output[idx + 1] += frame.1 * volume_music;
             }
         }
-        //ending
-        let mut pos = O + length;
-        while pos < video_length && params.config.ending_length > EndingScene::BPM_WAIT_TIME {
-            let start_index = (pos * sample_rate_f64).round() as usize * 2;
-            if start_index >= output.len() {
+        let mut current_time = O + length;
+        while current_time < video_length && params.config.ending_length > EndingScene::BPM_WAIT_TIME {
+            let start_idx = time_to_samples(current_time, sample_rate_f64) * 2;
+            if start_idx >= output.len() {
                 break;
             }
-            let max_samples = (output.len() - start_index) / 2;
-            let slice = &mut output[start_index..];
-            let len = (slice.len() / 2).min(ending.frame_count()).min(max_samples);
         
-            if len > 0 {
-                let frames = &ending.frames();
-                for i in 0..len {
-                    let index = i * 2;
-                    slice[index] += frames[i].0 * volume_music;
-                    slice[index + 1] += frames[i].1 * volume_music;
-                }
+            let max_samples = (output.len() - start_idx) / 2;
+            let write_len = ending.frame_count().min(max_samples);
+        
+            for i in 0..write_len {
+                let frame = ending.frames()[i];
+                let idx = start_idx + i * 2;
+                output[idx] += frame.0 * volume_music;
+                output[idx + 1] += frame.1 * volume_music;
             }
-            pos += ending.frame_count() as f64 / sample_rate_f64;
+            current_time += write_len as f64 / sample_rate_f64;
         }
     }
     if volume_sfx != 0.0 {
