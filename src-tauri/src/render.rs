@@ -337,13 +337,13 @@ pub async fn main() -> Result<()> {
     let mut writer = BufWriter::new(
         proc.stdin
             .take()
-            .ok_or_else(|| anyhow!(tl!("failed-get-stdin")))?
+            .ok_or_else(|| anyhow::anyhow!(tl!("failed-get-stdin")))?
     );
-    for sample in output {
+    for sample in output.into_iter() {
         writer.write_all(&sample.to_le_bytes())?;
     }
     writer.flush()?;
-    proc.wait().with_context(|| tl!("process-failed"))?;
+    proc.wait()?;
 
     let (vw, vh) = params.config.resolution;
     let mst = Rc::new(MSRenderTarget::new((vw, vh), config.sample_count));
