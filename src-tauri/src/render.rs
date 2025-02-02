@@ -249,8 +249,8 @@ pub async fn main() -> Result<()> {
         if position >= output2.len() {
             return 0;
         }
-        let slice = &mut output2[position..];
-        let len = (slice.len()).min(clip.frame_count());
+        let remaining = output2.len() - position;
+        let len = clip.frame_count().min(remaining);
 
         let frames = clip.frames();
         for i in 0..len {
@@ -369,9 +369,9 @@ pub async fn main() -> Result<()> {
             .with_context(|| tl!("run-ffmpeg-failed"))?
             .stdout,
     )?;
-    
+    let supports_hevc = codecs.contains("hevc");
     let hardware_accel = params.config.hardware_accel;
-
+    
     let use_cuda = hardware_accel && codecs.contains("h264_nvenc");
     let use_qsv = hardware_accel && codecs.contains("h264_qsv");
     let use_amf = hardware_accel && codecs.contains("h264_amf");
@@ -409,15 +409,14 @@ pub async fn main() -> Result<()> {
         bail!(tl!("no-hwacc"));
     }
 
-    let ffmpeg_preset_name = if use_cuda {
-        ffmpeg_preset_name_list.nth(1)
-    } else if use_qsv {
-        ffmpeg_preset_name_list.nth(0)
-    } else if use_amf {
-        ffmpeg_preset_name_list.nth(2)
-    } else {
-        ffmpeg_preset_name_list.nth(0)
-    };
+    let ffmpeg_preset_name = ffmpeg_preset_name_list
+    .nth(match (use_cuda, use_qsv, use_amf) {
+        (true, _, _) => 1,
+        (_, true, _) => 0,
+        (_, _, true) => 2,
+        _ => 0,
+    })
+    .unwrap_or("medium");
 
     let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
      if use_cuda {
@@ -478,6 +477,8 @@ pub async fn main() -> Result<()> {
     }
 
     for frame in N as u64..(frames + N as u64 - 1) {
+        const BATCH_SIZE: usize = 1024;
+        let mut buffer = Vec::with_capacity(byte_size * BATCH_SIZE);
         let real_time = O + (frame as f64 * frame_delta as f64);
         *my_time.borrow_mut() = real_time;
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
@@ -510,15 +511,22 @@ pub async fn main() -> Result<()> {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[(frame + 1) as usize % N]);
             let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
             if !src.is_null() {
-                input.write_all(&std::slice::from_raw_parts(src as *const u8, byte_size))?;
+                buffer.extend_from_slice(&std::slice::from_raw_parts(src as *const u8, byte_size));
+                if buffer.len() >= byte_size * BATCH_SIZE {
+                input.write_all(&buffer)?;
+                buffer.clear();
+                }
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
             }
         }
         send(IPCEvent::Frame);
     }
+    if !buffer.is_empty() {
+        input.write_all(&buffer)?;
+    }
     drop(input);
     proc.wait()?;
-
+ 
     send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
     Ok(())
 }
