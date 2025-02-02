@@ -495,7 +495,7 @@ pub async fn main() -> Result<()> {
         glGenBuffers(pbos.len() as i32, pbos.as_mut_ptr());
         for pbo in &pbos {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
-            glBufferData(GL_PIXEL_PACK_BUFFER, (vw * vh * 4) as i64, std::ptr::null(), GL_STREAM_READ);
+            glBufferData((GL_PIXEL_PACK_BUFFER, (vw * vh * 4) as i64).try_into().unwrap(), std::ptr::null(), GL_STREAM_READ);
         }
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
