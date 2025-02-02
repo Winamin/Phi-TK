@@ -451,7 +451,7 @@ pub async fn main() -> Result<()> {
         ffmpeg_preset,
         ffmpeg_preset_name,
         ss_arg,
-
+    );
     let mut proc = cmd_hidden(&ffmpeg)
         .args(args.split_whitespace())
         .arg(mixing_output.path())
