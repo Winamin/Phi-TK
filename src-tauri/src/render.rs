@@ -419,7 +419,6 @@ pub async fn main() -> Result<()> {
         _ => 0,
     })
     .unwrap_or("medium");
-
     let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
      if use_cuda {
         args += " -hwaccel_output_format cuda";
@@ -436,20 +435,22 @@ pub async fn main() -> Result<()> {
         "-ss 0.1".to_string()
     };
     let args2 = format!(
-        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
-        ffmpeg_111,
-        if params.config.bitrate_control == "CRF" {
-            if use_cuda { "-cq" }
-            else if use_qsv { "-q" }
-            else if use_amf { "-qp_p" }
-            else { "-crf" }
-        }else {
-            "-b:v"
-        },
-        params.config.bitrate,
-        ffmpeg_preset,
-        ffmpeg_preset_name,
-        ss_arg,
+        "-c:a copy \
+        -c:v {encoder} \
+        -pix_fmt yuv420p \
+        {bitrate_param} {bitrate} \
+        {preset_type} {preset_value} \
+        -map 0:v:0 \
+        -map 1:a:0 \
+        {ss_arg} \
+        -vf vflip \
+        -f mov",
+        encoder = ffmpeg_111,
+        bitrate_param = bitrate_param,
+        bitrate = params.config.bitrate,
+        preset_type = ffmpeg_preset,
+        preset_value = ffmpeg_preset_name,
+        ss_arg = ss_arg
     );
 
     let mut proc = cmd_hidden(&ffmpeg)
@@ -501,12 +502,13 @@ pub async fn main() -> Result<()> {
         }
         unsafe {
             use miniquad::gl::*;
-            //let tex = mst.output().texture.raw_miniquad_texture_handle();
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
-
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[frame as usize % N]);
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            let pbo_index = (frame as usize) % N;
+            let next_pbo = (frame as usize + 1) % N;
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[pbo_index]);
             glReadPixels(
-                0,
+                0, 
                 0,
                 vw as _,
                 vh as _,
@@ -514,17 +516,19 @@ pub async fn main() -> Result<()> {
                 GL_UNSIGNED_BYTE,
                 std::ptr::null_mut(),
             );
-
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[(frame + 1) as usize % N]);
-            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[next_pbo]);
+            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
             if !src.is_null() {
-                buffer.extend_from_slice(&std::slice::from_raw_parts(src as *const u8, byte_size));
-                if buffer.len() >= byte_size * BATCH_SIZE {
-                input.write_all(&buffer)?;
-                buffer.clear();
+                let expected_size = (vw * vh * 4) as usize;
+                let frame_data = std::slice::from_raw_parts(src as *const u8, expected_size);
+                if frame_data.len() != expected_size {
+                    log::error!("Invalid frame data length: {} vs {}", frame_data.len(), expected_size);
+                } else {
+                    buffer.extend_from_slice(frame_data);
                 }
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
             }
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
         }
         send(IPCEvent::Frame);
     }
