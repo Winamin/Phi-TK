@@ -447,7 +447,7 @@ pub async fn main() -> Result<()> {
         -vf vflip \
         -f mov",
         encoder = ffmpeg_111,
-        bitrate_param = bitrate_param,
+        bitrate_param = -b:v,
         bitrate = params.config.bitrate,
         preset_type = ffmpeg_preset,
         preset_value = ffmpeg_preset_name,
@@ -473,12 +473,7 @@ pub async fn main() -> Result<()> {
     const N: usize = 30;
     let mut pbos: [GLuint; N] = [0; N];
     unsafe {
-        use miniquad::gl::{
-            GL_PACK_ALIGNMENT,
-            GL_UNPACK_ALIGNMENT,
-            GL_READ_ONLY,
-            GL_PIXEL_PACK_BUFFER,
-        };
+        use miniquad::gl::*;
         glGenBuffers(N as _, pbos.as_mut_ptr());
         for pbo in pbos {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo);
@@ -507,12 +502,7 @@ pub async fn main() -> Result<()> {
             mst.blit();
         }
         unsafe {
-            use miniquad::gl::{
-                GL_PACK_ALIGNMENT,
-                GL_UNPACK_ALIGNMENT,
-                GL_READ_ONLY,
-                GL_PIXEL_PACK_BUFFER,
-            };
+            use miniquad::gl::*;
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
             let pbo_index = (frame as usize) % N;
