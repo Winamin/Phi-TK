@@ -447,7 +447,7 @@ pub async fn main() -> Result<()> {
         -vf vflip \
         -f mov",
         encoder = ffmpeg_111,
-        bitrate_param = -b:v,
+        bitrate_param = "-b:v",
         bitrate = params.config.bitrate,
         preset_type = ffmpeg_preset,
         preset_value = ffmpeg_preset_name,
@@ -486,7 +486,10 @@ pub async fn main() -> Result<()> {
         }
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
-
+    
+    const GL_PACK_ALIGNMENT: u32 = 0x0D05;
+    const GL_READ_ONLY: u32 = 0x88B8;
+    
     for frame in N as u64..(frames + N as u64 - 1) {
         let real_time = O + (frame as f64 * frame_delta as f64);
         *my_time.borrow_mut() = real_time;
