@@ -304,7 +304,7 @@ pub async fn main() -> Result<()> {
           pos += ending.frame_count() as f64 / sample_rate_f64;
         }
     }
-    volume_sfx != 0.0 {
+    if volume_sfx != 0.0 {
         let sfx_time = Instant::now();
         let offset = offset as f64;
         let o_plus_offset = O + offset;
