@@ -430,6 +430,11 @@ pub async fn main() -> Result<()> {
     }
     write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
+    let ss_arg = if params.config.disable_loading {
+        format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
+    } else {
+        "-ss 0.1".to_string()
+    };
     let args2 = format!(
         "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
         ffmpeg_111,
@@ -444,8 +449,7 @@ pub async fn main() -> Result<()> {
         params.config.bitrate,
         ffmpeg_preset,
         ffmpeg_preset_name
-        if params.config.disable_loading { format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME) }
-        else { "-ss 0.1".to_string() },
+        ss_arg,
     );
 
     let mut proc = cmd_hidden(&ffmpeg)
