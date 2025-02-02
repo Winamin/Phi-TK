@@ -296,6 +296,7 @@ pub async fn main() -> Result<()> {
         let sfx_time = Instant::now();
         let offset = offset as f64;
         let o_plus_offset = O + offset;
+        let audio_buffer = Arc::new(Mutex::new(Vec::<u8>::new()));
         let (mut click_times, mut drag_times, mut flick_times) = (Vec::new(), Vec::new(), Vec::new());
         chart.lines.iter()
             .flat_map(|line| line.notes.iter())
@@ -308,20 +309,23 @@ pub async fn main() -> Result<()> {
                     NoteKind::Flick => flick_times.push(time),
                 }
         });
-        let volume = volume_sfx;
         click_times.par_iter().for_each(|&t| {
-            place(t, &sfx_click, volume);
+            let buffer_ref = audio_buffer.clone();
+            let mut buffer = buffer_ref.lock().unwrap();
+            place(t, &sfx_click, volume_sfx, &mut buffer);
         });
         drag_times.par_iter().for_each(|&t| {
-            place(t, &sfx_drag, volume);
+            let buffer_ref = audio_buffer.clone();
+            let mut buffer = buffer_ref.lock().unwrap();
+            place(t, &sfx_drag, volume_sfx, &mut buffer);
         });
         flick_times.par_iter().for_each(|&t| {
-            place(t, &sfx_flick, volume);
+            let buffer_ref = audio_buffer.clone();
+            let mut buffer = buffer_ref.lock().unwrap();
+            place(t, &sfx_flick, volume_sfx, &mut buffer);
         });
-
         info!("Render Hit Effects Time:{:?}", sfx_time.elapsed());
     }
-
     output.chunks_exact_mut(2)
         .zip(output2.iter())
         .for_each(|(ch, &val)| {
