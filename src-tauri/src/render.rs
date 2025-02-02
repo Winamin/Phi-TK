@@ -30,6 +30,8 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 
+use rayon::prelude::*;
+
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderConfig {
@@ -245,88 +247,87 @@ pub async fn main() -> Result<()> {
     
     let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
     let mut output2 = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize];
-    fn time_to_samples(t: f64, sr: f64) -> usize {
-        (t * sr).round() as usize
-    }
+
     let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
-        let position = (pos * sample_rate_f64).round() as usize;
-            if position >= output2.len() {
-                return 0;
+         let position = (pos * sample_rate_f64).round() as usize;
+         if position >= output2.len() {
+            return 0;
         }
         let remaining = output2.len() - position;
         let len = clip.frame_count().min(remaining);
-
+    
         let slice = &mut output2[position..position + len];
         let frames = clip.frames();
-
+    
         for i in 0..len {
             slice[i] += frames[i].0 * volume;
         }
-            return len;
+
+        return len;
     };
- 
+
     if volume_music != 0.0 {
         let music_time = Instant::now();
-        let music_start_time = O + chart.offset;
-        let video_start_time = music_start_time.max(0.0);
-        let music_skip_time = (-music_start_time).max(0.0);
-    
-        let start_index = time_to_samples(video_start_time, sample_rate_f64) * 2;
-        let skip_samples = time_to_samples(music_skip_time, sample_rate_f64);
-    
-        let max_samples = (output.len() - start_index) / 2;
-        let music_total = time_to_samples(music.length() as f64, sample_rate_f64);
-        let len = (music_total - skip_samples).min(max_samples);
-    
-        if len > 0 {
-            for i in 0..len {
-                let music_sample = skip_samples + i;
-                let frame = music.sample_at(music_sample).unwrap_or_default();
-                let idx = start_index + i * 2;
-                output[idx] += frame.0 * volume_music;
-                output[idx + 1] += frame.1 * volume_music;
-            }
+        let pos = O - chart.offset.min(0.) as f64;
+        let len = ((music.length() as f64 + 1. + A + params.config.ending_length) * sample_rate_f64) as usize;
+        let start_index = (pos * sample_rate_f64).round() as usize * 2;
+        let ratio = 1.0 / sample_rate_f64;
+        for i in 0..len {
+            let position = i as f64 * ratio;
+            let frame = music.sample(position as f32).unwrap_or_default();
+            output[start_index + i * 2] += frame.0 * volume_music;
+            output[start_index + i * 2 + 1] += frame.1 * volume_music;
         }
-        let mut current_time = O + length;
-        while current_time < video_length && params.config.ending_length > EndingScene::BPM_WAIT_TIME {
-            let start_idx = time_to_samples(current_time, sample_rate_f64) * 2;
-            if start_idx >= output.len() {
-                break;
+        //ending
+        let mut pos = O + length;
+        while pos < video_length && params.config.ending_length > EndingScene::BPM_WAIT_TIME {
+            let start_index = (pos * sample_rate_f64).round() as usize * 2;
+            let slice = &mut output[start_index..];
+            let len = (slice.len() / 2).min(ending.frame_count());
+            let frames = &ending.frames();
+            for i in 0..len {
+                slice[i * 2] += frames[i].0 * volume_music;
+                slice[i * 2 + 1] += frames[i].1 * volume_music;
             }
-        
-            let max_samples = (output.len() - start_idx) / 2;
-            let write_len = ending.frame_count().min(max_samples);
-        
-            for i in 0..write_len {
-                let frame = ending.frames()[i];
-                let idx = start_idx + i * 2;
-                output[idx] += frame.0 * volume_music;
-                output[idx + 1] += frame.1 * volume_music;
-            }
-            current_time += write_len as f64 / sample_rate_f64;
+            pos += ending.frame_count() as f64 / sample_rate_f64;
         }
     }
     if volume_sfx != 0.0 {
         let sfx_time = Instant::now();
         let offset = offset as f64;
-        for line in &chart.lines {
-            for note in &line.notes {
-                if !note.fake {
-                    let sfx = match note.kind {
-                        NoteKind::Click | NoteKind::Hold { .. } => &sfx_click,
-                        NoteKind::Drag => &sfx_drag,
-                        NoteKind::Flick => &sfx_flick,
-                    };
-                    place(O + note.time as f64 + offset, sfx, volume_sfx);
+        let o_plus_offset = O + offset;
+        let (mut click_times, mut drag_times, mut flick_times) = (Vec::new(), Vec::new(), Vec::new());
+        chart.lines.iter()
+            .flat_map(|line| line.notes.iter())
+            .filter(|note| !note.fake)
+            .for_each(|note| {
+                let time = o_plus_offset + note.time as f64;
+                match note.kind {
+                    NoteKind::Click | NoteKind::Hold { .. } => click_times.push(time),
+                    NoteKind::Drag => drag_times.push(time),
+                    NoteKind::Flick => flick_times.push(time),
                 }
-            }
-        }
-        info!("Render Hit Effects Time:{:?}", sfx_time.elapsed())
+        });
+        let volume = volume_sfx;
+        click_times.par_iter().for_each(|&t| {
+            place(t, &sfx_click, volume);
+        });
+        drag_times.par_iter().for_each(|&t| {
+            place(t, &sfx_drag, volume);
+        });
+        flick_times.par_iter().for_each(|&t| {
+            place(t, &sfx_flick, volume);
+        });
+
+        info!("Render Hit Effects Time:{:?}", sfx_time.elapsed());
     }
-    for i in 0..output2.len() {
-            output[i * 2] += output2[i];
-            output[i * 2 + 1] += output2[i];
-    }
+
+    output.chunks_exact_mut(2)
+        .zip(output2.iter())
+        .for_each(|(ch, &val)| {
+            ch[0] += val;
+            ch[1] += val;
+    });
     let mut proc = cmd_hidden(&ffmpeg)
         .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
         .arg(mixing_output.path())
