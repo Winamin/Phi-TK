@@ -337,7 +337,7 @@ pub async fn main() -> Result<()> {
     let input = proc.stdin.as_mut().unwrap();
     let mut writer = BufWriter::new(input);
     for sample in output.into_iter() {
-        writer.write_all(&sample.to_le_bytes())
+        writer.write_all(&sample.to_le_bytes())?;
     }
     drop(writer);
     proc.wait()?;
