@@ -448,7 +448,7 @@ pub async fn main() -> Result<()> {
         },
         params.config.bitrate,
         ffmpeg_preset,
-        ffmpeg_preset_name
+        ffmpeg_preset_name,
         ss_arg,
     );
 
