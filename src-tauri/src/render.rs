@@ -307,36 +307,19 @@ pub async fn main() -> Result<()> {
     if volume_sfx != 0.0 {
         let sfx_time = Instant::now();
         let offset = offset as f64;
-        let o_plus_offset = O + offset;
-        let audio_buffer = Arc::new(Mutex::new(Vec::<u8>::new()));
-        let place = move |pos: f64, clip: &AudioClip, volume: f32| {
-            let mut buffer = audio_buffer.lock().unwrap();
-    };
-        let (mut click_times, mut drag_times, mut flick_times) = (Vec::new(), Vec::new(), Vec::new());
-        chart.lines.iter()
-            .flat_map(|line| line.notes.iter())
-            .filter(|note| !note.fake)
-            .for_each(|note| {
-                let time = o_plus_offset + note.time as f64;
-                match note.kind {
-                    NoteKind::Click | NoteKind::Hold { .. } => click_times.push(time),
-                    NoteKind::Drag => drag_times.push(time),
-                    NoteKind::Flick => flick_times.push(time),
+        for line in &chart.lines {
+            for note in &line.notes {
+                if !note.fake {
+                    let sfx = match note.kind {
+                        NoteKind::Click | NoteKind::Hold { .. } => &sfx_click,
+                        NoteKind::Drag => &sfx_drag,
+                        NoteKind::Flick => &sfx_flick,
+                    };
+                    place(O + note.time as f64 + offset, sfx, volume_sfx);
                 }
-         });
-        click_times.par_iter().for_each(|&t| {
-            place(t, &sfx_click, volume_sfx);
-        });
-
-        drag_times.par_iter().for_each(|&t| {
-            place(t, &sfx_drag, volume_sfx);
-        });
-
-        flick_times.par_iter().for_each(|&t| {
-            place(t, &sfx_flick, volume_sfx);
-        });
-
-        info!("Render Hit Effects Time:{:?}", sfx_time.elapsed());
+            }
+        }
+        info!("Render Hit Effects Time:{:?}", sfx_time.elapsed())
     }
     output.chunks_exact_mut(2)
         .zip(output2.iter())
@@ -345,18 +328,17 @@ pub async fn main() -> Result<()> {
             ch[1] += val;
     });
     let mut proc = cmd_hidden(&ffmpeg)
-    .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
-    .arg(mixing_output.path())
-    .stdin(Stdio::piped())
-    .stderr(Stdio::inherit())
-    .spawn()
-    .with_context(|| tl!("run-ffmpeg-failed"))?;
+        .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
+        .arg(mixing_output.path())
+        .stdin(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .with_context(|| tl!("run-ffmpeg-failed"))?;
     let input = proc.stdin.as_mut().unwrap();
-    let mut writer = BufWriter::new(&mut *input);
+    let mut writer = BufWriter::new(input);
     for sample in output.into_iter() {
-        writer.write_all(&sample.to_le_bytes())?;
-    }
-    writer.flush()?;
+        writer.write_all(&sample.to_le_bytes()
+    drop(writer);
     proc.wait()?;
 
     let (vw, vh) = params.config.resolution;
