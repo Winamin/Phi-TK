@@ -17,7 +17,7 @@ use sasa::AudioClip;
 use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
-    io::{BufRead, BufWriter, Write, self},
+    io::{BufRead, BufWriter, Write},
     ops::DerefMut,
     path::PathBuf,
     process::{Command, Stdio},
@@ -245,14 +245,16 @@ pub async fn main() -> Result<()> {
     let mut output2 = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize];
 
     let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
-        let position = (pos * sample_rate_f64).round() as usize;
-        if position >= output2.len() {
+         let position = (pos * sample_rate_f64).round() as usize;
+         if position >= output2.len() {
             return 0;
         }
         let remaining = output2.len() - position;
         let len = clip.frame_count().min(remaining);
-
+    
+        let slice = &mut output2[position..position + len];
         let frames = clip.frames();
+    
         for i in 0..len {
             slice[i] += frames[i].0 * volume;
         }
@@ -417,7 +419,7 @@ pub async fn main() -> Result<()> {
         _ => 0,
     })
     .unwrap_or("medium");
-
+    .args(&[ffmpeg_preset_name])
     let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
      if use_cuda {
         args += " -hwaccel_output_format cuda";
@@ -441,7 +443,7 @@ pub async fn main() -> Result<()> {
         },
         params.config.bitrate,
         ffmpeg_preset,
-        ffmpeg_preset_name.unwrap(),
+        ffmpeg_preset_name
         if params.config.disable_loading { format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME) }
         else { "-ss 0.1".to_string() },
     );
@@ -458,6 +460,9 @@ pub async fn main() -> Result<()> {
     let mut input = proc.stdin.take().unwrap();
 
     let byte_size = vw as usize * vh as usize * 4;
+
+    const BATCH_SIZE: usize = 1024;
+    let mut buffer = Vec::with_capacity(byte_size * BATCH_SIZE);
 
     const N: usize = 30;
     let mut pbos: [GLuint; N] = [0; N];
@@ -477,8 +482,6 @@ pub async fn main() -> Result<()> {
     }
 
     for frame in N as u64..(frames + N as u64 - 1) {
-        const BATCH_SIZE: usize = 1024;
-        let mut buffer = Vec::with_capacity(byte_size * BATCH_SIZE);
         let real_time = O + (frame as f64 * frame_delta as f64);
         *my_time.borrow_mut() = real_time;
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
