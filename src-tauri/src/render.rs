@@ -13,6 +13,7 @@ use prpr::{
     ui::{FontArc, TextPainter},
     Main,
 };
+use log::{error, info};
 use sasa::AudioClip;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -472,7 +473,12 @@ pub async fn main() -> Result<()> {
     const N: usize = 30;
     let mut pbos: [GLuint; N] = [0; N];
     unsafe {
-        use miniquad::gl::*;
+        use miniquad::gl::{
+            GL_PACK_ALIGNMENT,
+            GL_UNPACK_ALIGNMENT,
+            GL_READ_ONLY,
+            GL_PIXEL_PACK_BUFFER,
+        };
         glGenBuffers(N as _, pbos.as_mut_ptr());
         for pbo in pbos {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo);
@@ -501,7 +507,12 @@ pub async fn main() -> Result<()> {
             mst.blit();
         }
         unsafe {
-            use miniquad::gl::*;
+            use miniquad::gl::{
+                GL_PACK_ALIGNMENT,
+                GL_UNPACK_ALIGNMENT,
+                GL_READ_ONLY,
+                GL_PIXEL_PACK_BUFFER,
+            };
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
             let pbo_index = (frame as usize) % N;
