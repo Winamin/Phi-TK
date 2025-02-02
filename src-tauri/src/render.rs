@@ -497,7 +497,7 @@ pub async fn main() -> Result<()> {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
             glBufferData(
                 GL_PIXEL_PACK_BUFFER,
-                (vw * vh * 4) as i64,
+                (vw * vh * 4) as i32,
                 std::ptr::null(),
                 GL_STREAM_READ
         );
