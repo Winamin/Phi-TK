@@ -339,8 +339,11 @@ pub async fn main() -> Result<()> {
             .take()
             .ok_or_else(|| anyhow!(tl!("failed-get-stdin")))?
     );
-    writer.write_all(...)?;
-    proc.wait()?;
+    for sample in output {
+        writer.write_all(&sample.to_le_bytes())?;
+    }
+    writer.flush()?;
+    proc.wait().with_context(|| tl!("process-failed"))?;
 
     let (vw, vh) = params.config.resolution;
     let mst = Rc::new(MSRenderTarget::new((vw, vh), config.sample_count));
