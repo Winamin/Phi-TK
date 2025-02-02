@@ -490,6 +490,7 @@ pub async fn main() -> Result<()> {
 
     let mut pbos = vec![0; N];
     unsafe {
+        use miniquad::gl::*;
         glGenBuffers(pbos.len() as i32, pbos.as_mut_ptr());
         for pbo in &pbos {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
@@ -503,6 +504,7 @@ pub async fn main() -> Result<()> {
     let max_chunk = 1024 * 1024 * 100;
     for frame in 0..frames {
         unsafe {
+            use miniquad::gl::*;
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
             let pbo_index = (frame as usize) % N;
@@ -535,6 +537,7 @@ pub async fn main() -> Result<()> {
         buffer.clear();
     }
     unsafe {
+        use miniquad::gl::*;
         glDeleteBuffers(pbos.len() as i32, pbos.as_ptr());
     }
 
