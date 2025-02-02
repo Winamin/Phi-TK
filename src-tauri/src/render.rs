@@ -487,56 +487,57 @@ pub async fn main() -> Result<()> {
     
     const GL_PACK_ALIGNMENT: u32 = 0x0D05;
     const GL_READ_ONLY: u32 = 0x88B8;
-    
-    for frame in N as u64..(frames + N as u64 - 1) {
-        let real_time = O + (frame as f64 * frame_delta as f64);
-        *my_time.borrow_mut() = real_time;
-        gl.quad_gl.render_pass(Some(mst.output().render_pass));
-        main.update()?;
-        main.render(&mut painter)?;
-        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 {
-            draw_rectangle(0., 0., 0., 0., Color::default());
-        }
-        gl.flush();
 
-        if MSAA.load(Ordering::SeqCst) {
-            mst.blit();
+    let mut pbos = vec![0; N];
+    unsafe {
+        glGenBuffers(pbos.len() as i32, pbos.as_mut_ptr());
+        for pbo in &pbos {
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
+            glBufferData(GL_PIXEL_PACK_BUFFER, (vw * vh * 4) as isize, std::ptr::null(), GL_STREAM_READ);
         }
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    }
+    let mut input = File::create("output.mp4")?;
+    let mut buffer = Vec::new();
+    let mut chunk_size = 0;
+    let max_chunk = 1024 * 1024 * 100;
+    for frame in 0..frames {
         unsafe {
-            use miniquad::gl::*;
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
             let pbo_index = (frame as usize) % N;
             let next_pbo = (frame as usize + 1) % N;
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[pbo_index]);
-            glReadPixels(
-                0, 
-                0,
-                vw as _,
-                vh as _,
-                GL_RGBA,
-                GL_UNSIGNED_BYTE,
-                std::ptr::null_mut(),
-            );
+            glReadPixels(0, 0, vw as _, vh as _, GL_RGBA, GL_UNSIGNED_BYTE, std::ptr::null_mut());
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[next_pbo]);
             let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
             if !src.is_null() {
                 let expected_size = (vw * vh * 4) as usize;
                 let frame_data = std::slice::from_raw_parts(src as *const u8, expected_size);
-                if frame_data.len() != expected_size {
-                    log::error!("Invalid frame data length: {} vs {}", frame_data.len(), expected_size);
-                } else {
-                    buffer.extend_from_slice(frame_data);
-                }
+                buffer.extend_from_slice(frame_data);
+                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            } else {
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
             }
             glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        }    
+        chunk_size += buffer.len();
+        if chunk_size >= max_chunk {
+            input.write_all(&buffer)?;
+            buffer.clear();
+            chunk_size = 0;
         }
         send(IPCEvent::Frame);
     }
     if !buffer.is_empty() {
         input.write_all(&buffer)?;
+        buffer.clear();
     }
+    unsafe {
+        glDeleteBuffers(pbos.len() as i32, pbos.as_ptr());
+    }
+
     drop(input);
     proc.wait()?;
  
