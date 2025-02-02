@@ -435,24 +435,22 @@ pub async fn main() -> Result<()> {
     } else {
         "-ss 0.1".to_string()
     };
+    
     let args2 = format!(
-        "-c:a copy \
-        -c:v {encoder} \
-        -pix_fmt yuv420p \
-        {bitrate_param} {bitrate} \
-        {preset_type} {preset_value} \
-        -map 0:v:0 \
-        -map 1:a:0 \
-        {ss_arg} \
-        -vf vflip \
-        -f mov",
-        encoder = ffmpeg_111,
-        bitrate_param = "-b:v",
-        bitrate = params.config.bitrate,
-        preset_type = ffmpeg_preset,
-        preset_value = ffmpeg_preset_name,
-        ss_arg = ss_arg
-    );
+        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
+        ffmpeg_111,
+        if params.config.bitrate_control == "CRF" {
+            if use_cuda { "-cq" }
+            else if use_qsv { "-q" }
+            else if use_amf { "-qp_p" }
+            else { "-crf" }
+        }else {
+            "-b:v"
+        },
+        params.config.bitrate,
+        ffmpeg_preset,
+        ffmpeg_preset_name,
+        ss_arg,
 
     let mut proc = cmd_hidden(&ffmpeg)
         .args(args.split_whitespace())
