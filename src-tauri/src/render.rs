@@ -17,6 +17,7 @@ use log::{error, info};
 use sasa::AudioClip;
 use serde::{Deserialize, Serialize};
 use std::{
+    fs::File;
     cell::RefCell,
     io::{BufRead, BufWriter, Write},
     ops::DerefMut,
@@ -494,11 +495,11 @@ pub async fn main() -> Result<()> {
         glGenBuffers(pbos.len() as i32, pbos.as_mut_ptr());
         for pbo in &pbos {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
-            glBufferData(GL_PIXEL_PACK_BUFFER, (vw * vh * 4) as isize, std::ptr::null(), GL_STREAM_READ);
+            glBufferData(GL_PIXEL_PACK_BUFFER, (vw * vh * 4) as i64, std::ptr::null(), GL_STREAM_READ);
         }
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
-    let mut input = File::create("output.mp4")?;
+    let mut input = File::create("output.mov")?;
     let mut buffer = Vec::new();
     let mut chunk_size = 0;
     let max_chunk = 1024 * 1024 * 100;
