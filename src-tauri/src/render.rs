@@ -31,6 +31,7 @@ use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 
 use rayon::prelude::*;
+use std::sync::{Arc, Mutex};
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -312,17 +313,17 @@ pub async fn main() -> Result<()> {
         click_times.par_iter().for_each(|&t| {
             let buffer_ref = audio_buffer.clone();
             let mut buffer = buffer_ref.lock().unwrap();
-            place(t, &sfx_click, volume_sfx, &mut buffer);
+            place(t, &sfx_click, volume_sfx);
         });
         drag_times.par_iter().for_each(|&t| {
             let buffer_ref = audio_buffer.clone();
             let mut buffer = buffer_ref.lock().unwrap();
-            place(t, &sfx_drag, volume_sfx, &mut buffer);
+            place(t, &sfx_drag, volume_sfx);
         });
         flick_times.par_iter().for_each(|&t| {
             let buffer_ref = audio_buffer.clone();
             let mut buffer = buffer_ref.lock().unwrap();
-            place(t, &sfx_flick, volume_sfx, &mut buffer);
+            place(t, &sfx_flick, volume_sfx);
         });
         info!("Render Hit Effects Time:{:?}", sfx_time.elapsed());
     }
