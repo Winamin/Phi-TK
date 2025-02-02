@@ -479,9 +479,6 @@ pub async fn main() -> Result<()> {
 
     let byte_size = vw as usize * vh as usize * 4;
 
-    const BATCH_SIZE: usize = 1024;
-    let mut buffer: Vec<u8> = Vec::with_capacity(byte_size * BATCH_SIZE);
-
     const N: usize = 30;
     let mut pbos: [GLuint; N] = [0; N];
     unsafe {
@@ -498,71 +495,51 @@ pub async fn main() -> Result<()> {
         }
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
-    
-    const GL_PACK_ALIGNMENT: u32 = 0x0D05;
-    const GL_READ_ONLY: u32 = 0x88B8;
 
-    let mut pbos = vec![0; N];
-    unsafe {
-        use miniquad::gl::*;
-        glGenBuffers(pbos.len() as i32, pbos.as_mut_ptr());
-        for pbo in &pbos {
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
-            glBufferData(
-                GL_PIXEL_PACK_BUFFER,
-                (vw * vh * 4) as i32,
-                std::ptr::null(),
-                GL_STREAM_READ
-        );
-        }
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    }
-    let mut input = File::create("output.mov")?;
-    let mut buffer = Vec::new();
-    let mut chunk_size = 0;
-    let max_chunk = 1024 * 1024 * 100;
+    send(IPCEvent::StartRender(frames));
+
     for frame in 0..frames {
+        *my_time.borrow_mut() = (frame as f32 * frame_delta).max(0.) as f64;
+        gl.quad_gl.render_pass(Some(mst.output().render_pass));
+        clear_background(BLACK);
+        main.viewport = Some((0, 0, vw as _, vh as _));
+        main.update()?;
+        main.render(&mut painter)?;
+        // TODO magic. can't remove this line.
+        draw_rectangle(0., 0., 0., 0., Color::default());
+        gl.flush();
+
+        if MSAA.load(Ordering::SeqCst) {
+            mst.blit();
+        }
         unsafe {
             use miniquad::gl::*;
+            let tex = mst.output().texture.raw_miniquad_texture_handle();
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
-            glPixelStorei(GL_PACK_ALIGNMENT, 1);
-            let pbo_index = (frame as usize) % N;
-            let next_pbo = (frame as usize + 1) % N;
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[pbo_index]);
-            glReadPixels(0, 0, vw as _, vh as _, GL_RGBA, GL_UNSIGNED_BYTE, std::ptr::null_mut());
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[next_pbo]);
-            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[frame as usize % N]);
+            glReadPixels(
+                0,
+                0,
+                tex.width as _,
+                tex.height as _,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                std::ptr::null_mut(),
+            );
+
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[(frame + 1) as usize % N]);
+            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
             if !src.is_null() {
-                let expected_size = (vw * vh * 4) as usize;
-                let frame_data = std::slice::from_raw_parts(src as *const u8, expected_size);
-                buffer.extend_from_slice(frame_data);
-                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-            } else {
+                input.write_all(&std::slice::from_raw_parts(src as *const u8, byte_size))?;
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
             }
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        }    
-        chunk_size += buffer.len();
-        if chunk_size >= max_chunk {
-            input.write_all(&buffer)?;
-            buffer.clear();
-            chunk_size = 0;
         }
         send(IPCEvent::Frame);
     }
-    if !buffer.is_empty() {
-        input.write_all(&buffer)?;
-        buffer.clear();
-    }
-    unsafe {
-        use miniquad::gl::*;
-        glDeleteBuffers(pbos.len() as i32, pbos.as_ptr());
-    }
-
     drop(input);
     proc.wait()?;
- 
+
     send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
     Ok(())
 }
