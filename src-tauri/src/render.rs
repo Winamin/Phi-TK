@@ -32,6 +32,7 @@ use tempfile::NamedTempFile;
 
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
+use anyhow::anyhow;
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
