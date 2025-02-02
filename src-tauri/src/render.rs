@@ -345,18 +345,20 @@ pub async fn main() -> Result<()> {
             ch[1] += val;
     });
     let mut proc = cmd_hidden(&ffmpeg)
-        .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
-        .arg(mixing_output.path())
-        .stdin(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .with_context(|| tl!("run-ffmpeg-failed"))?;
-    let input = proc.stdin.as_mut().unwrap();
-    let mut writer = BufWriter::new(input);
-    for sample in output.into_iter() {
-        writer.write_all(&sample.to_le_bytes())?;
+    .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
+    .arg(mixing_output.path())
+    .stdin(Stdio::piped())
+    .stderr(Stdio::inherit())
+    .spawn()
+    .with_context(|| tl!("run-ffmpeg-failed"))?;
+    {
+        let input = proc.stdin.as_mut().unwrap();
+        let mut writer = BufWriter::new(&mut *input);
+        for sample in output.into_iter() {
+            writer.write_all(&sample.to_le_bytes())?;
+         }
+        writer.flush()?;
     }
-    drop(writer);
     proc.wait()?;
 
     let (vw, vh) = params.config.resolution;
