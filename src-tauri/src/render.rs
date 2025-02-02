@@ -338,6 +338,7 @@ pub async fn main() -> Result<()> {
     let mut writer = BufWriter::new(input);
     for sample in output.into_iter() {
         writer.write_all(&sample.to_le_bytes()
+    }
     drop(writer);
     proc.wait()?;
 
