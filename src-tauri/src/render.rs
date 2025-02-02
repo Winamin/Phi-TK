@@ -419,7 +419,7 @@ pub async fn main() -> Result<()> {
         _ => 0,
     })
     .unwrap_or("medium");
-    .args(&[ffmpeg_preset_name])
+
     let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
      if use_cuda {
         args += " -hwaccel_output_format cuda";
