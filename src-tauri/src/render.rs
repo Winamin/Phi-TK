@@ -334,12 +334,12 @@ pub async fn main() -> Result<()> {
         .stderr(Stdio::inherit())
         .spawn()
         .with_context(|| tl!("run-ffmpeg-failed"))?;
-    let input = proc.stdin.as_mut().unwrap();
-    let mut writer = BufWriter::new(input);
-    for sample in output.into_iter() {
-        writer.write_all(&sample.to_le_bytes())?;
-    }
-    drop(writer);
+    let mut writer = BufWriter::new(
+        proc.stdin
+            .take()
+            .ok_or_else(|| anyhow!(tl!("failed-get-stdin")))?
+    );
+    writer.write_all(...)?;
     proc.wait()?;
 
     let (vw, vh) = params.config.resolution;
