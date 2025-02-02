@@ -17,7 +17,7 @@ use log::{error, info};
 use sasa::AudioClip;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::File;
+    fs::File,
     cell::RefCell,
     io::{BufRead, BufWriter, Write},
     ops::DerefMut,
@@ -467,7 +467,7 @@ pub async fn main() -> Result<()> {
     let byte_size = vw as usize * vh as usize * 4;
 
     const BATCH_SIZE: usize = 1024;
-    let mut buffer = Vec::with_capacity(byte_size * BATCH_SIZE);
+    let mut buffer: Vec<u8> = Vec::with_capacity(byte_size * BATCH_SIZE);
 
     const N: usize = 30;
     let mut pbos: [GLuint; N] = [0; N];
