@@ -300,7 +300,8 @@ pub async fn main() -> Result<()> {
                     slice[index + 1] += frames[i].1 * volume_music;
                 }
             }
-        pos += ending.frame_count() as f64 / sample_rate_f64;
+            pos += ending.frame_count() as f64 / sample_rate_f64;
+        }
     }
     if volume_sfx != 0.0 {
         let sfx_time = Instant::now();
