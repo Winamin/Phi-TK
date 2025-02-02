@@ -534,13 +534,13 @@ pub async fn main() -> Result<()> {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[(frame + 1) as usize % N]);
             let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
             if !src.is_null() {
-                input.write_all(&std::slice::from_raw_parts(src as *const u8, byte_size))?;
+                //input.write_all(&std::slice::from_raw_parts(src as *const u8, byte_size))?;
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
             }
         }
         send(IPCEvent::Frame);
     }
-    drop(input);
+    //drop(input);
     proc.wait()?;
 
     send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
