@@ -72,7 +72,17 @@ pub struct RenderConfig {
     judge_offset: f32,
     simple_file_name: bool,
     flid_x: bool,
+    phira_mode: bool,
     max_particles: usize,
+
+    render_line: bool,
+    render_line_extra: bool,
+    render_note: bool,
+    render_ui_pause: bool,
+    render_ui_score: bool,
+    render_ui_combo: bool,
+    render_ui_bar: bool,
+    render_bg: bool,
 }
 
 impl RenderConfig {
@@ -88,6 +98,7 @@ impl RenderConfig {
             note_scale: self.note_scale,
             //offset: self.offset,
             particle: self.particle,
+            phira_mode: self.phira_mode,
             player_name: self.player_name.clone(),
             player_rks: self.player_rks,
             sample_count: self.sample_count,
@@ -102,6 +113,14 @@ impl RenderConfig {
             phira_mode: self.phira_mode,
             disable_audio: false,
             judge_offset: self.judge_offset,
+            render_line: self.render_line,
+            render_line_extra: self.render_line_extra,
+            render_note: self.render_note,
+            render_ui_pause: self.render_ui_pause,
+            render_ui_score: self.render_ui_score,
+            render_ui_combo: self.render_ui_combo,
+            render_ui_bar: self.render_ui_bar,
+            render_bg: self.render_bg,
 
             flid_x: self.flid_x,
             max_particles: self.max_particles,
@@ -143,8 +162,18 @@ impl RenderConfig {
             combo: "AUTOPLAY".to_string(),
             difficulty: "".to_string(),
             player_avatar: None,
+            phira_mode: false,
             judge_offset: 0.,
             simple_file_name: false,
+            render_line: true,
+            render_line_extra: true,
+            render_note: true,
+            render_ui_pause: true,
+            render_ui_score: true,
+            render_ui_combo: true,
+            render_ui_bar: true,
+            render_bg: true,
+
             max_particles: 100000,
         }
     }
