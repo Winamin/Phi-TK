@@ -308,7 +308,7 @@ pub async fn main() -> Result<()> {
             output[i * 2 + 1] += output2[i];
     }
     let mut proc = cmd_hidden(&ffmpeg)
-        .args(format!("-y -f f32le -ar {} -ac 6 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
+        .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
         .arg(mixing_output.path())
         .stdin(Stdio::piped())
         .stderr(Stdio::inherit())
