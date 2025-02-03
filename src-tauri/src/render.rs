@@ -39,13 +39,11 @@ pub struct RenderConfig {
     ending_length: f64,
     disable_loading: bool,
     chart_debug: bool,
-    flid_x: bool,
     chart_ratio: f32,
-    buffer_size: f32,
-    combo: String,
     fps: u32,
     hardware_accel: bool,
     hevc: bool,
+    mpeg4: bool,
     bitrate_control: String,
     bitrate: String,
 
@@ -56,6 +54,7 @@ pub struct RenderConfig {
     double_hint: bool,
     fxaa: bool,
     note_scale: f32,
+    //offset: f32,
     particle: bool,
     player_avatar: Option<String>,
     player_name: String,
@@ -65,6 +64,15 @@ pub struct RenderConfig {
     speed: f32,
     volume_music: f32,
     volume_sfx: f32,
+    compression_ratio: f32,
+    force_limit: bool,
+    limit_threshold: f32,
+    combo: String,
+    difficulty: String,
+    judge_offset: f32,
+    simple_file_name: bool,
+    flid_x: bool,
+    max_particles: usize,
 }
 
 impl RenderConfig {
@@ -74,9 +82,11 @@ impl RenderConfig {
             challenge_color: self.challenge_color.clone(),
             challenge_rank: self.challenge_rank,
             disable_effect: self.disable_effect,
+            disable_loading: self.disable_loading,
             double_hint: self.double_hint,
             fxaa: self.fxaa,
             note_scale: self.note_scale,
+            //offset: self.offset,
             particle: self.particle,
             player_name: self.player_name.clone(),
             player_rks: self.player_rks,
@@ -87,10 +97,17 @@ impl RenderConfig {
             volume_sfx: self.volume_sfx,
             chart_debug: self.chart_debug,
             chart_ratio: self.chart_ratio,
-            buffer_size: self.buffer_size,
             combo: self.combo.clone(),
+            difficulty: self.difficulty.clone(),
+            phira_mode: self.phira_mode,
+            disable_audio: false,
+            judge_offset: self.judge_offset,
+
             flid_x: self.flid_x,
+            max_particles: self.max_particles,
             ..Default::default()
+        }
+    }
         }
     }
     pub fn default() -> RenderConfig {
@@ -99,7 +116,6 @@ impl RenderConfig {
             ffmpeg_preset: "medium".to_string(),
             ending_length: 5.0,
             disable_loading: false,
-            hires: true,
             fps: 60,
             hardware_accel: true,
             hevc: false,
