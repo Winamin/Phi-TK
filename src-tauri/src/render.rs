@@ -1,11 +1,13 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 prpr::tl_file!("render");
 
+use crate::common::{ensure_dir, let_output_dir, output_dir, DATA_DIR};
+use chrono::Local;
 use anyhow::{bail, Context, Result};
 use macroquad::{miniquad::gl::GLuint, prelude::*};
 use prpr::{
     config::{ChallengeModeColor, Config, Mods},
-    core::{internal_id, MSRenderTarget, NoteKind},
+    core::{init_assets, internal_id, MSRenderTarget, HitSound, Note},
     fs,
     info::ChartInfo,
     scene::{BasicPlayer, GameMode, GameScene, LoadingScene, EndingScene},
@@ -13,11 +15,9 @@ use prpr::{
     ui::{FontArc, TextPainter},
     Main,
 };
-use log::{error, info};
 use sasa::AudioClip;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::File,
     cell::RefCell,
     io::{BufRead, BufWriter, Write},
     ops::DerefMut,
@@ -30,11 +30,7 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 
-use rayon::prelude::*;
-use std::sync::{Arc, Mutex};
-use anyhow::anyhow;
-
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderConfig {
     resolution: (u32, u32),
@@ -42,15 +38,12 @@ pub struct RenderConfig {
     ending_length: f64,
     disable_loading: bool,
     chart_debug: bool,
-    flid_x: bool,
     chart_ratio: f32,
-    buffer_size: f32,
-    combo: String,
-    fps: u32,
     hardware_accel: bool,
     hevc: bool,
     bitrate_control: String,
     bitrate: String,
+    fps: bool,
 
     aggressive: bool,
     challenge_color: ChallengeModeColor,
@@ -59,6 +52,7 @@ pub struct RenderConfig {
     double_hint: bool,
     fxaa: bool,
     note_scale: f32,
+    //offset: f32,
     particle: bool,
     player_avatar: Option<String>,
     player_name: String,
@@ -68,6 +62,13 @@ pub struct RenderConfig {
     speed: f32,
     volume_music: f32,
     volume_sfx: f32,
+    compression_ratio: f32,
+    force_limit: bool,
+    limit_threshold: f32,
+    combo_name: String,
+    difficulty: String,
+
+    max_particles: usize,
 }
 
 impl RenderConfig {
@@ -77,9 +78,11 @@ impl RenderConfig {
             challenge_color: self.challenge_color.clone(),
             challenge_rank: self.challenge_rank,
             disable_effect: self.disable_effect,
+            disable_loading: self.disable_loading,
             double_hint: self.double_hint,
             fxaa: self.fxaa,
             note_scale: self.note_scale,
+            //offset: self.offset,
             particle: self.particle,
             player_name: self.player_name.clone(),
             player_rks: self.player_rks,
@@ -90,15 +93,57 @@ impl RenderConfig {
             volume_sfx: self.volume_sfx,
             chart_debug: self.chart_debug,
             chart_ratio: self.chart_ratio,
-            buffer_size: self.buffer_size,
-            combo: self.combo.clone(),
-            flid_x: self.flid_x,
+            combo_name: self.combo_name.clone(),
+            difficulty: self.difficulty.clone(),
+            disable_audio: false,
+            max_particles: self.max_particles,
             ..Default::default()
+        }
+    }
+
+    pub fn default() -> RenderConfig {
+        RenderConfig {
+            resolution: (1920, 1080),
+            ffmpeg_preset: "medium".to_string(),
+            ending_length: 5.0,
+            disable_loading: false,
+            fps: 60,
+            hardware_accel: true,
+            hevc: false,
+            mpeg4: false,
+            bitrate_control: "CRF".to_string(),
+            bitrate: "1000k".to_string(),
+            aggressive: true,
+            challenge_color: ChallengeModeColor::Rainbow,
+            challenge_rank: 45,
+            disable_effect: false,
+            double_hint: true,
+            fxaa: false,
+            note_scale: 1.0,
+            particle: true,
+            player_name: " ".to_string(),
+            player_rks: 16.0,
+            sample_count: 2,
+            res_pack_path: None,
+            speed: 1.0,
+            volume_music: 1.0,
+            volume_sfx: 0.7,
+            compression_ratio: 100.,
+            force_limit: false,
+            limit_threshold: 1.0,
+            chart_debug: false,
+            chart_ratio: 1.0,
+            combo_name: "AUTOPLAY".to_string(),
+            difficulty: "".to_string(),
+            player_avatar: None,
+            simple_file_name: false,
+
+            max_particles: 100000,
         }
     }
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderParams {
     pub path: PathBuf,
@@ -108,6 +153,7 @@ pub struct RenderParams {
 
 #[derive(Serialize, Deserialize)]
 pub enum IPCEvent {
+    Loading,
     StartMixing,
     StartRender(u64),
     Frame,
@@ -169,40 +215,118 @@ pub fn find_ffmpeg() -> Result<Option<String>> {
     })
 }
 
-pub async fn main() -> Result<()> {
+pub async fn main(cmd: bool) -> Result<()> {
+    let loading_time = Instant::now();
+
+    let (mut fs, output_path, config, info) = 
+    if cmd {
+        init_assets();
+
+        #[cfg(target_os = "windows")]
+        {
+            let app_data_dir = std::env::var("APPDATA").unwrap();
+            let data_dir = PathBuf::from(app_data_dir).join("com.hlmc.phi.recorder");
+            DATA_DIR.set(ensure_dir(data_dir.clone())).unwrap();
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            DATA_DIR
+                .set(ensure_dir(std::env::current_dir().unwrap().to_owned()))
+                .unwrap();
+        }
+
+        let config = match (|| -> Result<RenderConfig> {
+            Ok(serde_yaml::from_str(
+                &std::fs::read_to_string("config.yml").context("error reading config")?,
+            )?)
+        })() {
+            Err(err) => {
+                warn!("error loading config: {:?}", err);
+                RenderConfig::default()
+            }
+            Ok(config) => config,
+        };
+        let path = std::env::args().nth(2).unwrap();
+
+        let mut fs = fs::fs_from_file(path.as_ref())?;
+        let info = fs::load_info(fs.deref_mut()).await?;
+        let level: String = info
+            .level
+            .split_whitespace()
+            .next()
+            .unwrap_or("UK")
+            .to_string();
+        let safe_name: String = info
+            .name
+            .chars()
+            .filter(|&it| it == '-' || it == '_' || it.is_alphanumeric())
+            .collect();
+        let safe_name2: String = info
+            .composer
+            .chars()
+            .filter(|&it| it == '-' || it == '_' || it.is_alphanumeric())
+            .collect();
+        let format = if config.hires { "mov" } else { "mp4" };
+
+        let file_name = if config.simple_file_name {
+            format!(
+                "{safe_name}.{safe_name2}_{level}.{format}",
+            )
+        } else {
+            format!(
+                "{} {safe_name}_{level}.{format}",
+                Local::now().format("%Y-%m-%d %H-%M-%S")
+            )
+        };
+        let output_path = if std::env::args().len() > 3 {
+            let dir = std::env::args().nth(3).unwrap();
+            let output_dir = PathBuf::from(dir);
+            info!("output dir: {:?}", output_dir);
+            let_output_dir(output_dir)?.join(file_name)
+        } else {
+            output_dir()?.join(file_name)
+        };
+
+        (fs, output_path, config, info)
+    }
+    else {
+        set_pc_assets_folder(&std::env::args().nth(2).unwrap());
+    
+        let mut stdin = std::io::stdin().lock();
+        let stdin = &mut stdin;
+    
+        let mut line = String::new();
+        stdin.read_line(&mut line)?;
+        let params: RenderParams = serde_json::from_str(line.trim())?;
+        let path = params.path;
+    
+        line.clear();
+        stdin.read_line(&mut line)?;
+        let output_path: PathBuf = serde_json::from_str(line.trim())?;
+    
+        let fs = fs::fs_from_file(&path)?;
+    
+        let config = params.config;
+        let info = params.info;
+
+        (fs, output_path, config, info)
+    };
+
+
     use crate::ipc::client::*;
-
-    set_pc_assets_folder(&std::env::args().nth(2).unwrap());
-
-    let mut stdin = std::io::stdin().lock();
-    let stdin = &mut stdin;
-
-    let mut line = String::new();
-    stdin.read_line(&mut line)?;
-    let params: RenderParams = serde_json::from_str(line.trim())?;
-    let path = params.path;
-
-    line.clear();
-    stdin.read_line(&mut line)?;
-    let output_path: PathBuf = serde_json::from_str(line.trim())?;
-
-    let mut fs = fs::fs_from_file(&path)?;
-
+    let ipc = if cmd { false } else { true };
     let font = FontArc::try_from_vec(load_file("font.ttf").await?)?;
-
+    let mut painter = TextPainter::new(font);
+    let mut prpr_config = config.to_config();
+    prpr_config.mods = Mods::AUTOPLAY;
+    prpr_config.disable_audio = true;
     let Some(ffmpeg) = find_ffmpeg()? else {
         bail!("FFmpeg not found")
     };
-    dbg!(&ffmpeg);
+    info!("ffmpeg: {}", &ffmpeg);
 
-    let mut painter = TextPainter::new(font);
-
-    let mut config = params.config.to_config();
-    config.mods = Mods::AUTOPLAY;
-
-    let info = params.info;
-
-    let (chart, ..) = GameScene::load_chart(fs.deref_mut(), &info)
+    let (mut chart, ..) = GameScene::load_chart(fs.deref_mut(), &info)
         .await
         .with_context(|| tl!("load-chart-failed"))?;
     macro_rules! ld {
@@ -221,47 +345,73 @@ pub async fn main() -> Result<()> {
 
     let mut gl = unsafe { get_internal_gl() };
 
-    let volume_music = std::mem::take(&mut config.volume_music);
-    let volume_sfx = std::mem::take(&mut config.volume_sfx);
+    let volume_music = config.volume_music;
+    let volume_sfx = config.volume_sfx;
 
-    let length = track_length - chart.offset.min(0.) as f64 + 1.;
-    let video_length = O + length + A + params.config.ending_length;
-    let offset = chart.offset.max(0.);
+    let o: f64 = if config.disable_loading {
+        GameScene::BEFORE_DURATION as f64
+    } else {
+        LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_DURATION as f64
+    };
+    let a: f64 = -0.5; // fade out time
+    let musica: f64 = GameScene::WAIT_AFTER_TIME as f64 + EndingScene::BPM_WAIT_TIME;
+
+    let offset = chart.offset + info.offset;
+    let length = track_length - offset.min(0.) as f64 + 1.;
+    let video_length = o + length + a + config.ending_length;
+
+    info!("Loading Resources Time:{:.2?}", loading_time.elapsed());
+    info!("video length: {:.2}s", video_length);
 
     let render_start_time = Instant::now();
 
-    send(IPCEvent::StartMixing);
-    let mixing_output = NamedTempFile::new()?;
-    let sample_rate = 96000;
-    let sample_rate_f64 = sample_rate as f64;
-    assert_eq!(sample_rate, ending.sample_rate());
-    assert_eq!(sample_rate, sfx_click.sample_rate());
-    assert_eq!(sample_rate, sfx_drag.sample_rate());
-    assert_eq!(sample_rate, sfx_flick.sample_rate());
-    
-    let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
-    if volume_music != 0.0 {
-        let start_time = Instant::now();
-        let pos = O - chart.offset.min(0.) as f64;
-        let count = (music.length() as f64 * sample_rate_f64) as usize;
-        let start_index = (pos * sample_rate_f64).round() as usize * 2;
-        let ratio = 1.0 / sample_rate_f64;
-        for i in 0..count {
-            let position = i as f64 * ratio;
-            let frame = music.sample(position as f32).unwrap_or_default();
-            output[start_index + i * 2] += frame.0 * volume_music;
-            output[start_index + i * 2 + 1] += frame.1 * volume_music;
-        }
-        info!("music Time:{:?}", start_time.elapsed())
-
+    if ipc {
+        send(IPCEvent::StartMixing);
     }
-    
+    let mixing_output = NamedTempFile::new()?;
+    let sample_rate = 48000;
+    let sample_rate_f64 = sample_rate as f64;
+    assert_eq!(
+        sample_rate,
+        ending.sample_rate(),
+        "Sample rate mismatch: expected {}, got {}",
+        sample_rate,
+        ending.sample_rate()
+    );
+    assert_eq!(
+        sample_rate,
+        sfx_click.sample_rate(),
+        "Sample rate mismatch: expected {}, got {}",
+        sample_rate,
+        sfx_click.sample_rate()
+    );
+    assert_eq!(
+        sample_rate,
+        sfx_drag.sample_rate(),
+        "Sample rate mismatch: expected {}, got {}",
+        sample_rate,
+        sfx_drag.sample_rate()
+    );
+    assert_eq!(
+        sample_rate,
+        sfx_flick.sample_rate(),
+        "Sample rate mismatch: expected {}, got {}",
+        sample_rate,
+        sfx_flick.sample_rate()
+    );
+
+    let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
+    let mut output2 = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
+    let mut output2_agg = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize];
+    let agg = config.aggressive;
+
+    // let stereo_sfx = false; // TODO stereo sound effects
     let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
         let position = (pos * sample_rate_f64).round() as usize * 2;
-        if position >= output.len() {
+        if position >= output2.len() {
             return 0;
         }
-        let slice = &mut output[position..];
+        let slice = &mut output2[position..];
         let len = (slice.len() / 2).min(clip.frame_count());
 
         let frames = clip.frames();
@@ -269,31 +419,41 @@ pub async fn main() -> Result<()> {
             slice[i * 2] += frames[i].0 * volume;
             slice[i * 2 + 1] += frames[i].1 * volume;
         }
-    
+
         return len;
     };
-    
 
-    if volume_sfx != 0.0 {
-        let start_time = Instant::now();
-        for line in &chart.lines {
-            for note in &line.notes {
-                if !note.fake {
-                    let sfx = match note.kind {
-                        NoteKind::Click | NoteKind::Hold { .. } => &sfx_click,
-                        NoteKind::Drag => &sfx_drag,
-                        NoteKind::Flick => &sfx_flick,
-                    };
-                    place(O + note.time as f64 + offset as f64, sfx, volume_sfx);
-                }
-            }
+    let mut place_agg = |pos: f64, clip: &AudioClip, volume: f32| {
+        let position = (pos * sample_rate_f64).round() as usize;
+        if position >= output2_agg.len() {
+            return 0;
         }
-        info!("sfx Time:{:?}", start_time.elapsed())
-        
-    }
+        let slice = &mut output2_agg[position..];
+        let len = (slice.len()).min(clip.frame_count());
 
-    //ending
-    let mut pos = o + length + musica - offset as f64;
+        let frames = clip.frames();
+        for i in 0..len {
+            slice[i] += frames[i].0 * volume;
+        }
+
+        return len;
+    };
+
+    if volume_music != 0.0 {
+        let music_time = Instant::now();
+        let pos = o - offset.min(0.) as f64;
+        let len = ((track_length + config.ending_length) * sample_rate_f64) as usize;
+        let start_index = (pos * sample_rate_f64).round() as usize * 2;
+        let ratio = 1.0 / sample_rate_f64;
+        let slice = &mut output[start_index..];
+        for i in 0..len.min(slice.len() / 2) {
+            let position = i as f64 * ratio + offset.max(0.) as f64;
+            let frame = music.sample(position as f32).unwrap_or_default();
+            slice[i * 2] += frame.0 * volume_music;
+            slice[i * 2 + 1] += frame.1 * volume_music;
+        }
+        //ending
+        let mut pos = o + length + musica - offset as f64;
         while pos < video_length && config.ending_length > EndingScene::BPM_WAIT_TIME {
             let start_index = (pos * sample_rate_f64).round() as usize * 2;
             let slice = &mut output[start_index..];
@@ -303,27 +463,168 @@ pub async fn main() -> Result<()> {
                 slice[i * 2] += frames[i].0 * volume_music;
                 slice[i * 2 + 1] += frames[i].1 * volume_music;
             }
-        pos += ending.frame_count() as f64 / sample_rate_f64;
+            pos += ending.frame_count() as f64 / sample_rate_f64;
+        }
+        info!("Render Music Time:{:.2?}", music_time.elapsed())
     }
 
-    let mut proc = cmd_hidden(&ffmpeg)
-        .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
-        .arg(mixing_output.path())
-        .arg("-loglevel")
-        .arg("warning")
-        .stdin(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .with_context(|| tl!("run-ffmpeg-failed"))?;
-    let input = proc.stdin.as_mut().unwrap();
-    let mut writer = BufWriter::new(input);
-    for sample in output.into_iter() {
-        writer.write_all(&sample.to_le_bytes())?;
-    }
-    drop(writer);
-    proc.wait()?;
+    let threshold = 1.0;
+    let attack_time = 0.0;
+    let release_time = 0.0;
+    let attack_coeff = (1.0 - (-2.0 / (attack_time * sample_rate as f32)).exp()).min(1.0);
+    let release_coeff = (1.0 - (-2.0 / (release_time * sample_rate as f32)).exp()).min(1.0);
+    let mut gain_reduction = 1.0;
 
-    let (vw, vh) = params.config.resolution;
+    fn apply_compressor(
+        sample: f32,
+        threshold: f32,
+        ratio: f32,
+        attack_coeff: f32,
+        release_coeff: f32,
+        gain_reduction: &mut f32,
+    ) -> f32 {
+        let abs_sample = sample.abs();
+        let mut gain = 1.0;
+
+        if abs_sample > threshold {
+            let excess = abs_sample - threshold;
+            let compressed_excess = excess / ratio;
+            let compressed_sample = threshold + compressed_excess;
+            gain = compressed_sample / abs_sample;
+        }
+
+        if gain < *gain_reduction {
+            *gain_reduction += attack_coeff * (gain - *gain_reduction);
+        } else {
+            *gain_reduction += release_coeff * (gain - *gain_reduction);
+        }
+
+        sample * *gain_reduction
+    }
+
+    type AudioMap = std::collections::HashMap<String, AudioClip>;
+    let mut extra_sfxs: AudioMap = AudioMap::new();
+
+    chart.hitsounds.drain().for_each(|(name, clip)| {
+        extra_sfxs.insert(name, clip);
+    });
+
+    let get_hitsound = |note: &Note| {
+        match &note.hitsound {
+            HitSound::None => None,
+            HitSound::Click => Some(&sfx_click),
+            HitSound::Flick => Some(&sfx_flick),
+            HitSound::Drag => Some(&sfx_drag),
+            HitSound::Custom(s) => extra_sfxs.get(s)
+        }
+    };
+
+    if volume_sfx != 0.0 {
+        let sfx_time = Instant::now();
+        let offset = config.judge_offset as f64;
+        if agg {
+            for line in &chart.lines {
+                for note in &line.notes {
+                    if !note.fake {
+                        if let Some(sfx) = get_hitsound(note) {
+                            place_agg(o + note.time as f64 + offset, sfx, volume_sfx);
+                        }
+                    }
+                }
+            }
+        } else {
+            for line in &chart.lines {
+                for note in &line.notes {
+                    if !note.fake {
+                        if let Some(sfx) = get_hitsound(note) {
+                            place(o + note.time as f64 + offset, sfx, volume_sfx);
+                        }
+                    }
+                }
+            }
+        }
+        info!("Render Hit Effects Time:{:.2?}", sfx_time.elapsed())
+    }
+
+    {
+        let mixing_time = Instant::now();
+        if config.force_limit {
+            if config.aggressive {
+                for i in 0..output2_agg.len() {
+                    output2_agg[i] = output2_agg[i]
+                        .clamp(-config.limit_threshold, config.limit_threshold)
+                }
+            } else {
+                for i in 0..output2.len() {
+                    output2[i] = output2[i]
+                        .clamp(-config.limit_threshold, config.limit_threshold)
+                }
+            }
+        } else if config.compression_ratio > 1. {
+            for i in 0..output2.len() {
+                output2[i] = apply_compressor(
+                    output2[i],
+                    threshold,
+                    config.compression_ratio,
+                    attack_coeff,
+                    release_coeff,
+                    &mut gain_reduction,
+                );
+            }
+        }
+
+        if agg {
+            for i in 0..output2_agg.len() {
+                output[i * 2] += output2_agg[i];
+                output[i * 2 + 1] += output2_agg[i];
+            }
+        } else {
+            for i in 0..output2.len() {
+                output[i] += output2[i];
+            }
+        }
+
+        if !config.hires {
+            for i in 0..output.len() {
+                output[i] = output[i].clamp(-config.limit_threshold, config.limit_threshold);
+            }
+        }
+        info!("Mixing Time:{:.2?}", mixing_time.elapsed());
+    }
+
+    {
+        let output_audio_time = Instant::now();
+        let mut proc = cmd_hidden(&ffmpeg)
+            .args(
+                format!(
+                    "-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav",
+                    sample_rate
+                )
+                .split_whitespace(),
+            )
+            .arg(mixing_output.path())
+            .arg("-loglevel")
+            .arg("warning")
+            .stdin(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .with_context(|| tl!("run-ffmpeg-failed"))?;
+        let input = proc.stdin.as_mut().unwrap();
+        let mut writer = BufWriter::new(input);
+        for sample in output.into_iter() {
+            writer.write_all(&sample.to_le_bytes())?;
+        }
+        drop(writer);
+        proc.wait()?;
+        info!("Output Audio Time:{:.2?}", output_audio_time.elapsed());
+    }
+
+    if ipc {
+        send(IPCEvent::Loading);
+    }
+
+    let preparing_render_time = Instant::now();
+    let (vw, vh) = config.resolution;
     let mst = Rc::new(MSRenderTarget::new((vw, vh), config.sample_count));
     let my_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.));
     let tm = TimeManager::manual(Box::new({
@@ -331,10 +632,19 @@ pub async fn main() -> Result<()> {
         move || *(*my_time).borrow()
     }));
     static MSAA: AtomicBool = AtomicBool::new(false);
-    let player = build_player(&params.config).await?;
+    let player = build_player(&config).await?;
     let mut main = Main::new(
         Box::new(
-            LoadingScene::new(GameMode::Normal, info, &config, fs, Some(player), None, None).await?,
+            LoadingScene::new(
+                GameMode::Normal,
+                info,
+                &prpr_config,
+                fs,
+                Some(player),
+                None,
+                None,
+            )
+            .await?,
         ),
         tm,
         {
@@ -356,73 +666,135 @@ pub async fn main() -> Result<()> {
     main.top_level = false;
     main.viewport = Some((0, 0, vw as _, vh as _));
 
-    const O: f64 = LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64;
-    const A: f64 = 0.7 + 0.3 + 0.4 - 0.4;
+    let fps = config.fps;
+    let frames = (video_length * fps as f64 + N as f64 - 1.).ceil() as u64;
 
-    let fps = params.config.fps;
-    let frame_delta = 1. / fps as f32;
-    let frames = (video_length / frame_delta as f64).ceil() as u64;
-    send(IPCEvent::StartRender(frames));
 
-    let codecs = String::from_utf8(
-        cmd_hidden(&ffmpeg)
-            .arg("-codecs")
+    let test_encoder = |encoder: &str| -> bool {
+        let output = Command::new(&ffmpeg)
+            .args(&["-f", "lavfi", "-i", "color=c=black:s=320x240:d=0", "-c:v", encoder, "-f", "null", "-"])
+            .arg("-loglevel")
+            .arg("fatal")
+            .arg("-hide_banner")
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .output()
-            .with_context(|| tl!("run-ffmpeg-failed"))?
-            .stdout,
-    )?;
-
-    let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
-    let has_qsv = params.config.hardware_accel && codecs.contains("h264_qsv");
-    let has_amf = params.config.hardware_accel && codecs.contains("h264_amf");
-
-    let use_cuda_hevc = params.config.hardware_accel && codecs.contains("hevc_nvenc");
-    let has_qsv_hevc = params.config.hardware_accel && codecs.contains("hevc_qsv");
-    let has_amf_hevc = params.config.hardware_accel && codecs.contains("hevc_amf");
-
-    let ffmpeg_preset =  if !use_cuda && !has_qsv && has_amf {"-quality"} else {"-preset"};
-    let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
-
-    let (nvenc, qsv, _amf, cpu) = if params.config.hevc {
-        ("hevc_nvenc", "hevc_qsv", "hevc_amf", "libx265")
-    } else {
-        ("h264_nvenc", "h264_qsv", "h264_amf", "libx264")
+            .expect("Failed to test encoder");
+    
+        output.status.success()
     };
-    if params.config.hardware_accel && !use_cuda_hevc && !has_qsv_hevc && !has_amf_hevc {bail!(tl!("no-hwacc"));}
 
-    let ffmpeg_preset_name = if use_cuda {ffmpeg_preset_name_list.nth(1)
-    } else if has_qsv {ffmpeg_preset_name_list.nth(0)
-    } else if has_amf {ffmpeg_preset_name_list.nth(2)
-    } else {ffmpeg_preset_name_list.nth(0)};
+    let use_cuda = config.hardware_accel && test_encoder("h264_nvenc");
+    let has_qsv = config.hardware_accel && test_encoder("h264_qsv");
+    let has_amf = config.hardware_accel && test_encoder("h264_amf");
 
-    let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
+    let use_cuda_hevc = config.hardware_accel && config.hevc && test_encoder("hevc_nvenc");
+    let has_qsv_hevc = config.hardware_accel && config.hevc && test_encoder("hevc_qsv");
+    let has_amf_hevc = config.hardware_accel && config.hevc && test_encoder("hevc_amf");
+
+    let ffmpeg_preset = "-preset";
+    let mut ffmpeg_preset_name_list = config.ffmpeg_preset.split_whitespace();
+
+    if config.hardware_accel && !config.mpeg4 {
+        if !(use_cuda_hevc || has_qsv_hevc || has_amf_hevc) && config.hevc {
+            bail!(tl!("no-hwacc"));
+        } else if !(use_cuda || has_qsv || has_amf) {
+            bail!(tl!("no-hwacc"));
+        }
+    }
+
+    let ffmpeg_encoder = if config.mpeg4 {
+        "mpeg4"
+    } else if use_cuda_hevc {
+        "hevc_nvenc"
+    } else if use_cuda {
+        "h264_nvenc"
+    } else if has_qsv_hevc {
+        "hevc_qsv"
+    } else if has_qsv {
+        "h264_qsv"
+    } else if has_amf_hevc {
+        "hevc_amf"
+    } else if has_amf {
+        "h264_amf"
+    } else {
+        if config.hevc {
+            "libx265"
+        } else {
+            "libx264"
+        }
+    };
+
+    info!("Encoder: {}", ffmpeg_encoder);
+
+    let ffmpeg_preset_name = if use_cuda {
+        ffmpeg_preset_name_list.nth(1).unwrap_or(
+            ffmpeg_preset_name_list.nth(0).unwrap_or("p4")
+        )
+    } else if has_qsv {
+        ffmpeg_preset_name_list.nth(2).unwrap_or("medium")
+    } else if has_amf {
+        ffmpeg_preset_name_list.nth(3).unwrap_or(
+            ffmpeg_preset_name_list.nth(0).unwrap_or("balanced")
+        )
+    } else {
+        ffmpeg_preset_name_list.nth(0).unwrap_or("medium")
+    };
+
+    let bitrate_control = 
+    if config.bitrate_control.to_lowercase() == "crf" {
+        if use_cuda && !config.mpeg4 {
+            "-cq"
+        } else if has_qsv || config.mpeg4 {
+            "-q"
+        }
+        else if has_amf {
+            "-qp_p"
+        } else {
+            "-crf"
+        }
+    } else {
+        "-b:v"
+    };
+
+    let bitrate = config.bitrate;
+
+    let mut args = "-probesize 50M -y -f rawvideo -c:v rawvideo".to_owned();
     if use_cuda {
         args += " -hwaccel_output_format cuda";
     }
-    write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
+    write!(
+        &mut args,
+        " -s {vw}x{vh} -r {fps} -pix_fmt rgba -thread_queue_size 1024 -i - -i"
+    )?;
 
     let args2 = format!(
-        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
-        if use_cuda {nvenc} 
-        else if has_qsv {qsv} 
-        //else if has_amf {amf}
-        else if params.config.hardware_accel {bail!(tl!("no-hwacc"));} 
-        else {cpu},
-        if params.config.bitrate_control == "CRF" {
-            if use_cuda {"-cq"}
-            else if has_qsv {"-q"}
-            //else if has_amf {"-qp_p"}
-            else {"-crf"}
+        "-c:a {} -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f {}",
+        if config.hires {
+            "copy"
         } else {
-            "-b:v"
+            "aac -b:a 320k"
         },
-        params.config.bitrate,
+        ffmpeg_encoder,
+        bitrate_control,
+        bitrate,
         ffmpeg_preset,
-        ffmpeg_preset_name.unwrap(),
-        if params.config.disable_loading{format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)}
-        else{"-ss 0.1".to_string()},
+        ffmpeg_preset_name,
+        if config.disable_loading {
+            format!("-ss {}", o)
+        } else {
+            "".to_string()
+        },
+        mov
     );
 
+    info!(
+        "Preparing Render Time:{:.2?}",
+        preparing_render_time.elapsed()
+    );
+    let pre_render_time = Instant::now();
+
+    //info!("Command: {} {} {} {} {}", "ffmpeg", args,"-", args2, output_path.display());
     let mut proc = cmd_hidden(&ffmpeg)
         .args(args.split_whitespace())
         .arg(mixing_output.path())
@@ -438,8 +810,7 @@ pub async fn main() -> Result<()> {
 
     let byte_size = vw as usize * vh as usize * 4;
 
-
-    const N: usize = 3;
+    const N: usize = 60;
     let mut pbos: [GLuint; N] = [0; N];
     unsafe {
         use miniquad::gl::*;
@@ -456,16 +827,19 @@ pub async fn main() -> Result<()> {
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
 
+    if ipc {
+        send(IPCEvent::StartRender(frames));
+    }
 
-    for frame in 0..frames {
-        *my_time.borrow_mut() = (frame as f32 * frame_delta).max(0.) as f64;
+    let fps = fps as f64;
+    for frame in 0..N {
+        *my_time.borrow_mut() = (frame as f64 / fps).max(0.);
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
-        //clear_background(BLACK);
-        main.viewport = Some((0, 0, vw as _, vh as _));
         main.update()?;
         main.render(&mut painter)?;
-        // TODO magic. can't remove this line.
-        draw_rectangle(0., 0., 0., 0., Color::default());
+        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 && !config.disable_loading {
+            draw_rectangle(0., 0., 0., 0., Color::default());
+        }
         gl.flush();
 
         if MSAA.load(Ordering::SeqCst) {
@@ -473,15 +847,65 @@ pub async fn main() -> Result<()> {
         }
         unsafe {
             use miniquad::gl::*;
-            let tex = mst.output().texture.raw_miniquad_texture_handle();
+            //let tex = mst.output().texture.raw_miniquad_texture_handle();
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[frame]);
+            glReadPixels(
+                0,
+                0,
+                vw as _,
+                vh as _,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                std::ptr::null_mut(),
+            );
+        }
+        if ipc {
+            send(IPCEvent::Frame);
+        }
+    }
+    info!("Pre-Render Time:{:.2?}", pre_render_time.elapsed());
+
+    let frames10 = frames / 10;
+    let render_time = Instant::now();
+    let mut step_time = Instant::now();
+    for frame in N as u64..frames {
+        if frame % frames10 == 0 {
+            let proc = (frame as f32 / frames as f32 * 100.).ceil() as i8 / 10 * 10;
+            info!(
+                "Render progress: {:.0}% Time elapsed: {:.2}s",
+                proc,
+                step_time.elapsed().as_secs_f32()
+            );
+            step_time = Instant::now();
+        }
+        *my_time.borrow_mut() = (frame as f64 / fps).max(0.);
+        gl.quad_gl.render_pass(Some(mst.output().render_pass));
+        //clear_background(BLACK);
+        main.viewport = Some((0, 0, vw as _, vh as _));
+        main.update()?;
+        main.render(&mut painter)?;
+        // TODO magic. can't remove this line.
+        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 && !config.disable_loading {
+            draw_rectangle(0., 0., 0., 0., Color::default());
+        }
+
+        gl.flush();
+
+        if MSAA.load(Ordering::SeqCst) {
+            mst.blit();
+        }
+        unsafe {
+            use miniquad::gl::*;
+            //let tex = mst.output().texture.raw_miniquad_texture_handle();
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
 
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[frame as usize % N]);
             glReadPixels(
                 0,
                 0,
-                tex.width as _,
-                tex.height as _,
+                vw as _,
+                vh as _,
                 GL_RGBA,
                 GL_UNSIGNED_BYTE,
                 std::ptr::null_mut(),
@@ -494,11 +918,20 @@ pub async fn main() -> Result<()> {
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
             }
         }
-        send(IPCEvent::Frame);
+        if ipc {
+            send(IPCEvent::Frame);
+        }
     }
     drop(input);
+    info!("Render Time: {:.2?}", render_time.elapsed());
+    info!(
+        "Average FPS: {:.2}",
+        frames as f64 / render_time.elapsed().as_secs_f64()
+    );
     proc.wait()?;
-
-    send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
+    info!("Task done in {:.2?}", render_start_time.elapsed());
+    if ipc {
+        send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
+    }
     Ok(())
 }
