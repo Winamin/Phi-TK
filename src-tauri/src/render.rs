@@ -322,7 +322,8 @@ pub async fn main() -> Result<()> {
     drop(writer);
     proc.wait()?;
 
-    let (vw, vh) = params.config.resolution;
+    let preparing_render_time = Instant::now();
+    let (vw, vh) = config.resolution;
     let mst = Rc::new(MSRenderTarget::new((vw, vh), config.sample_count));
     let my_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.));
     let tm = TimeManager::manual(Box::new({
@@ -330,11 +331,19 @@ pub async fn main() -> Result<()> {
         move || *(*my_time).borrow()
     }));
     static MSAA: AtomicBool = AtomicBool::new(false);
-    let player = build_player(&params.config).await?;
-    let config_ref = &config;
+    let player = build_player(&config).await?;
     let mut main = Main::new(
         Box::new(
-            LoadingScene::new(GameMode::Normal, info, &config_ref.clone(), fs, Some(player), None, None).await?,
+            LoadingScene::new(
+                GameMode::Normal,
+                info,
+                &prpr_config,
+                fs,
+                Some(player),
+                None,
+                None,
+            )
+            .await?,
         ),
         tm,
         {
@@ -356,19 +365,22 @@ pub async fn main() -> Result<()> {
     main.top_level = false;
     main.viewport = Some((0, 0, vw as _, vh as _));
 
-    let fps = params.config.fps;
-    let frame_delta = 1. / fps as f32;
-    
-    let frames = (video_length / frame_delta as f64).ceil() as u64;
-    send(IPCEvent::StartRender(frames));
+    let fps = config.fps;
+    let frames = (video_length * fps as f64 + N as f64 - 1.).ceil() as u64;
 
-    let codecs = String::from_utf8(
-        cmd_hidden(&ffmpeg)
-            .arg("-codecs")
+    let test_encoder = |encoder: &str| -> bool {
+        let output = Command::new(&ffmpeg)
+            .args(&["-f", "lavfi", "-i", "color=c=black:s=320x240:d=0", "-c:v", encoder, "-f", "null", "-"])
+            .arg("-loglevel")
+            .arg("fatal")
+            .arg("-hide_banner")
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .output()
-            .with_context(|| tl!("run-ffmpeg-failed"))?
-            .stdout,
-    )?;
+            .expect("Failed to test encoder");
+    
+        output.status.success()
+    };
 
     let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
     let has_qsv = params.config.hardware_accel && codecs.contains("h264_qsv");
@@ -426,6 +438,8 @@ pub async fn main() -> Result<()> {
         .arg(mixing_output.path())
         .args(args2.split_whitespace())
         .arg(output_path)
+        .arg("-loglevel")
+        .arg("warning")
         .stdin(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
@@ -434,9 +448,7 @@ pub async fn main() -> Result<()> {
 
     let byte_size = vw as usize * vh as usize * 4;
 
-    let frames = (video_length / frame_delta as f64).ceil() as u64;
-
-    const N: usize = 3;
+    const N: usize = 60;
     let mut pbos: [GLuint; N] = [0; N];
     unsafe {
         use miniquad::gl::*;
@@ -453,17 +465,19 @@ pub async fn main() -> Result<()> {
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
 
-    send(IPCEvent::StartRender(frames));
+    if ipc {
+        send(IPCEvent::StartRender(frames));
+    }
 
-    for frame in 0..frames {
-        *my_time.borrow_mut() = (frame as f32 * frame_delta).max(0.) as f64;
+    let fps = fps as f64;
+    for frame in 0..N {
+        *my_time.borrow_mut() = (frame as f64 / fps).max(0.);
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
-        clear_background(BLACK);
-        main.viewport = Some((0, 0, vw as _, vh as _));
         main.update()?;
         main.render(&mut painter)?;
-        // TODO magic. can't remove this line.
-        draw_rectangle(0., 0., 0., 0., Color::default());
+        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 && !config.disable_loading {
+            draw_rectangle(0., 0., 0., 0., Color::default());
+        }
         gl.flush();
 
         if MSAA.load(Ordering::SeqCst) {
@@ -471,15 +485,65 @@ pub async fn main() -> Result<()> {
         }
         unsafe {
             use miniquad::gl::*;
-            let tex = mst.output().texture.raw_miniquad_texture_handle();
+            //let tex = mst.output().texture.raw_miniquad_texture_handle();
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[frame]);
+            glReadPixels(
+                0,
+                0,
+                vw as _,
+                vh as _,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                std::ptr::null_mut(),
+            );
+        }
+        if ipc {
+            send(IPCEvent::Frame);
+        }
+    }
+    info!("Pre-Render Time:{:.2?}", pre_render_time.elapsed());
+
+    let frames10 = frames / 10;
+    let render_time = Instant::now();
+    let mut step_time = Instant::now();
+    for frame in N as u64..frames {
+        if frame % frames10 == 0 {
+            let proc = (frame as f32 / frames as f32 * 100.).ceil() as i8 / 10 * 10;
+            info!(
+                "Render progress: {:.0}% Time elapsed: {:.2}s",
+                proc,
+                step_time.elapsed().as_secs_f32()
+            );
+            step_time = Instant::now();
+        }
+        *my_time.borrow_mut() = (frame as f64 / fps).max(0.);
+        gl.quad_gl.render_pass(Some(mst.output().render_pass));
+        //clear_background(BLACK);
+        main.viewport = Some((0, 0, vw as _, vh as _));
+        main.update()?;
+        main.render(&mut painter)?;
+        // TODO magic. can't remove this line.
+        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 && !config.disable_loading {
+            draw_rectangle(0., 0., 0., 0., Color::default());
+        }
+
+        gl.flush();
+
+        if MSAA.load(Ordering::SeqCst) {
+            mst.blit();
+        }
+        unsafe {
+            use miniquad::gl::*;
+            //let tex = mst.output().texture.raw_miniquad_texture_handle();
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
 
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[frame as usize % N]);
             glReadPixels(
                 0,
                 0,
-                tex.width as _,
-                tex.height as _,
+                vw as _,
+                vh as _,
                 GL_RGBA,
                 GL_UNSIGNED_BYTE,
                 std::ptr::null_mut(),
@@ -492,11 +556,20 @@ pub async fn main() -> Result<()> {
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
             }
         }
-        send(IPCEvent::Frame);
+        if ipc {
+            send(IPCEvent::Frame);
+        }
     }
     drop(input);
+    info!("Render Time: {:.2?}", render_time.elapsed());
+    info!(
+        "Average FPS: {:.2}",
+        frames as f64 / render_time.elapsed().as_secs_f64()
+    );
     proc.wait()?;
-
-    send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
+    info!("Task done in {:.2?}", render_start_time.elapsed());
+    if ipc {
+        send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
+    }
     Ok(())
 }
