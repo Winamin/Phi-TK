@@ -228,7 +228,7 @@ pub async fn main() -> Result<()> {
 
     let offset = chart.offset + info.offset;
     let length = track_length - offset.min(0.) as f64 + 1.;
-    let video_length = O + length + a + config.ending_length;
+    let video_length = O + length + A + config.ending_length;
     
     let render_start_time = Instant::now();
 
