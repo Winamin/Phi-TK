@@ -108,8 +108,6 @@ impl RenderConfig {
             ..Default::default()
         }
     }
-        }
-    }
     pub fn default() -> RenderConfig {
         RenderConfig {
             resolution: (1920, 1080),
