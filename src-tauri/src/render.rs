@@ -226,7 +226,8 @@ pub async fn main() -> Result<()> {
 
     let length = track_length - chart.offset.min(0.) as f64 + 1.;
     let video_length = O + length + A + params.config.ending_length;
-    let offset = chart.offset.max(0.);
+    let chart_offset = chart.offset;
+    let music_start_time = O - chart_offset;
 
     let render_start_time = Instant::now();
 
@@ -242,18 +243,21 @@ pub async fn main() -> Result<()> {
     let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
     if volume_music != 0.0 {
         let start_time = Instant::now();
-        let pos = O - chart.offset.min(0.) as f64;
-        let count = (music.length() as f64 * sample_rate_f64) as usize;
-        let start_index = (pos * sample_rate_f64).round() as usize * 2;
-        let ratio = 1.0 / sample_rate_f64;
-        for i in 0..count {
-            let position = i as f64 * ratio;
-            let frame = music.sample(position as f32).unwrap_or_default();
-            output[start_index + i * 2] += frame.0 * volume_music;
-            output[start_index + i * 2 + 1] += frame.1 * volume_music;
+        let chart_offset = chart.offset;
+        let music_start_frame = ((O - chart_offset) * sample_rate_f64).round() as usize * 2;
+        let music_samples = music.frame_count();
+        for i in 0..music_samples {
+            let global_frame = music_start_frame + i * 2;
+            if global_frame + 1 >= output.len() {
+                break;
+            }
+        
+            let frame = music.sample(i as f32 / sample_rate).unwrap_or_default();
+            output[global_frame] += frame.0 * volume_music;
+            output[global_frame + 1] += frame.1 * volume_music;
         }
-        info!("music Time:{:?}", start_time.elapsed())
-
+    
+        info!("music Time:{:?}", start_time.elapsed());
     }
     
     let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
@@ -352,7 +356,8 @@ pub async fn main() -> Result<()> {
     const A: f64 = 0.7 + 0.3 + 0.4 - 0.4;
 
     let fps = params.config.fps;
-    let frame_delta = 1. / fps as f32;
+    let audio_samples_per_frame = (sample_rate as f64 / fps as f64).round() as usize;
+    let frame_delta = audio_samples_per_frame as f64 / sample_rate as f64;
     let frames = (video_length / frame_delta as f64).ceil() as u64;
     send(IPCEvent::StartRender(frames));
 
