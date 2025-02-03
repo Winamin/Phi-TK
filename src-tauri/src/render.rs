@@ -93,6 +93,47 @@ impl RenderConfig {
             ..Default::default()
         }
     }
+    pub fn default() -> RenderConfig {
+        RenderConfig {
+            resolution: (1920, 1080),
+            ffmpeg_preset: "medium".to_string(),
+            ending_length: 5.0,
+            disable_loading: false,
+            hires: true,
+            fps: 60,
+            hardware_accel: true,
+            hevc: false,
+            mpeg4: false,
+            bitrate_control: "CRF".to_string(),
+            bitrate: "1000k".to_string(),
+            aggressive: true,
+            challenge_color: ChallengeModeColor::Rainbow,
+            challenge_rank: 45,
+            disable_effect: false,
+            double_hint: true,
+            fxaa: false,
+            note_scale: 1.0,
+            particle: true,
+            player_name: "Link".to_string(),
+            player_rks: 16.0,
+            sample_count: 2,
+            res_pack_path: None,
+            speed: 1.0,
+            volume_music: 1.0,
+            volume_sfx: 0.7,
+            compression_ratio: 100.,
+            force_limit: false,
+            limit_threshold: 1.0,
+            chart_debug: false,
+            chart_ratio: 1.0,
+            combo: "AUTOPLAY".to_string(),
+            difficulty: "".to_string(),
+            player_avatar: None,
+            judge_offset: 0.,
+            simple_file_name: false,
+            max_particles: 100000,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone)]
