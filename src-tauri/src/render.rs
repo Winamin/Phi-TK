@@ -1,13 +1,11 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 prpr::tl_file!("render");
 
-use crate::common::{ensure_dir, let_output_dir, output_dir, DATA_DIR};
-use chrono::Local;
 use anyhow::{bail, Context, Result};
 use macroquad::{miniquad::gl::GLuint, prelude::*};
 use prpr::{
     config::{ChallengeModeColor, Config, Mods},
-    core::{init_assets, internal_id, MSRenderTarget, Note},
+    core::{internal_id, MSRenderTarget, NoteKind},
     fs,
     info::ChartInfo,
     scene::{BasicPlayer, GameMode, GameScene, LoadingScene, EndingScene},
@@ -19,7 +17,7 @@ use sasa::AudioClip;
 use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
-    io::{BufRead, BufWriter, Write},
+    io::{BufRead, BufWriter, Write, self},
     ops::DerefMut,
     path::PathBuf,
     process::{Command, Stdio},
@@ -30,7 +28,6 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 
-
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderConfig {
@@ -39,11 +36,13 @@ pub struct RenderConfig {
     ending_length: f64,
     disable_loading: bool,
     chart_debug: bool,
+    flid_x: bool,
     chart_ratio: f32,
+    buffer_size: f32,
+    combo: String,
     fps: u32,
     hardware_accel: bool,
     hevc: bool,
-    mpeg4: bool,
     bitrate_control: String,
     bitrate: String,
 
@@ -54,7 +53,6 @@ pub struct RenderConfig {
     double_hint: bool,
     fxaa: bool,
     note_scale: f32,
-    //offset: f32,
     particle: bool,
     player_avatar: Option<String>,
     player_name: String,
@@ -64,25 +62,6 @@ pub struct RenderConfig {
     speed: f32,
     volume_music: f32,
     volume_sfx: f32,
-    compression_ratio: f32,
-    force_limit: bool,
-    limit_threshold: f32,
-    combo: String,
-    difficulty: String,
-    judge_offset: f32,
-    simple_file_name: bool,
-    flid_x: bool,
-    phira_mode: bool,
-    max_particles: usize,
-
-    render_line: bool,
-    render_line_extra: bool,
-    render_note: bool,
-    render_ui_pause: bool,
-    render_ui_score: bool,
-    render_ui_combo: bool,
-    render_ui_bar: bool,
-    render_bg: bool,
 }
 
 impl RenderConfig {
@@ -92,13 +71,10 @@ impl RenderConfig {
             challenge_color: self.challenge_color.clone(),
             challenge_rank: self.challenge_rank,
             disable_effect: self.disable_effect,
-            disable_loading: self.disable_loading,
             double_hint: self.double_hint,
             fxaa: self.fxaa,
             note_scale: self.note_scale,
-            //offset: self.offset,
             particle: self.particle,
-            phira_mode: self.phira_mode,
             player_name: self.player_name.clone(),
             player_rks: self.player_rks,
             sample_count: self.sample_count,
@@ -108,78 +84,16 @@ impl RenderConfig {
             volume_sfx: self.volume_sfx,
             chart_debug: self.chart_debug,
             chart_ratio: self.chart_ratio,
+            buffer_size: self.buffer_size,
             combo: self.combo.clone(),
-            difficulty: self.difficulty.clone(),
-            phira_mode: self.phira_mode,
-            disable_audio: false,
-            judge_offset: self.judge_offset,
-            render_line: self.render_line,
-            render_line_extra: self.render_line_extra,
-            render_note: self.render_note,
-            render_ui_pause: self.render_ui_pause,
-            render_ui_score: self.render_ui_score,
-            render_ui_combo: self.render_ui_combo,
-            render_ui_bar: self.render_ui_bar,
-            render_bg: self.render_bg,
-
             flid_x: self.flid_x,
-            max_particles: self.max_particles,
             ..Default::default()
-        }
-    }
-    pub fn default() -> RenderConfig {
-        RenderConfig {
-            resolution: (1920, 1080),
-            ffmpeg_preset: "medium".to_string(),
-            ending_length: 5.0,
-            disable_loading: false,
-            fps: 60,
-            hardware_accel: true,
-            hevc: false,
-            mpeg4: false,
-            bitrate_control: "CRF".to_string(),
-            bitrate: "1000k".to_string(),
-            aggressive: true,
-            challenge_color: ChallengeModeColor::Rainbow,
-            challenge_rank: 45,
-            disable_effect: false,
-            double_hint: true,
-            fxaa: false,
-            note_scale: 1.0,
-            particle: true,
-            player_name: "Link".to_string(),
-            player_rks: 16.0,
-            sample_count: 2,
-            res_pack_path: None,
-            speed: 1.0,
-            volume_music: 1.0,
-            volume_sfx: 0.7,
-            compression_ratio: 100.,
-            force_limit: false,
-            limit_threshold: 1.0,
-            chart_debug: false,
-            chart_ratio: 1.0,
-            combo: "AUTOPLAY".to_string(),
-            difficulty: "".to_string(),
-            player_avatar: None,
-            phira_mode: false,
-            judge_offset: 0.,
-            simple_file_name: false,
-            render_line: true,
-            render_line_extra: true,
-            render_note: true,
-            render_ui_pause: true,
-            render_ui_score: true,
-            render_ui_combo: true,
-            render_ui_bar: true,
-            render_bg: true,
-
-            max_particles: 100000,
         }
     }
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderParams {
     pub path: PathBuf,
@@ -305,18 +219,10 @@ pub async fn main() -> Result<()> {
     let volume_music = std::mem::take(&mut config.volume_music);
     let volume_sfx = std::mem::take(&mut config.volume_sfx);
 
-    let O: f64 = if params.config.disable_loading {
-        GameScene::BEFORE_TIME as f64
-    } else {
-        LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64
-    };
-    let A: f64 = -0.5; // fade out time
-    let musica: f64 = 0.7 + 0.3 + EndingScene::BPM_WAIT_TIME;
-
-    let offset = chart.offset + info.offset;
-    let length = track_length - offset.min(0.) as f64 + 1.;
+    let length = track_length - chart.offset.min(0.) as f64 + 1.;
     let video_length = O + length + A + params.config.ending_length;
-    
+    let offset = chart.offset.max(0.);
+
     let render_start_time = Instant::now();
 
     send(IPCEvent::StartMixing);
@@ -329,53 +235,42 @@ pub async fn main() -> Result<()> {
     assert_eq!(sample_rate, sfx_flick.sample_rate());
     
     let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
-    let mut output2 = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize];
-
-    let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
-        let position = (pos * sample_rate_f64).round() as usize;
-        if position >= output2.len() {
-            return 0;
-        }
-        let slice = &mut output2[position..];
-        let len = (slice.len()).min(clip.frame_count());
-
-        let frames = clip.frames();
-        for i in 0..len {
-            slice[i] += frames[i].0 * volume;
-        }
-
-        return len;
-    };
-
     if volume_music != 0.0 {
-        let music_time = Instant::now();
+        let start_time = Instant::now();
         let pos = O - chart.offset.min(0.) as f64;
-        let len = ((music.length() as f64 + 1. + A + params.config.ending_length) * sample_rate_f64) as usize;
+        let count = (music.length() as f64 * sample_rate_f64) as usize;
         let start_index = (pos * sample_rate_f64).round() as usize * 2;
         let ratio = 1.0 / sample_rate_f64;
-        for i in 0..len {
+        for i in 0..count {
             let position = i as f64 * ratio;
             let frame = music.sample(position as f32).unwrap_or_default();
             output[start_index + i * 2] += frame.0 * volume_music;
             output[start_index + i * 2 + 1] += frame.1 * volume_music;
         }
-        //ending
-        let mut pos = O + length;
-        while pos < video_length && params.config.ending_length > EndingScene::BPM_WAIT_TIME {
-            let start_index = (pos * sample_rate_f64).round() as usize * 2;
-            let slice = &mut output[start_index..];
-            let len = (slice.len() / 2).min(ending.frame_count());
-            let frames = &ending.frames();
-            for i in 0..len {
-                slice[i * 2] += frames[i].0 * volume_music;
-                slice[i * 2 + 1] += frames[i].1 * volume_music;
-            }
-            pos += ending.frame_count() as f64 / sample_rate_f64;
-        }
+        info!("music Time:{:?}", start_time.elapsed())
+
     }
+    
+    let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
+        let position = (pos * sample_rate_f64).round() as usize * 2;
+        if position >= output.len() {
+            return 0;
+        }
+        let slice = &mut output[position..];
+        let len = (slice.len() / 2).min(clip.frame_count());
+
+        let frames = clip.frames();
+        for i in 0..len {
+            slice[i * 2] += frames[i].0 * volume;
+            slice[i * 2 + 1] += frames[i].1 * volume;
+        }
+    
+        return len;
+    };
+    
+
     if volume_sfx != 0.0 {
-        let sfx_time = Instant::now();
-        let offset = offset as f64;
+        let start_time = Instant::now();
         for line in &chart.lines {
             for note in &line.notes {
                 if !note.fake {
@@ -384,19 +279,25 @@ pub async fn main() -> Result<()> {
                         NoteKind::Drag => &sfx_drag,
                         NoteKind::Flick => &sfx_flick,
                     };
-                    place(O + note.time as f64 + offset, sfx, volume_sfx);
+                    place(O + note.time as f64 + offset as f64, sfx, volume_sfx);
                 }
             }
         }
-        info!("Render Hit Effects Time:{:?}", sfx_time.elapsed())
+        info!("sfx Time:{:?}", start_time.elapsed())
+        
     }
-    for i in 0..output2.len() {
-            output[i * 2] += output2[i];
-            output[i * 2 + 1] += output2[i];
+
+    //ending
+    let mut pos = O + length + A;
+    while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
+        pos += ending.frame_count() as f64 / sample_rate_f64;
     }
+
     let mut proc = cmd_hidden(&ffmpeg)
         .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
         .arg(mixing_output.path())
+        .arg("-loglevel")
+        .arg("warning")
         .stdin(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
@@ -409,8 +310,7 @@ pub async fn main() -> Result<()> {
     drop(writer);
     proc.wait()?;
 
-    let preparing_render_time = Instant::now();
-    let (vw, vh) = config.resolution;
+    let (vw, vh) = params.config.resolution;
     let mst = Rc::new(MSRenderTarget::new((vw, vh), config.sample_count));
     let my_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.));
     let tm = TimeManager::manual(Box::new({
@@ -418,19 +318,10 @@ pub async fn main() -> Result<()> {
         move || *(*my_time).borrow()
     }));
     static MSAA: AtomicBool = AtomicBool::new(false);
-    let player = build_player(&config).await?;
+    let player = build_player(&params.config).await?;
     let mut main = Main::new(
         Box::new(
-            LoadingScene::new(
-                GameMode::Normal,
-                info,
-                &prpr_config,
-                fs,
-                Some(player),
-                None,
-                None,
-            )
-            .await?,
+            LoadingScene::new(GameMode::Normal, info, &config, fs, Some(player), None, None).await?,
         ),
         tm,
         {
@@ -452,91 +343,50 @@ pub async fn main() -> Result<()> {
     main.top_level = false;
     main.viewport = Some((0, 0, vw as _, vh as _));
 
-    let fps = config.fps;
-    let frames = (video_length * fps as f64 + N as f64 - 1.).ceil() as u64;
+    const O: f64 = LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64;
+    const A: f64 = 0.7 + 0.3 + 0.4 - 0.4;
 
-    let test_encoder = |encoder: &str| -> bool {
-        let output = Command::new(&ffmpeg)
-            .args(&["-f", "lavfi", "-i", "color=c=black:s=320x240:d=0", "-c:v", encoder, "-f", "null", "-"])
-            .arg("-loglevel")
-            .arg("fatal")
-            .arg("-hide_banner")
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
+    let fps = params.config.fps;
+    let frame_delta = 1. / fps as f32;
+    let frames = (video_length / frame_delta as f64).ceil() as u64;
+    send(IPCEvent::StartRender(frames));
+
+    let codecs = String::from_utf8(
+        cmd_hidden(&ffmpeg)
+            .arg("-codecs")
             .output()
-            .expect("Failed to test encoder");
-    
-        output.status.success()
-    };
+            .with_context(|| tl!("run-ffmpeg-failed"))?
+            .stdout,
+    )?;
 
-    let hardware_accel = params.config.hardware_accel;
+    let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
+    let has_qsv = params.config.hardware_accel && codecs.contains("h264_qsv");
+    let has_amf = params.config.hardware_accel && codecs.contains("h264_amf");
 
-    let use_cuda = hardware_accel && codecs.contains("h264_nvenc");
-    let has_qsv = hardware_accel && codecs.contains("h264_qsv");
-    let has_amf = hardware_accel && codecs.contains("h264_amf");
+    let use_cuda_hevc = params.config.hardware_accel && codecs.contains("hevc_nvenc");
+    let has_qsv_hevc = params.config.hardware_accel && codecs.contains("hevc_qsv");
+    let has_amf_hevc = params.config.hardware_accel && codecs.contains("hevc_amf");
 
-    let use_cuda_hevc = hardware_accel && codecs.contains("hevc_nvenc");
-    let has_qsv_hevc = hardware_accel && codecs.contains("hevc_qsv");
-    let has_amf_hevc = hardware_accel && codecs.contains("hevc_amf");
-
-    let ffmpeg_preset = if use_amf { "-quality" } else { "-preset" };
+    let ffmpeg_preset =  if !use_cuda && !has_qsv && has_amf {"-quality"} else {"-preset"};
     let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
 
-    let ffmpeg_111 = 
-    if use_cuda_hevc {
-        "hevc_nvenc"
-    } else if use_cuda {
-        "h264_nvenc"
-    } else if has_qsv_hevc {
-        "hevc_qsv"
-    } else if has_qsv {
-        "h264_qsv"
-    } else if has_amf_hevc {
-        "hevc_amf"
-    } else if has_amf {
-        "h264_amf"
+    let (nvenc, qsv, _amf, cpu) = if params.config.hevc {
+        ("hevc_nvenc", "hevc_qsv", "hevc_amf", "libx265")
     } else {
-        warn!("Warinig:No hardware acceleration available, using software encoding");
-        if params.config.hevc {
-            "libx265"
-        } else {
-            "libx264"
-        }
+        ("h264_nvenc", "h264_qsv", "h264_amf", "libx264")
     };
+    if params.config.hardware_accel && !use_cuda_hevc && !has_qsv_hevc && !has_amf_hevc {bail!(tl!("no-hwacc"));}
 
-    if hardware_accel && !use_cuda_hevc && !use_qsv_hevc && !use_amf_hevc {
-        bail!(tl!("no-hwacc"));
-    }
-
-    let ffmpeg_preset_name = if use_cuda {
-        ffmpeg_preset_name_list.nth(1)
-    } else if use_qsv {
-        ffmpeg_preset_name_list.nth(0)
-    } else if use_amf {
-        ffmpeg_preset_name_list.nth(2)
-    } else {
-        ffmpeg_preset_name_list.nth(0)
-    };
+    let ffmpeg_preset_name = if use_cuda {ffmpeg_preset_name_list.nth(1)
+    } else if has_qsv {ffmpeg_preset_name_list.nth(0)
+    } else if has_amf {ffmpeg_preset_name_list.nth(2)
+    } else {ffmpeg_preset_name_list.nth(0)};
 
     let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
-     if use_cuda {
-        args += " -hwaccel_output_format cuda";
-    } else if use_qsv {
-        args += " -hwaccel_output_format qsv";
-    } else if use_amf {
-        args += " -hwaccel_output_format d3d11va";
-    }
-    write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
-
-
-    let mut args = "-probesize 50M -y -f rawvideo -c:v rawvideo".to_owned();
     if use_cuda {
         args += " -hwaccel_output_format cuda";
     }
-    write!(
-        &mut args,
-        " -s {vw}x{vh} -r {fps} -pix_fmt rgba -thread_queue_size 1024 -i - -i"
-    )?;
+    write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
     let args2 = format!(
         "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
@@ -575,7 +425,8 @@ pub async fn main() -> Result<()> {
 
     let byte_size = vw as usize * vh as usize * 4;
 
-    const N: usize = 60;
+
+    const N: usize = 3;
     let mut pbos: [GLuint; N] = [0; N];
     unsafe {
         use miniquad::gl::*;
@@ -592,69 +443,16 @@ pub async fn main() -> Result<()> {
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
 
-    if ipc {
-        send(IPCEvent::StartRender(frames));
-    }
 
-    let fps = fps as f64;
-    for frame in 0..N {
-        *my_time.borrow_mut() = (frame as f64 / fps).max(0.);
-        gl.quad_gl.render_pass(Some(mst.output().render_pass));
-        main.update()?;
-        main.render(&mut painter)?;
-        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 && !config.disable_loading {
-            draw_rectangle(0., 0., 0., 0., Color::default());
-        }
-        gl.flush();
-
-        if MSAA.load(Ordering::SeqCst) {
-            mst.blit();
-        }
-        unsafe {
-            use miniquad::gl::*;
-            //let tex = mst.output().texture.raw_miniquad_texture_handle();
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[frame]);
-            glReadPixels(
-                0,
-                0,
-                vw as _,
-                vh as _,
-                GL_RGBA,
-                GL_UNSIGNED_BYTE,
-                std::ptr::null_mut(),
-            );
-        }
-        if ipc {
-            send(IPCEvent::Frame);
-        }
-    }
-    info!("Pre-Render Time:{:.2?}", pre_render_time.elapsed());
-
-    let frames10 = frames / 10;
-    let render_time = Instant::now();
-    let mut step_time = Instant::now();
-    for frame in N as u64..frames {
-        if frame % frames10 == 0 {
-            let proc = (frame as f32 / frames as f32 * 100.).ceil() as i8 / 10 * 10;
-            info!(
-                "Render progress: {:.0}% Time elapsed: {:.2}s",
-                proc,
-                step_time.elapsed().as_secs_f32()
-            );
-            step_time = Instant::now();
-        }
-        *my_time.borrow_mut() = (frame as f64 / fps).max(0.);
+    for frame in 0..frames {
+        *my_time.borrow_mut() = (frame as f32 * frame_delta).max(0.) as f64;
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
         //clear_background(BLACK);
         main.viewport = Some((0, 0, vw as _, vh as _));
         main.update()?;
         main.render(&mut painter)?;
         // TODO magic. can't remove this line.
-        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 && !config.disable_loading {
-            draw_rectangle(0., 0., 0., 0., Color::default());
-        }
-
+        draw_rectangle(0., 0., 0., 0., Color::default());
         gl.flush();
 
         if MSAA.load(Ordering::SeqCst) {
@@ -662,15 +460,15 @@ pub async fn main() -> Result<()> {
         }
         unsafe {
             use miniquad::gl::*;
-            //let tex = mst.output().texture.raw_miniquad_texture_handle();
+            let tex = mst.output().texture.raw_miniquad_texture_handle();
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
 
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[frame as usize % N]);
             glReadPixels(
                 0,
                 0,
-                vw as _,
-                vh as _,
+                tex.width as _,
+                tex.height as _,
                 GL_RGBA,
                 GL_UNSIGNED_BYTE,
                 std::ptr::null_mut(),
@@ -683,20 +481,11 @@ pub async fn main() -> Result<()> {
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
             }
         }
-        if ipc {
-            send(IPCEvent::Frame);
-        }
+        send(IPCEvent::Frame);
     }
     drop(input);
-    info!("Render Time: {:.2?}", render_time.elapsed());
-    info!(
-        "Average FPS: {:.2}",
-        frames as f64 / render_time.elapsed().as_secs_f64()
-    );
     proc.wait()?;
-    info!("Task done in {:.2?}", render_start_time.elapsed());
-    if ipc {
-        send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
-    }
+
+    send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
     Ok(())
 }
