@@ -225,7 +225,7 @@ pub async fn main() -> Result<()> {
         LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64
     };
     let A: f64 = -0.5; // fade out time
-    let musica: f64 = 0.7 + 0.3 + EndingScene::BPM_WAIT_TIME;
+    //let musica: f64 = 0.7 + 0.3 + EndingScene::BPM_WAIT_TIME;
 
     let length = track_length - chart.offset.min(0.) as f64 + 1.;
     let video_length = O + length + A + params.config.ending_length;
