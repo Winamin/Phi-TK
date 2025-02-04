@@ -248,9 +248,7 @@ pub async fn main() -> Result<()> {
             output[start_index + i * 2 + 1] += frame.1 * volume_music;
         }
         info!("music Time:{:?}", start_time.elapsed())
-
     }
-    
     let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
         let position = (pos * sample_rate_f64).round() as usize * 2;
         if position >= output.len() {
@@ -261,14 +259,12 @@ pub async fn main() -> Result<()> {
 
         let frames = clip.frames();
         for i in 0..len {
-            slice[i * 2] += frames[i].0 * volume;
-            slice[i * 2 + 1] += frames[i].1 * volume;
+            let sample = frames[i].0 * volume;
+            slice[i * 2] += sample;
+            slice[i * 2 + 1] += sample;
         }
-    
         return len;
     };
-    
-
     if volume_sfx != 0.0 {
         let start_time = Instant::now();
         for line in &chart.lines {
@@ -284,9 +280,7 @@ pub async fn main() -> Result<()> {
             }
         }
         info!("sfx Time:{:?}", start_time.elapsed())
-        
-    }
-
+    }.
     //ending
     let mut pos = O + length + A;
     while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
