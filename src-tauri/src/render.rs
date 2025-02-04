@@ -218,7 +218,13 @@ pub async fn main() -> Result<()> {
 
     let volume_music = std::mem::take(&mut config.volume_music);
     let volume_sfx = std::mem::take(&mut config.volume_sfx);
-
+    let O: f64 = if params.config.disable_loading {
+        GameScene::BEFORE_TIME as f64
+    } else {
+        LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64
+    };
+    let A: f64 = -0.5; // fade out time
+    let musica: f64 = GameScene::WAIT_AFTER_TIME as f64 + EndingScene::BPM_WAIT_TIME;
     let length = track_length - chart.offset.min(0.) as f64 + 1.;
     let video_length = O + length + A + params.config.ending_length;
     let offset = chart.offset.max(0.);
@@ -337,8 +343,8 @@ pub async fn main() -> Result<()> {
     main.top_level = false;
     main.viewport = Some((0, 0, vw as _, vh as _));
 
-    const O: f64 = LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64;
-    const A: f64 = 0.7 + 0.3 + 0.4 - 0.4;
+    //const O: f64 = LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64;
+    //const A: f64 = 0.7 + 0.3 + 0.4 - 0.4;
 
     let fps = params.config.fps;
     let frame_delta = 1. / fps as f32;
