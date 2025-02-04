@@ -217,17 +217,17 @@ pub async fn main() -> Result<()> {
     let mut gl = unsafe { get_internal_gl() };
 
     let volume_music = std::mem::take(&mut config.volume_music);
-    let volume_sfx = std::mem::take(&mut config.volume_sfx);
+    let volume_sfx =ength + A + params.config.ending_length;
+    let offset = chart.offset.m std::mem::take(&mut config.volume_sfx);
     let O: f64 = if params.config.disable_loading {
         GameScene::BEFORE_TIME as f64
     } else {
         LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64
     };
     let A: f64 = -0.5; // fade out time
-    let musica: f64 = GameScene::WAIT_AFTER_TIME as f64 + EndingScene::BPM_WAIT_TIME;
+
     let length = track_length - chart.offset.min(0.) as f64 + 1.;
-    let video_length = O + length + A + params.config.ending_length;
-    let offset = chart.offset.max(0.);
+    let video_length = O + lax(0.);
 
     let render_start_time = Instant::now();
 
@@ -286,7 +286,7 @@ pub async fn main() -> Result<()> {
             }
         }
         info!("sfx Time:{:?}", start_time.elapsed())
-    }.
+    }
     //ending
     let mut pos = O + length + A;
     while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
