@@ -241,18 +241,20 @@ pub async fn main() -> Result<()> {
     assert_eq!(sample_rate, sfx_drag.sample_rate());
     assert_eq!(sample_rate, sfx_flick.sample_rate());
     
-    let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
+    let mut output = vec![0.0_f32; ((video_length * sample_rate_f64).ceil() as usize + 1) * 2];
     if volume_music != 0.0 {
         let start_time = Instant::now();
         let pos = O - chart.offset.min(0.) as f64;
         let count = (music.length() as f64 * sample_rate_f64) as usize;
         let start_index = (pos * sample_rate_f64).round() as usize * 2;
-        let ratio = 1.0 / sample_rate_f64;
+        let available_samples = (output.len() - start_index) / 2;
+        let count = count.min(available_samples);
         for i in 0..count {
             let position = i as f64 * ratio;
             let frame = music.sample(position as f32).unwrap_or_default();
-            output[start_index + i * 2] += frame.0 * volume_music;
-            output[start_index + i * 2 + 1] += frame.1 * volume_music;
+            let idx = start_index + i * 2;
+            output[idx] += frame.0 * volume_music;
+            output[idx + 1] += frame.1 * volume_music;
         }
         info!("music Time:{:?}", start_time.elapsed())
     }
@@ -262,7 +264,8 @@ pub async fn main() -> Result<()> {
             return 0;
         }
         let slice = &mut output[position..];
-        let len = (slice.len() / 2).min(clip.frame_count());
+        let remaining_samples = (output.len() - position) / 2;
+        let len = remaining_samples.min(clip.frame_count()).min(slice.len() / 2);
 
         let frames = clip.frames();
         for i in 0..len {
@@ -292,6 +295,9 @@ pub async fn main() -> Result<()> {
     let mut pos = O + length + A;
     while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
+        if pos * sample_rate_f64 >= output.len() as f64 / 2 {
+            break;
+        }
     }
 
     let mut proc = cmd_hidden(&ffmpeg)
