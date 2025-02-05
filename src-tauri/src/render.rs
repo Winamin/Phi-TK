@@ -249,6 +249,7 @@ pub async fn main() -> Result<()> {
         let start_index = (pos * sample_rate_f64).round() as usize * 2;
         let available_samples = (output.len() - start_index) / 2;
         let count = count.min(available_samples);
+        let ratio = 1.0 / sample_rate_f64;
         for i in 0..count {
             let position = i as f64 * ratio;
             let frame = music.sample(position as f32).unwrap_or_default();
@@ -295,7 +296,7 @@ pub async fn main() -> Result<()> {
     let mut pos = O + length + A;
     while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
-        if pos * sample_rate_f64 >= output.len() as f64 / 2 {
+        if pos * sample_rate_f64 >= output.len() as f64 / 2.0 {
             break;
         }
     }
