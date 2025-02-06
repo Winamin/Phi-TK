@@ -634,7 +634,7 @@ async function replacePreset() {
         </v-col>
         <v-col cols="3">
           <TipSwitch :label="t('show_progress_text')" v-model="pk"></TipSwitch>
-          </v-col>
+        </v-col>
         <v-col cols="3">
           <TipSwitch :label="t('show_time_text')" v-model="pl"></TipSwitch>
         <v-col cols="3">
