@@ -60,7 +60,7 @@ en:
   combo: Customize COMBO Text
   flid_x: Mirror Mode
   show_progress_text: Progress bar (scale display)
-  show_time_text:Progress bar time display
+  show_time_text: Progress bar time display
 
   presets: Presets
   preset-refresh: Refresh
