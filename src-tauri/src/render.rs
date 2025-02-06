@@ -288,7 +288,7 @@ pub async fn main() -> Result<()> {
                         NoteKind::Drag => &sfx_drag,
                         NoteKind::Flick => &sfx_flick,
                     };
-                    place(O + note.time as f64 + offset as f64, sfx, volume_sfx);
+                    place(&mut output, O + note.time as f64 + offset as f64, sfx, volume_sfx);
                 }
             }
         }
