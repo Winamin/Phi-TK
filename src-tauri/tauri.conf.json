@@ -6,8 +6,8 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "Phigros-TK",
-    "version": "0.1.6"
+    "productName": "Phi-TK",
+    "version": "0.1.62"
   },
   "tauri": {
     "allowlist": {
@@ -46,7 +46,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "com.sc.phigros.tk",
+      "identifier": "com.sc.phi.tk",
       "longDescription": "",
       "macOS": {
         "entitlements": null,
