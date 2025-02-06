@@ -60,9 +60,9 @@ window.goto = (name: string) => {
 </script>
 
 <template>
-  <v-app id="phira-render">
+  <v-app id="Phi TK">
     <v-sonner position="top-center" />
-    <v-app-bar title="Phigros TK"></v-app-bar>
+    <v-app-bar title="Phi TK"></v-app-bar>
     <v-navigation-drawer expand-on-hover rail permanent>
       <v-list density="compact" nav>
         <v-list-item
