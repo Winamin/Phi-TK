@@ -1,11 +1,11 @@
 [package]
-name = "phigros-tk"
-version = "0.1.6"
-description = "Phigros-TK"
+name = "Phi-TK"
+version = "0.1.62"
+description = "Phi-TK"
 authors = ["Mivik", "HLMC", "Link"]
 license = ""
 repository = ""
-default-run = "phigros-tk"
+default-run = "Phi-TK"
 edition = "2021"
 rust-version = "1.60"
 
@@ -22,7 +22,7 @@ tauri = { version = "1.4.0", features = [ "dialog-message", "system-tray", "shel
 
 anyhow = { version = "1.0.70", features = ["backtrace"] }
 macroquad = { git = "https://github.com/Mivik/prpr-macroquad", default-features = false }
-prpr = { git = "https://github.com/Winamin/Phigros-TK-render-lib", package = "prpr", branch = "render-lib" }
+prpr = { git = "https://github.com/Winamin/Phi-TK-render-lib", package = "prpr", branch = "render-lib" }
 # prpr = { path = "../../phira/prpr" }
 
 sasa = { git = "https://github.com/Winamin/sasa" }
