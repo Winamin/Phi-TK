@@ -267,7 +267,7 @@ pub async fn main() -> Result<()> {
             return 0;
         }
         let slice = &mut output[position..];
-        let remaining_samples = (output.len() - position) / 2;
+        let remaining_samples = (output_len - position) / 2;
         let len = remaining_samples.min(clip.frame_count()).min(slice.len() / 2);
 
         let frames = clip.frames();
