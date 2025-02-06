@@ -59,6 +59,8 @@ en:
   buffer_size: Adjust Buffer Size
   combo: Customize COMBO Text
   flid_x: Mirror Mode
+  show_progress_text: Progress bar (scale display)
+  show_time_text:Progress bar time display
 
   presets: Presets
   preset-refresh: Refresh
@@ -136,6 +138,8 @@ zh-CN:
   buffer_size-tips: 用处不大
   combo: 自定义COMBO名称
   flid_x: 镜像模式
+  show_progress_text: 进度条（比例显示）
+  show_time_text: 进度条时间显示
 
   presets: 预设配置
   preset-refresh: 刷新
@@ -267,6 +271,8 @@ const flidX = ref(false)
 const chartDebug = ref(false)
 const chartRatio = ref(1.0)
 const bufferSize = ref(256)
+const pk = ref(false)
+const pl = ref(false)
 
 const STD_CHALLENGE_COLORS = ['white', 'green', 'blue', 'red', 'golden', 'rainbow'];
 
@@ -310,6 +316,8 @@ async function buildConfig(): Promise<RenderConfig | null> {
     volumeMusic: volumeMusic.value,
     volumeSfx: volumeSfx.value,
     combo: combo.value,
+    pk: pk.value,
+    pl: pl.value,
   };
 }
 
@@ -364,6 +372,8 @@ function applyConfig(config: RenderConfig) {
   volumeMusic.value = config.volumeMusic;
   volumeSfx.value = config.volumeSfx;
   combo.value = config.combo;
+  pk.value = config.pk
+  pl.value = config.pl
 }
 
 const DEFAULT_CONFIG: RenderConfig = {
@@ -398,6 +408,8 @@ const DEFAULT_CONFIG: RenderConfig = {
   volumeMusic: 1,
   volumeSfx: 1,
   combo: 'AUTOPLAY',
+  pk: false,
+  pl: false,
 };
 interface Preset {
   name: string;
@@ -620,6 +632,11 @@ async function replacePreset() {
         <v-col cols="3">
           <TipSwitch :label="t('flid_x')" v-model="flidX"></TipSwitch>
         </v-col>
+        <v-col cols="3">
+          <TipSwitch :label="t('show_progress_text')" v-model="pk"></TipSwitch>
+          </v-col>
+        <v-col cols="3">
+          <TipSwitch :label="t('show_time_text')" v-model="pl"></TipSwitch>
         <v-col cols="3">
           <TipSwitch :label="t('hevc')" :tooltip="t('hevc-tips')" v-model="hevc"></TipSwitch>
         </v-col>
