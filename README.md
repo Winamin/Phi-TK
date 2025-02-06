@@ -1,4 +1,4 @@
-# Phigros TK
+# Phi TK
 
 Replaced Phigros Spectral Surface renderer
 
