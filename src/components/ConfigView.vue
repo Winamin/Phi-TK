@@ -372,8 +372,8 @@ function applyConfig(config: RenderConfig) {
   volumeMusic.value = config.volumeMusic;
   volumeSfx.value = config.volumeSfx;
   combo.value = config.combo;
-  pk.value = config.pk
-  pl.value = config.pl
+  pk.value = config.pk;
+  pl.value = config.pl;
 }
 
 const DEFAULT_CONFIG: RenderConfig = {
