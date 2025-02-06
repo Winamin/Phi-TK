@@ -259,7 +259,8 @@ pub async fn main() -> Result<()> {
         }
         info!("music Time:{:?}", start_time.elapsed())
     }
-    let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
+    let output_samples = output.len() / 2;
+    let mut place = |output: &mut [f32], pos: f64, clip: &AudioClip, volume: f32| -> usize {
         let position = (pos * sample_rate_f64).round() as usize * 2;
         let output_len = output.len();
         if position >= output.len() {
@@ -294,9 +295,8 @@ pub async fn main() -> Result<()> {
         info!("sfx Time:{:?}", start_time.elapsed())
     }
     //ending
-    let output_samples = output.len() / 2;
     let mut pos = O + length + A;
-    while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
+    while place(&mut output, pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
         if (pos * sample_rate_f64) as usize >= output_samples { 
             break;
