@@ -14,7 +14,7 @@ dependencies:
   moment:
     specifier: ^2.29.4
     version: 2.29.4
-  phigros-tk:
+  Phi-TK:
     specifier: 'link:'
     version: 'link:'
   vue:
