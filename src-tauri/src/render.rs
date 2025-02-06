@@ -40,6 +40,8 @@ pub struct RenderConfig {
     chart_ratio: f32,
     buffer_size: f32,
     combo: String,
+    show_progress_text: bool,
+    show_time_text : bool,
     fps: u32,
     hardware_accel: bool,
     hevc: bool,
@@ -87,6 +89,8 @@ impl RenderConfig {
             buffer_size: self.buffer_size,
             combo: self.combo.clone(),
             flid_x: self.flid_x,
+            show_progress_text: self.show_progress_text,
+            show_time_text : self.show_time_text,
             ..Default::default()
         }
     }
