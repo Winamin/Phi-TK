@@ -637,6 +637,7 @@ async function replacePreset() {
         </v-col>
         <v-col cols="3">
           <TipSwitch :label="t('show_time_text')" v-model="pl"></TipSwitch>
+        </v-col>
         <v-col cols="3">
           <TipSwitch :label="t('hevc')" :tooltip="t('hevc-tips')" v-model="hevc"></TipSwitch>
         </v-col>
