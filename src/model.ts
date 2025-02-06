@@ -57,7 +57,7 @@ export interface RenderConfig {
   chartDebug: boolean;
   flidX: boolean;
   pk: boolean;
-  pl: bollean;
+  pl: boolean;
   chartRatio: number;
   bufferSize: number;
   combo: string;
