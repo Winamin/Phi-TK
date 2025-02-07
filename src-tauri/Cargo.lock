@@ -3019,7 +3019,7 @@ dependencies = [
 [[package]]
 name = "prpr"
 version = "0.4.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#e6aa976ccc748a7d9c6bcf5c69ce76121aab7ade"
+source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#f5ca3a6e8b04b6ab76991f016eeb705221059c8c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3086,7 +3086,7 @@ dependencies = [
 [[package]]
 name = "prpr-avc"
 version = "0.1.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#e6aa976ccc748a7d9c6bcf5c69ce76121aab7ade"
+source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#f5ca3a6e8b04b6ab76991f016eeb705221059c8c"
 dependencies = [
  "anyhow",
  "tracing",
