@@ -24,6 +24,7 @@ use std::{
     rc::Rc,
     sync::atomic::{AtomicBool, Ordering},
     time::Instant,
+    cell::Cell,
 };
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
@@ -455,6 +456,7 @@ pub async fn main() -> Result<()> {
     }
 
     for frame in 0..frames {
+        let frame_usize = frame as usize;
         my_time.set((frame as f32 * frame_delta).max(0.) as f64);
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
         main.update()?;
@@ -474,7 +476,7 @@ pub async fn main() -> Result<()> {
             if frame > 0 {
                 let prev_pbo = (current_pbo + N - 1) % N;
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[prev_pbo]);
-                let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
+                let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
                 if !src.is_null() {
                     input.write_all(std::slice::from_raw_parts(src as *const u8, vw as usize * vh as usize * 4))?;
                     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
@@ -484,11 +486,12 @@ pub async fn main() -> Result<()> {
         send(IPCEvent::Frame);
     }
     for i in 1..N {
+        let i_u64 = i as u64;
         unsafe {
             use miniquad::gl::*;
-            let pbo_index = (frames + i - 1) % N;
+            let pbo_index = ((frames + i_u64 - 1) % N as u64) as usize;
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[pbo_index]);
-            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
+            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
             if !src.is_null() {
                 input.write_all(std::slice::from_raw_parts(src as *const u8, vw as usize * vh as usize * 4))?;
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
