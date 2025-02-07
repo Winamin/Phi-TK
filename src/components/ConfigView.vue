@@ -271,8 +271,8 @@ const flidX = ref(false)
 const chartDebug = ref(false)
 const chartRatio = ref(1.0)
 const bufferSize = ref(256)
-const pk = ref(false)
-const pl = ref(false)
+const showProgressText = ref(false)
+const showTimeText = ref(false)
 
 const STD_CHALLENGE_COLORS = ['white', 'green', 'blue', 'red', 'golden', 'rainbow'];
 
@@ -316,8 +316,8 @@ async function buildConfig(): Promise<RenderConfig | null> {
     volumeMusic: volumeMusic.value,
     volumeSfx: volumeSfx.value,
     combo: combo.value,
-    pk: pk.value,
-    pl: pl.value,
+    showProgressText: showProgressText.value,
+    showTimeText: showTimeText.value,
   };
 }
 
@@ -372,8 +372,8 @@ function applyConfig(config: RenderConfig) {
   volumeMusic.value = config.volumeMusic;
   volumeSfx.value = config.volumeSfx;
   combo.value = config.combo;
-  pk.value = config.pk;
-  pl.value = config.pl;
+  showProgressText.value = config.showProgressText;
+  showTimeText.value = config.showTimeText;
 }
 
 const DEFAULT_CONFIG: RenderConfig = {
@@ -408,8 +408,8 @@ const DEFAULT_CONFIG: RenderConfig = {
   volumeMusic: 1,
   volumeSfx: 1,
   combo: 'AUTOPLAY',
-  pk: false,
-  pl: false,
+  showProgressText: false,
+  showTimeText: false,
 };
 interface Preset {
   name: string;
@@ -633,10 +633,10 @@ async function replacePreset() {
           <TipSwitch :label="t('flid_x')" v-model="flidX"></TipSwitch>
         </v-col>
         <v-col cols="3">
-          <TipSwitch :label="t('show_progress_text')" v-model="pk"></TipSwitch>
+          <TipSwitch :label="t('show_progress_text')" v-model="showProgressText"></TipSwitch>
         </v-col>
         <v-col cols="3">
-          <TipSwitch :label="t('show_time_text')" v-model="pl"></TipSwitch>
+          <TipSwitch :label="t('show_time_text')" v-model="showTimeText"></TipSwitch>
         </v-col>
         <v-col cols="3">
           <TipSwitch :label="t('hevc')" :tooltip="t('hevc-tips')" v-model="hevc"></TipSwitch>
