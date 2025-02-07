@@ -421,8 +421,11 @@ pub async fn main() -> Result<()> {
         params.config.bitrate,
         ffmpeg_preset,
         ffmpeg_preset_name.unwrap(),
-        if params.config.disable_loading{format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)}
-        else{"-ss 0.1".to_string()},
+        if config.disable_loading {
+            format!("-ss {}", o)
+        } else {
+            "".to_string()
+        },
     );
 
     let mut proc = cmd_hidden(&ffmpeg)
@@ -467,7 +470,10 @@ pub async fn main() -> Result<()> {
         main.update()?;
         main.render(&mut painter)?;
         // TODO magic. can't remove this line.
-        draw_rectangle(0., 0., 0., 0., Color::default());
+        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 && !config.disable_loading {
+            draw_rectangle(0., 0., 0., 0., Color::default());
+        }
+        //draw_rectangle(0., 0., 0., 0., Color::default());
         gl.flush();
 
         if MSAA.load(Ordering::SeqCst) {
