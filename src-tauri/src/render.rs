@@ -421,8 +421,8 @@ pub async fn main() -> Result<()> {
         params.config.bitrate,
         ffmpeg_preset,
         ffmpeg_preset_name.unwrap(),
-        if config.disable_loading {
-            format!("-ss {}", o)
+        if params.config.disable_loading {
+            format!("-ss {}", O)
         } else {
             "".to_string()
         },
@@ -470,7 +470,7 @@ pub async fn main() -> Result<()> {
         main.update()?;
         main.render(&mut painter)?;
         // TODO magic. can't remove this line.
-        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 && !config.disable_loading {
+        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading {
             draw_rectangle(0., 0., 0., 0., Color::default());
         }
         //draw_rectangle(0., 0., 0., 0., Color::default());
