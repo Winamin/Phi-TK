@@ -53,7 +53,7 @@ export interface RenderConfig {
   resolution: number[];
   ffmpegPreset: string;
   endingLength: number;
-  //disableLoading: boolean;
+  disableLoading: boolean;
   chartDebug: boolean;
   flidX: boolean;
   showProgressText: boolean;
