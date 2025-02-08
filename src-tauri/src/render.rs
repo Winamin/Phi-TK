@@ -300,13 +300,13 @@ pub async fn main() -> Result<()> {
         info!("sfx Time:{:?}", start_time.elapsed())
     }
     //ending
+    let mut pos = O + length + A;
     while place(&mut output, pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
         if (pos * sample_rate_f64) as usize >= output_samples { 
             break;
         }
     }
-
     let mut proc = cmd_hidden(&ffmpeg)
         .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
         .arg(mixing_output.path())
