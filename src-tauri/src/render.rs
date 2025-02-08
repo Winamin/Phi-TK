@@ -301,7 +301,7 @@ pub async fn main() -> Result<()> {
     }
     //ending
     let mut pos = O + length + A;
-    while pos < video_length && config.ending_length > EndingScene::BPM_WAIT_TIME {
+    while pos < video_length && params.config.ending_length > EndingScene::BPM_WAIT_TIME {
             let start_index = (pos * sample_rate_f64).round() as usize * 2;
             let slice = &mut output[start_index..];
             let len = (slice.len() / 2).min(ending.frame_count());
