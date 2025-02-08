@@ -300,17 +300,10 @@ pub async fn main() -> Result<()> {
         info!("sfx Time:{:?}", start_time.elapsed())
     }
     //ending
-    let mut pos = O + length + A;
-    while pos < video_length && params.config.ending_length > EndingScene::BPM_WAIT_TIME {
-            let start_index = (pos * sample_rate_f64).round() as usize * 2;
-            let slice = &mut output[start_index..];
-            let len = (slice.len() / 2).min(ending.frame_count());
-            let frames = &ending.frames();
-            for i in 0..len {
-                slice[i * 2] += frames[i].0 * volume_music;
-                slice[i * 2 + 1] += frames[i].1 * volume_music;
-            }
-            pos += ending.frame_count() as f64 / sample_rate_f64;
+    while place(&mut output, pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
+        pos += ending.frame_count() as f64 / sample_rate_f64;
+        if (pos * sample_rate_f64) as usize >= output_samples { 
+            break;
     }
 
     let mut proc = cmd_hidden(&ffmpeg)
