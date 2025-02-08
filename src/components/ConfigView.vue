@@ -53,7 +53,7 @@ en:
   volume-sfx: SFX Volume
 
   ending-length: Result Screen Duration
-  disable-loading: Remove loading screen
+  //disable-loading: Remove loading screen
   chart_debug: Debug Mode
   chart_ratio: Chart Zoom
   buffer_size: Adjust Buffer Size
