@@ -1,17 +1,35 @@
 <template>
-  <div class="pa-8 w-100 h-100 d-flex flex-column align-center glass-background" style="max-width: 1280px; gap: 1rem">
-    <h1 class="gradient-text" v-t="'app'"></h1>
-    <v-scale-transition>
-      <h4 class="mt-n2 text-glow">v{{ appVersion }}</h4>
-    </v-scale-transition>
-    <v-btn 
-      prepend-icon="mdi-github" 
-      color="accent"
-      variant="flat"
-      class="elevation-8 hover-scale"
-      @click="open('https://github.com/Winamin/Phi-TK.git')"
-    >GitHub</v-btn>
-    <p class="text-gradient">Licensed by GPLv3</p>
+  <i18n>
+en:
+  app: Phi TK
+
+zh-CN:
+  app: Phi TK
+</i18n>
+
+<script setup lang="ts">
+import { useI18n } from 'vue-i18n';
+useI18n();
+
+import { getVersion } from '@tauri-apps/api/app';
+import { open } from '@tauri-apps/api/shell';
+
+const appVersion = ref<string>('');
+getVersion().then((version) => {
+  appVersion.value = version;
+});
+
+const openGitHub = () => {
+  open('https://github.com/Winamin/Phi-TK.git');
+};
+</script>
+
+<template>
+  <div class="pa-8 w-100 h-100 d-flex flex-column align-center" style="max-width: 1280px; gap: 1rem">
+    <h1 v-t="'app'"></h1>
+    <h4 class="mt-n2">v{{ appVersion }}</h4>
+    <v-btn prepend-icon="mdi-github" @click="openGitHub">GitHub</v-btn>
+    <p>Licensed by GPLv3</p>
   </div>
 </template>
 
