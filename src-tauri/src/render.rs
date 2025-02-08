@@ -304,6 +304,7 @@ pub async fn main() -> Result<()> {
         pos += ending.frame_count() as f64 / sample_rate_f64;
         if (pos * sample_rate_f64) as usize >= output_samples { 
             break;
+        }
     }
 
     let mut proc = cmd_hidden(&ffmpeg)
