@@ -18,8 +18,8 @@ en:
   error: Error
   output: Output
 
-  show-output: 查看输出
-  show-in-folder: Show in Folder
+  show-output: Show Output
+  show-in-folder: Open Folder
 
 zh-CN:
   empty: 空空如也
@@ -41,7 +41,7 @@ zh-CN:
   output: 输出
 
   show-output: 查看输出
-  show-in-folder: 在文件夹中显示
+  show-in-folder: 打开文件夹
 
 </i18n>
 
@@ -109,17 +109,26 @@ async function showInFolder(path: string) {
     toastError(e);
   }
 }
+
+function showOutput(task: Task) {
+  if (task.status.type === 'done') {
+    outputDialogMessage.value = task.status.output;
+    outputDialog.value = true;
+  }
+}
 </script>
 
 <template>
   <div class="pa-8 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1rem">
     <h1 v-if="!tasks || !tasks.length" class="text-center font-italic text-disabled" v-t="'empty'"></h1>
-    <v-card v-for="task in tasks" :key="task.id">
+    <v-card v-for="task in tasks" :key="task.id" class="task-card">
       <div class="d-flex flex-row align-stretch">
         <div class="d-flex flex-row align-center" style="width: 35%">
           <div
             style="width: 100%; height: 100%; max-height: 240px; background-position: center; background-repeat: no-repeat; background-size: cover"
-            :style="{ 'background-image': 'url(' + convertFileSrc(task.cover) + ')' }"></div>
+            :style="{ 'background-image': 'url(' + convertFileSrc(task.cover) + ')' }"
+            class="task-cover"
+          ></div>
         </div>
         <div class="d-flex flex-column w-100">
           <v-card-title>{{ task.name }}</v-card-title>
@@ -130,42 +139,54 @@ async function showInFolder(path: string) {
               <v-progress-circular
                 v-if="task.status.type !== 'rendering'"
                 :indeterminate="true"
-                color="primary">
-              </v-progress-circular>
+                color="accent"
+                class="glow-spinner"
+              ></v-progress-circular>
               <v-progress-linear
                 v-else
-                :model-value="task.status.progress * 100">
-              </v-progress-linear>
+                :model-value="task.status.progress * 100"
+                color="accent"
+                height="12"
+                rounded
+              ></v-progress-linear>
               <div class="pt-4 d-flex justify-end">
-                <v-btn variant="text" @click="invoke('cancel_task', { id: task.id })" v-t="'cancel'"></v-btn>
+                <v-btn 
+                  variant="flat" 
+                  color="error" 
+                  prepend-icon="mdi-cancel" 
+                  @click="invoke('cancel_task', { id: task.id })" 
+                  v-t="'cancel'"
+                  class="hover-scale"
+                ></v-btn>
               </div>
             </template>
             <div v-if="task.status.type === 'failed'" class="pt-4 d-flex justify-end">
               <v-btn
-                variant="text"
-                @click="
-                  () => {
-                    if (task.status.type === 'failed') {
-                      errorDialogMessage = task.status.error;
-                      errorDialog = true;
-                    }
-                  }
-                "
-                v-t="'details'"></v-btn>
+                variant="flat"
+                color="error"
+                prepend-icon="mdi-alert-circle-outline"
+                @click="errorDialogMessage = task.status.error; errorDialog = true;"
+                v-t="'details'"
+                class="hover-scale"
+              ></v-btn>
             </div>
-            <div v-if="task.status.type === 'done'" class="pt-4 d-flex justify-end">
+            <div v-if="task.status.type === 'done'" class="pt-4 d-flex justify-end gap-2">
               <v-btn
-                variant="text"
-                @click="
-                  () => {
-                    if (task.status.type === 'done') {
-                      outputDialogMessage = task.status.output;
-                      outputDialog = true;
-                    }
-                  }
-                "
-                v-t="'show-output'"></v-btn>
-              <v-btn variant="text" @click="showInFolder(task.output)" v-t="'show-in-folder'"></v-btn>
+                variant="flat"
+                color="secondary"
+                prepend-icon="mdi-text-box-outline"
+                @click="showOutput(task)"
+                v-t="'show-output'"
+                class="hover-scale"
+              ></v-btn>
+              <v-btn
+                variant="flat"
+                color="accent"
+                prepend-icon="mdi-folder-open-outline"
+                @click="showInFolder(task.output)"
+                v-t="'show-in-folder'"
+                class="hover-scale"
+              ></v-btn>
             </div>
           </div>
         </div>
@@ -173,27 +194,91 @@ async function showInFolder(path: string) {
     </v-card>
 
     <v-dialog v-model="errorDialog" width="auto" min-width="400px">
-      <v-card>
-        <v-card-title v-t="'error'"> </v-card-title>
+      <v-card class="glass-background">
+        <v-card-title class="text-gradient" v-t="'error'"></v-card-title>
         <v-card-text>
           <pre class="block whitespace-pre overflow-auto" style="max-height: 60vh">{{ errorDialogMessage }}</pre>
         </v-card-text>
         <v-card-actions class="justify-end">
-          <v-btn color="primary" variant="text" @click="errorDialog = false" v-t="'confirm'"></v-btn>
+          <v-btn 
+            color="primary" 
+            variant="flat" 
+            @click="errorDialog = false" 
+            v-t="'confirm'"
+            class="hover-scale"
+          ></v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
     <v-dialog v-model="outputDialog" width="auto" min-width="400px">
-      <v-card>
-        <v-card-title v-t="'output'"> </v-card-title>
+      <v-card class="glass-background">
+        <v-card-title class="text-gradient" v-t="'output'"></v-card-title>
         <v-card-text>
           <pre class="block whitespace-pre overflow-auto" style="max-height: 60vh">{{ outputDialogMessage }}</pre>
         </v-card-text>
         <v-card-actions class="justify-end">
-          <v-btn color="primary" variant="text" @click="outputDialog = false" v-t="'confirm'"></v-btn>
+          <v-btn 
+            color="primary" 
+            variant="flat" 
+            @click="outputDialog = false" 
+            v-t="'confirm'"
+            class="hover-scale"
+          ></v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
   </div>
 </template>
+
+<style scoped>
+.task-card {
+  border-radius: 16px !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  backdrop-filter: blur(8px);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.task-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3) !important;
+}
+
+.task-cover {
+  border-radius: 16px 0 0 16px;
+}
+
+.hover-scale {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-scale:hover {
+  transform: scale(1.05);
+}
+
+.glass-background {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.text-gradient {
+  background: linear-gradient(45deg, #2196F3, #E91E63);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.glow-spinner {
+  filter: drop-shadow(0 0 8px #2196F3);
+}
+
+pre {
+  background: rgba(0, 0, 0, 0.3) !important;
+  padding: 16px !important;
+  border-radius: 8px;
+  font-family: 'Fira Code', monospace;
+}
+</style>
