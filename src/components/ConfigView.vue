@@ -131,7 +131,7 @@ zh-CN:
   volume-sfx: 音效音量
 
   ending-length: 结算画面时长
-  disable-loading: 启用UI加载
+  //disable-loading: 禁用UI加载
   chart_debug: 调试模式
   chart_ratio: 谱面缩放
   buffer_size: 音频Buffer Size
@@ -266,7 +266,7 @@ const volumeMusic = ref(1),
 
 const endingLength = ref('-2.0');
 
-const disableLoading = ref(false)
+//const disableLoading = ref(false)
 const flidX = ref(false)
 const chartDebug = ref(false)
 const chartRatio = ref(1.0)
@@ -288,7 +288,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
     })(),
     ffmpegPreset: ffmpegPreset.value,
     endingLength: parseFloat(endingLength.value),
-    disableLoading: disableLoading.value,
+    //disableLoading: disableLoading.value,
     chartDebug: chartDebug.value,
     flidX: flidX.value,
     chartRatio: chartRatio.value,
@@ -345,7 +345,7 @@ function applyConfig(config: RenderConfig) {
   resolution.value = config.resolution.join('x');
   ffmpegPreset.value = config.ffmpegPreset;
   endingLength.value = String(config.endingLength);
-  disableLoading.value = config.disableLoading;
+  //disableLoading.value = config.disableLoading;
   chartDebug.value = config.chartDebug;
   flidX.value = config.flidX;
   chartRatio.value = config.chartRatio;
@@ -380,7 +380,7 @@ const DEFAULT_CONFIG: RenderConfig = {
   resolution: [1920, 1080],
   ffmpegPreset: 'medium p4 balanced',
   endingLength: -2.0,
-  disableLoading: true,
+  //disableLoading: true,
   chartDebug: false,
   flidX: false,
   chartRatio: 1,
@@ -623,9 +623,9 @@ async function replacePreset() {
         </v-col>
       </v-row>
       <v-row no-gutters class="mx-n2 mt-2">
-        <v-col cols="3">
-          <TipSwitch :label="t('disable-loading')" v-model="disableLoading"></TipSwitch>
-        </v-col>
+        //<v-col cols="3">
+          //<TipSwitch :label="t('disable-loading')" v-model="disableLoading"></TipSwitch>
+        //</v-col>
         <v-col cols="3">
           <TipSwitch :label="t('chart_debug')" v-model="chartDebug"></TipSwitch>
         </v-col>
