@@ -24,7 +24,6 @@ use std::{
     rc::Rc,
     sync::atomic::{AtomicBool, Ordering},
     time::Instant,
-    cell::Cell,
 };
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
@@ -41,8 +40,6 @@ pub struct RenderConfig {
     chart_ratio: f32,
     buffer_size: f32,
     combo: String,
-    show_progress_text: bool,
-    show_time_text : bool,
     fps: u32,
     hardware_accel: bool,
     hevc: bool,
@@ -90,8 +87,6 @@ impl RenderConfig {
             buffer_size: self.buffer_size,
             combo: self.combo.clone(),
             flid_x: self.flid_x,
-            show_progress_text: self.show_progress_text,
-            show_time_text : self.show_time_text,
             ..Default::default()
         }
     }
@@ -246,34 +241,28 @@ pub async fn main() -> Result<()> {
     assert_eq!(sample_rate, sfx_drag.sample_rate());
     assert_eq!(sample_rate, sfx_flick.sample_rate());
     
-    let mut output = vec![0.0_f32; ((video_length * sample_rate_f64).ceil() as usize + 1) * 2];
+    let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
     if volume_music != 0.0 {
         let start_time = Instant::now();
         let pos = O - chart.offset.min(0.) as f64;
         let count = (music.length() as f64 * sample_rate_f64) as usize;
         let start_index = (pos * sample_rate_f64).round() as usize * 2;
-        let available_samples = (output.len() - start_index) / 2;
-        let count = count.min(available_samples);
         let ratio = 1.0 / sample_rate_f64;
         for i in 0..count {
             let position = i as f64 * ratio;
             let frame = music.sample(position as f32).unwrap_or_default();
-            let idx = start_index + i * 2;
-            output[idx] += frame.0 * volume_music;
-            output[idx + 1] += frame.1 * volume_music;
+            output[start_index + i * 2] += frame.0 * volume_music;
+            output[start_index + i * 2 + 1] += frame.1 * volume_music;
         }
         info!("music Time:{:?}", start_time.elapsed())
     }
-    let output_samples = output.len() / 2;
-    let mut place = |output: &mut [f32], pos: f64, clip: &AudioClip, volume: f32| -> usize {
+    let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
         let position = (pos * sample_rate_f64).round() as usize * 2;
-        let output_len = output.len();
         if position >= output.len() {
             return 0;
         }
         let slice = &mut output[position..];
-        let remaining_samples = (output_len - position) / 2;
-        let len = remaining_samples.min(clip.frame_count()).min(slice.len() / 2);
+        let len = (slice.len() / 2).min(clip.frame_count());
 
         let frames = clip.frames();
         for i in 0..len {
@@ -293,7 +282,7 @@ pub async fn main() -> Result<()> {
                         NoteKind::Drag => &sfx_drag,
                         NoteKind::Flick => &sfx_flick,
                     };
-                    place(&mut output, O + note.time as f64 + offset as f64, sfx, volume_sfx);
+                    place(O + note.time as f64 + offset as f64, sfx, volume_sfx);
                 }
             }
         }
@@ -301,12 +290,10 @@ pub async fn main() -> Result<()> {
     }
     //ending
     let mut pos = O + length + A;
-    while place(&mut output, pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
+    while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
-        if (pos * sample_rate_f64) as usize >= output_samples { 
-            break;
-        }
     }
+
     let mut proc = cmd_hidden(&ffmpeg)
         .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
         .arg(mixing_output.path())
