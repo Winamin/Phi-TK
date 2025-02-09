@@ -90,24 +90,26 @@ window.goto = (name: string) => {
       </v-list>
     </v-navigation-drawer>
 
-    <v-main class="d-flex justify-center animated-background">
-      <router-view v-slot="{ Component }">
-        <Suspense timeout="0">
-          <template #default>
-            <component :is="Component" ref="component" />
-          </template>
-          <template #fallback>
-            <div class="flex justify-center pa-8">
-              <v-progress-circular 
-                indeterminate 
-                size="large"
-                color="accent"
-                class="glow-spinner"
-              />
-            </div>
-          </template>
-        </Suspense>
-      </router-view>
+    <v-main class="d-flex justify-center glass-background">
+      <div class="glass-content">
+        <router-view v-slot="{ Component }">
+          <Suspense timeout="0">
+            <template #default>
+              <component :is="Component" ref="component" />
+            </template>
+            <template #fallback>
+              <div class="flex justify-center pa-8">
+                <v-progress-circular 
+                  indeterminate 
+                  size="large"
+                  color="accent"
+                  class="glow-spinner"
+                />
+              </div>
+            </template>
+          </Suspense>
+        </router-view>
+      </div>
     </v-main>
   </v-app>
 </template>
@@ -143,6 +145,26 @@ window.goto = (name: string) => {
 
 .glow-spinner {
   filter: drop-shadow(0 0 8px #2196F3);
+}
+
+/* 玻璃拟态设计 */
+.glass-background {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  border-radius: 16px;
+  margin: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.glass-content {
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
 }
 
 .animated-background {
