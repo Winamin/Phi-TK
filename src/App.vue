@@ -176,6 +176,6 @@ window.goto = (name: string) => {
 
 .blur-background {
   backdrop-filter: blur(10px);
-  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-color: rgba(255, 182, 193, 0.5) !important;
 }
 </style>
