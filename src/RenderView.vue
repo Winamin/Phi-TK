@@ -310,59 +310,62 @@ function tryParseAspect(): number | undefined {
 
       <template v-slot:item.2>
         <div class="glass-effect pa-4">
-         <v-form ref="form" v-if="chartInfo">
-          <v-row no-gutters class="mx-n2">
-            <v-col cols="8">
-              <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="chartInfo.name"></v-text-field>
-            </v-col>
-            <v-col cols="4">
-              <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]" v-model="chartInfo.level"></v-text-field>
-            </v-col>
-          </v-row>
+          <v-form ref="form" v-if="chartInfo">
+            <v-row no-gutters class="mx-n2">
+              <v-col cols="8">
+                <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="chartInfo.name"></v-text-field>
+              </v-col>
+              <v-col cols="4">
+                <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]" v-model="chartInfo.level"></v-text-field>
+              </v-col>
+            </v-row>
 
-          <v-row no-gutters class="mx-n2 mt-1">
-            <v-col cols="12" sm="4">
-              <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]" v-model="chartInfo.charter"></v-text-field>
-            </v-col>
-            <v-col cols="12" sm="4">
-              <v-text-field class="mx-2" :label="t('composer')" v-model="chartInfo.composer"></v-text-field>
-            </v-col>
-            <v-col cols="12" sm="4">
-              <v-text-field class="mx-2" :label="t('illustrator')" v-model="chartInfo.illustrator"></v-text-field>
-            </v-col>
-          </v-row>
+            <v-row no-gutters class="mx-n2 mt-1">
+              <v-col cols="12" sm="4">
+                <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]" v-model="chartInfo.charter"></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <v-text-field class="mx-2" :label="t('composer')" v-model="chartInfo.composer"></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <v-text-field class="mx-2" :label="t('illustrator')" v-model="chartInfo.illustrator"></v-text-field>
+              </v-col>
+            </v-row>
 
-          <v-row no-gutters class="mx-n2 mt-1 align-center">
-            <v-col cols="4">
-              <div class="mx-2 d-flex flex-column">
-                <p class="text-caption" v-t="'aspect'"></p>
-                <div class="d-flex flex-row align-center justify-center">
-                  <v-text-field type="number" class="mr-2" :rules="[RULES.positive]" :label="t('width')" v-model="aspectWidth"></v-text-field>
-                  <p>:</p>
-                  <v-text-field type="number" class="ml-2" :rules="[RULES.positive]" :label="t('height')" v-model="aspectHeight"></v-text-field>
+            <v-row no-gutters class="mx-n2 mt-1 align-center">
+              <v-col cols="4">
+                <div class="mx-2 d-flex flex-column">
+                  <p class="text-caption" v-t="'aspect'"></p>
+                  <div class="d-flex flex-row align-center justify-center">
+                    <v-text-field type="number" class="mr-2" :rules="[RULES.positive]" :label="t('width')" v-model="aspectWidth"></v-text-field>
+                    <p>:</p>
+                    <v-text-field type="number" class="ml-2" :rules="[RULES.positive]" :label="t('height')" v-model="aspectHeight"></v-text-field>
+                  </div>
                 </div>
-              </div>
-            </v-col>
-            <v-col cols="8" class="px-6">
-              <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.05" v-model="chartInfo.backgroundDim"></v-slider>
-            </v-col>
-          </v-row>
+              </v-col>
+              <v-col cols="8" class="px-6">
+                <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.05" v-model="chartInfo.backgroundDim"></v-slider>
+              </v-col>
+            </v-row>
 
-          <v-row no-gutters class="mx-n2 mt-1">
-            <v-col cols="12">
-              <v-text-field class="mx-2" :label="t('tip')" :placeholder="t('tip-placeholder')" v-model="chartInfo.tip"></v-text-field>
-            </v-col>
-          </v-row>
-        </v-form>
+            <v-row no-gutters class="mx-n2 mt-1">
+              <v-col cols="12">
+                <v-text-field class="mx-2" :label="t('tip')" :placeholder="t('tip-placeholder')" v-model="chartInfo.tip"></v-text-field>
+              </v-col>
+            </v-row>
+          </v-form>
+        </div>
       </template>
 
       <template v-slot:item.3>
-        <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()"></ConfigView>
+        <div class="glass-effect pa-4">
+          <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()"></ConfigView>
+        </div>
       </template>
 
       <template v-slot:item.4>
         <div class="d-flex flex-column justify-center align-center mb-2" style="gap: 1rem">
-          <span style="font-size: 84px">🎉</span>
+          <span style="font-size: 84px">😎</span>
           <h2>{{ t('render-started') }}</h2>
           <v-btn @click="router.push({ name: 'tasks' })" v-t="'see-tasks'"></v-btn>
         </div>
@@ -382,13 +385,26 @@ function tryParseAspect(): number | undefined {
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  .glass-effect.dark-mode {
+}
+
+.dark-mode .glass-effect {
   background: rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(0, 0, 0, 0.2);
 }
+
+.glass-effect {
+  transition: all 0.3s ease;
+}
+
+@media (hover: hover) {
+  .glass-effect:hover {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
+
 .v-progress-linear,
 .v-progress-linear__determinate {
   transition: none;
 }
 </style>
-}
