@@ -365,7 +365,7 @@ function tryParseAspect(): number | undefined {
 
       <template v-slot:item.4>
         <div class="d-flex flex-column justify-center align-center mb-2" style="gap: 1rem">
-          <span style="font-size: 84px">😎</span>
+          <span style="font-size: 84px">✨</span>
           <h2>{{ t('render-started') }}</h2>
           <v-btn @click="router.push({ name: 'tasks' })" v-t="'see-tasks'"></v-btn>
         </div>
@@ -385,11 +385,6 @@ function tryParseAspect(): number | undefined {
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.dark-mode .glass-effect {
-  background: rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(0, 0, 0, 0.2);
 }
 
 .glass-effect {
