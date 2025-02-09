@@ -54,13 +54,17 @@ en:
 
   ending-length: Result Screen Duration
   disable-loading: Remove loading screen
+  disable-loading-tips: It's a bit problematic and not recommended
   chart_debug: Debug Mode
   chart_ratio: Chart Zoom
   buffer_size: Adjust Buffer Size
+  buffer_size-tips: Not very useful
   combo: Customize COMBO Text
   flid_x: Mirror Mode
-  show_progress_text: Progress bar (scale display)
-  show_time_text: Progress bar time display
+  show_progress_text: Progress bar 1
+  show_progress_text-tips: Percent scale display
+  show_time_text: Progress bar 2
+  show_time_text-tips: Time display
 
   presets: Presets
   preset-refresh: Refresh
@@ -132,14 +136,17 @@ zh-CN:
 
   ending-length: 结算画面时长
   disable-loading: 启用UI加载
+  disable-loading-tips: 有点问题，不建议使用
   chart_debug: 调试模式
   chart_ratio: 谱面缩放
   buffer_size: 音频Buffer Size
   buffer_size-tips: 用处不大
   combo: 自定义COMBO名称
   flid_x: 镜像模式
-  show_progress_text: 进度条（比例显示）
-  show_time_text: 进度条时间显示
+  show_progress_text: 进度条1
+  show_progress_text-tips: 百分之比例显示
+  show_time_text: 进度条2
+  show_time_text-tips: 时间显示
 
   presets: 预设配置
   preset-refresh: 刷新
@@ -624,7 +631,7 @@ async function replacePreset() {
       </v-row>
       <v-row no-gutters class="mx-n2 mt-2">
         <v-col cols="3">
-          <TipSwitch :label="t('disable-loading')" v-model="disableLoading"></TipSwitch>
+          <TipSwitch :label="t('disable-loading')" :tooltip="t('disable-loading-tips')" v-model="disableLoading"></TipSwitch>
         </v-col>
         <v-col cols="3">
           <TipSwitch :label="t('chart_debug')" v-model="chartDebug"></TipSwitch>
@@ -633,10 +640,10 @@ async function replacePreset() {
           <TipSwitch :label="t('flid_x')" v-model="flidX"></TipSwitch>
         </v-col>
         <v-col cols="3">
-          <TipSwitch :label="t('show_progress_text')" v-model="showProgressText"></TipSwitch>
+          <TipSwitch :label="t('show_progress_text')" :tooltip="t('show_progress_text-tips')" v-model="showProgressText"></TipSwitch>
         </v-col>
         <v-col cols="3">
-          <TipSwitch :label="t('show_time_text')" v-model="showTimeText"></TipSwitch>
+          <TipSwitch :label="t('show_time_text')" :tooltip="t('show_time_text-tips')" v-model="showTimeText"></TipSwitch>
         </v-col>
         <v-col cols="3">
           <TipSwitch :label="t('hevc')" :tooltip="t('hevc-tips')" v-model="hevc"></TipSwitch>
@@ -649,7 +656,7 @@ async function replacePreset() {
       </v-row>
       <v-row no-gutters class="mx-n2 mt-2 align-center px-6">
         <v-col cols="12">
-          <v-slider :label="t('buffer_size')" thumb-label="always" :min="128" :max="2048" :step="1" v-model="bufferSize"> </v-slider>
+          <v-slider :label="t('buffer_size')" :tooltip="t('buffer_size-tips')" thumb-label="always" :min="128" :max="2048" :step="1" v-model="bufferSize"> </v-slider>
         </v-col>
       <v-col cols="6">
           <v-text-field class="mx-2" :label="t('combo')" v-model="combo"></v-text-field>
