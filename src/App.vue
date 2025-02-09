@@ -147,25 +147,32 @@ window.goto = (name: string) => {
   filter: drop-shadow(0 0 8px #2196F3);
 }
 
-/* 玻璃拟态设计 */
+/<style scoped>
 .glass-background {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.2);
+  -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   border-radius: 16px;
   margin: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 0 12px rgba(255, 255, 255, 0.05);
   overflow: hidden;
+  position: relative;
 }
 
 .glass-content {
-  width: 100%;
-  height: 100%;
+  width: calc(100% - 32px);
+  height: calc(100% - 32px);
   padding: 24px;
   background: rgba(255, 255, 255, 0.03);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border-radius: 12px;
+  margin: 16px;
 }
+</style>
 
 .animated-background {
   position: relative;
