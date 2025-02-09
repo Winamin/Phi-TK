@@ -90,26 +90,24 @@ window.goto = (name: string) => {
       </v-list>
     </v-navigation-drawer>
 
-    <v-main class="d-flex justify-center glass-background">
-      <div class="glass-content">
-        <router-view v-slot="{ Component }">
-          <Suspense timeout="0">
-            <template #default>
-              <component :is="Component" ref="component" />
-            </template>
-            <template #fallback>
-              <div class="flex justify-center pa-8">
-                <v-progress-circular 
-                  indeterminate 
-                  size="large"
-                  color="accent"
-                  class="glow-spinner"
-                />
-              </div>
-            </template>
-          </Suspense>
-        </router-view>
-      </div>
+    <v-main class="d-flex justify-center animated-background">
+      <router-view v-slot="{ Component }">
+        <Suspense timeout="0">
+          <template #default>
+            <component :is="Component" ref="component" />
+          </template>
+          <template #fallback>
+            <div class="flex justify-center pa-8">
+              <v-progress-circular 
+                indeterminate 
+                size="large"
+                color="accent"
+                class="glow-spinner"
+              />
+            </div>
+          </template>
+        </Suspense>
+      </router-view>
     </v-main>
   </v-app>
 </template>
@@ -146,33 +144,6 @@ window.goto = (name: string) => {
 .glow-spinner {
   filter: drop-shadow(0 0 8px #2196F3);
 }
-
-/<style scoped>
-.glass-background {
-  background: rgba(0, 0, 0, 0.2);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-  border-radius: 16px;
-  margin: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.3),
-    inset 0 0 12px rgba(255, 255, 255, 0.05);
-  overflow: hidden;
-  position: relative;
-}
-
-.glass-content {
-  width: calc(100% - 32px);
-  height: calc(100% - 32px);
-  padding: 24px;
-  background: rgba(255, 255, 255, 0.03);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border-radius: 12px;
-  margin: 16px;
-}
-</style>
 
 .animated-background {
   position: relative;
