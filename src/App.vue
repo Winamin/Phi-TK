@@ -20,6 +20,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
 import { VSonner } from 'vuetify-sonner';
+<script lang="ts" setup>
 
 const onLoaded = ref<() => void>();
 const component = ref();
@@ -61,13 +62,35 @@ window.goto = (name: string) => {
 
 <template>
   <v-app id="Phi TK" class="dark-theme">
-    <v-sonner position="top-center" />
-    <v-app-bar 
-      title="Phi TK" 
-      color="surface-variant"
-      :elevation="4"
-      class="app-bar-shadow"
-    ></v-app-bar>
+    <div class="glass-container fixed-top w-100 h-100">
+      <v-app-bar 
+        title="Phi TK" 
+        color="surface-variant"
+        :elevation="4"
+        class="app-bar-shadow glass-item"
+      ></v-app-bar>
+    </div>
+
+    <v-main class="d-flex justify-center animated-background">
+      <router-view v-slot="{ Component }">
+        <Suspense timeout="0">
+          <template #default>
+            <component :is="Component" ref="component" />
+          </template>
+          <template #fallback>
+            <div class="flex justify-center pa-8">
+              <v-progress-circular 
+                indeterminate 
+                size="large"
+                color="accent"
+                class="glow-spinner"
+              />
+            </div>
+          </template>
+        </Suspense>
+      </router-view>
+    </v-main>
+
     <v-navigation-drawer 
       expand-on-hover 
       rail 
@@ -89,26 +112,6 @@ window.goto = (name: string) => {
         ></v-list-item>
       </v-list>
     </v-navigation-drawer>
-
-    <v-main class="d-flex justify-center animated-background">
-      <router-view v-slot="{ Component }">
-        <Suspense timeout="0">
-          <template #default>
-            <component :is="Component" ref="component" />
-          </template>
-          <template #fallback>
-            <div class="flex justify-center pa-8">
-              <v-progress-circular 
-                indeterminate 
-                size="large"
-                color="accent"
-                class="glow-spinner"
-              />
-            </div>
-          </template>
-        </Suspense>
-      </router-view>
-    </v-main>
   </v-app>
 </template>
 
@@ -117,8 +120,28 @@ window.goto = (name: string) => {
   background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
 }
 
+.glass-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  backdrop-filter: blur(8px) saturate(1.5);
+  -webkit-backdrop-filter: blur(8px) saturate(1.5);
+  background-color: rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+}
+
+.glass-item {
+  backdrop-filter: blur(4px) saturate(1.5);
+  -webkit-backdrop-filter: blur(4px) saturate(1.5);
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
 .app-bar-shadow {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(4px) saturate(1.5);
+  -webkit-backdrop-filter: blur(4px) saturate(1.5);
 }
 
 .nav-drawer-border {
@@ -173,4 +196,5 @@ window.goto = (name: string) => {
   0% { transform: translate(-25%, -25%) rotate(0deg); }
   100% { transform: translate(-25%, -25%) rotate(360deg); }
 }
+</style>
 </style>
