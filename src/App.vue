@@ -113,10 +113,6 @@ window.goto = (name: string) => {
 </template>
 
 <style>
-.dark-theme {
-  background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
-}
-
 .app-bar-shadow {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
 }
