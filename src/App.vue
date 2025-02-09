@@ -197,4 +197,3 @@ window.goto = (name: string) => {
   100% { transform: translate(-25%, -25%) rotate(360deg); }
 }
 </style>
-</style>
