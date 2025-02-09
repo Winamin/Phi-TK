@@ -89,64 +89,44 @@ zh-CN:
 </i18n>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { invoke, event, dialog, shell } from '@tauri-apps/api'
-import { toastError, RULES, toast, anyFilter, isString } from './common'
-import type { ChartInfo } from './model'
-import { VForm } from 'vuetify/components'
-import ConfigView from './components/ConfigView.vue'
-import moment from 'moment'
+import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 
-const { t } = useI18n()
-const router = useRouter()
+import { useI18n } from 'vue-i18n';
+const { t } = useI18n();
 
-// 检查是否唯一实例
+import { invoke, event, dialog, shell } from '@tauri-apps/api';
+
+import { toastError, RULES, toast, anyFilter, isString } from './common';
+import type { ChartInfo } from './model';
+
+import { VForm } from 'vuetify/components';
+
+import ConfigView from './components/ConfigView.vue';
+
+import moment from 'moment';
+
 if (!(await invoke('is_the_only_instance'))) {
-  await dialog.message(t('already-running'))
-  await invoke('exit_program')
+  await dialog.message(t('already-running'));
+  await invoke('exit_program');
 }
 
-// 步骤管理
-const steps = ['choose', 'config', 'options', 'render']
-const stepIndex = ref(1)
-const step = computed(() => steps[stepIndex.value - 1])
+const router = useRouter();
 
-// 图表信息
-const chartInfo = ref<ChartInfo>()
-let chartPath = ''
+const steps = ['choose', 'config', 'options', 'render'];
+const stepIndex = ref(1),
+  step = computed(() => steps[stepIndex.value - 1]);
 
-// 状态管理
-const choosingChart = ref(false)
-const parsingChart = ref(false)
-const fileHovering = ref(false)
+const chartInfo = ref<ChartInfo>();
 
-// 表单引用
-const form = ref<VForm>()
-const configView = ref<typeof ConfigView>()
+let chartPath = '';
 
-// 宽高比
-const aspectWidth = ref('0')
-const aspectHeight = ref('0')
-
-// 渲染状态
-const renderMsg = ref('')
-const renderProgress = ref<number>()
-const renderDuration = ref<number>()
-
-// 初始化加载
-const chartInQuery = router.currentRoute.value.query.chart
-if (isString(chartInQuery)) {
-  onMounted(() => loadChart(chartInQuery as string))
-}
-
-// 选择图表
-async function chooseChart(folder = false) {
-  if (choosingChart.value) return
-  choosingChart.value = true
-
-  const file = folder
+const choosingChart = ref(false),
+  parsingChart = ref(false);
+async function chooseChart(folder?: boolean) {
+  if (choosingChart.value) return;
+  choosingChart.value = true;
+  let file = folder
     ? await dialog.open({ directory: true })
     : await dialog.open({
         filters: [
@@ -156,228 +136,250 @@ async function chooseChart(folder = false) {
           },
           anyFilter(),
         ],
-      })
+      });
+  if (!file) return;
 
-  if (file) await loadChart(file as string)
-  choosingChart.value = false
+  // noexcept
+  await loadChart(file as string);
+
+  choosingChart.value = false;
 }
-
-// 加载图表
 async function loadChart(file: string) {
   try {
-    parsingChart.value = true
-    chartPath = file
-    chartInfo.value = (await invoke('parse_chart', { path: file })) as ChartInfo
-    stepIndex.value++
-
-    // 设置宽高比
-    aspectWidth.value = String(chartInfo.value.aspectRatio)
-    aspectHeight.value = '1.0'
-    for (const asp of [
+    parsingChart.value = true;
+    chartPath = file;
+    chartInfo.value = (await invoke('parse_chart', { path: file })) as ChartInfo;
+    stepIndex.value++;
+    aspectWidth.value = String(chartInfo.value.aspectRatio);
+    aspectHeight.value = '1.0';
+    for (let asp of [
       [16, 9],
       [4, 3],
       [8, 5],
       [3, 2],
     ]) {
       if (Math.abs(asp[0] / asp[1] - chartInfo.value.aspectRatio) < 1e-4) {
-        aspectWidth.value = String(asp[0])
-        aspectHeight.value = String(asp[1])
-        break
+        aspectWidth.value = String(asp[0]);
+        aspectHeight.value = String(asp[1]);
+        break;
       }
     }
   } catch (e) {
-    toastError(e)
+    toastError(e);
   } finally {
-    parsingChart.value = false
+    parsingChart.value = false;
   }
 }
 
-// 构建参数
+const aspectWidth = ref('0'),
+  aspectHeight = ref('0');
+
+const fileHovering = ref(false);
+event.listen('tauri://file-drop-hover', (_event) => (fileHovering.value = step.value === 'choose'));
+event.listen('tauri://file-drop-cancelled', (_event) => (fileHovering.value = false));
+event.listen('tauri://file-drop', async (event) => {
+  if (step.value === 'choose') {
+    fileHovering.value = false;
+    await loadChart((event.payload as string[])[0]);
+  }
+});
+
+const form = ref<VForm>();
+
+const configView = ref<typeof ConfigView>();
 async function buildParams() {
-  const config = await configView.value!.buildConfig()
-  if (!config) return null
-  if (!chartInfo.value!.tip?.trim().length) chartInfo.value!.tip = null
+  let config = await configView.value!.buildConfig();
+  if (!config) return null;
+  if (!chartInfo.value!.tip?.trim().length) chartInfo.value!.tip = null;
   return {
     path: chartPath,
     info: chartInfo.value,
     config,
-  }
+  };
 }
 
-// 渲染
 async function postRender() {
   try {
     if (!(await invoke('test_ffmpeg'))) {
-      await dialog.message(t('ffmpeg-not-found'))
-      await invoke('open_app_folder')
-      await shell.open('https://mivik.moe/ffmpeg-windows/')
-      return false
+      await dialog.message(t('ffmpeg-not-found'));
+      await invoke('open_app_folder');
+      await shell.open('https://mivik.moe/ffmpeg-windows/');
+      return false;
     }
-    const params = await buildParams()
-    if (!params) return false
-    await invoke('post_render', { params })
-    return true
+    let params = await buildParams();
+    if (!params) return false;
+    await invoke('post_render', { params });
+    return true;
   } catch (e) {
-    toastError(e)
-    return false
+    toastError(e);
+    return false;
   }
 }
 
-// 预览
 async function previewChart() {
   try {
-    const params = await buildParams()
-    if (!params) return false
-    await invoke('preview_chart', { params })
-    return true
+    let params = await buildParams();
+    if (!params) return false;
+    await invoke('preview_chart', { params });
+    return true;
   } catch (e) {
-    toastError(e)
-    return false
+    toastError(e);
+    return false;
   }
 }
 
-// 下一步
-async function moveNext() {
-  if (step.value === 'config') {
-    if ((await form.value!.validate()).valid) {
-      stepIndex.value++
-      configView.value!.onEnter()
-    } else {
-      toast(t('has-error'), 'error')
-    }
-    return
-  }
-  if (step.value === 'options' && (await postRender())) {
-    stepIndex.value++
-  }
-}
-
-// 事件监听
-event.listen('tauri://file-drop-hover', () => (fileHovering.value = step.value === 'choose'))
-event.listen('tauri://file-drop-cancelled', () => (fileHovering.value = false))
-event.listen('tauri://file-drop', async (event) => {
-  if (step.value === 'choose') {
-    fileHovering.value = false
-    await loadChart((event.payload as string[])[0])
-  }
-})
-
-event.listen('render-msg', (msg) => (renderMsg.value = msg.payload as string))
+const renderMsg = ref(''),
+  renderProgress = ref<number>(),
+  renderDuration = ref<number>();
+event.listen('render-msg', (msg) => (renderMsg.value = msg.payload as string));
 event.listen('render-progress', (msg) => {
-  const payload = msg.payload as { progress: number; fps: number; estimate: number }
+  let payload = msg.payload as { progress: number; fps: number; estimate: number };
   renderMsg.value = t('render-status', {
     progress: (payload.progress * 100).toFixed(2),
     fps: payload.fps,
     estimate: moment.duration(payload.estimate, 'seconds').humanize(true, { ss: 1 }),
-  })
-  renderProgress.value = payload.progress * 100
-})
+  });
+  renderProgress.value = payload.progress * 100;
+  console.log(renderProgress.value);
+});
 event.listen('render-done', (msg) => {
-  stepIndex.value++
-  renderDuration.value = Math.round(msg.payload as number)
-})
+  stepIndex.value++;
+  renderDuration.value = Math.round(msg.payload as number);
+});
 
-// 解析宽高比
+async function moveNext() {
+  if (step.value === 'config') {
+    if ((await form.value!.validate()).valid) {
+      stepIndex.value++;
+      configView.value!.onEnter();
+    } else {
+      toast(t('has-error'), 'error');
+    }
+    return;
+  }
+  if (step.value === 'options') {
+    if (await postRender()) {
+      stepIndex.value++;
+    }
+    return;
+  }
+}
+
+let chartInQuery = router.currentRoute.value.query.chart;
+if (isString(chartInQuery)) {
+  onMounted(() => loadChart(chartInQuery as string));
+}
+
 function tryParseAspect(): number | undefined {
   try {
-    const width = parseFloat(aspectWidth.value)
-    const height = parseFloat(aspectHeight.value)
-    if (isNaN(width) || isNaN(height)) return undefined
-    return width / height
+    let width = parseFloat(aspectWidth.value);
+    let height = parseFloat(aspectHeight.value);
+    if (isNaN(width) || isNaN(height)) return undefined;
+    return width / height;
   } catch (e) {
-    return undefined
+    return undefined;
   }
 }
 </script>
 
 <template>
-  <div class="render-container">
-    <v-stepper alt-labels v-model="stepIndex" hide-actions :items="steps.map((x) => t('steps.' + x))">
-      <!-- Step 1: Choose Chart -->
+  <div class="render-container glass-background">
+    <v-stepper 
+      alt-labels 
+      v-model="stepIndex" 
+      hide-actions 
+      :items="steps.map((x) => t('steps.' + x))"
+      class="stepper-glow"
+    >
+      <div v-if="step === 'config' || step === 'options'" class="step-controls">
+        <v-btn 
+          variant="text" 
+          @click="stepIndex && stepIndex--" 
+          class="nav-btn hover-scale"
+        >
+          <v-icon>mdi-arrow-left</v-icon>
+          {{ t('prev-step') }}
+        </v-btn>
+        <div class="flex-grow-1"></div>
+        <v-btn 
+          v-if="step === 'options'" 
+          variant="tonal" 
+          @click="previewChart" 
+          class="preview-btn hover-scale"
+        >
+          <v-icon>mdi-eye-outline</v-icon>
+          {{ t('preview') }}
+        </v-btn>
+        <v-btn 
+          variant="tonal" 
+          @click="moveNext" 
+          class="next-btn gradient-btn hover-scale"
+        >
+          {{ step === 'options' ? t('render') : t('next-step') }}
+          <v-icon>mdi-arrow-right</v-icon>
+        </v-btn>
+      </div>
+
       <template v-slot:item.1>
         <div class="step-choose">
-          <div class="file-options">
-            <v-btn class="file-option" size="large" color="primary" @click="chooseChart(false)" prepend-icon="mdi-folder-zip">
-              {{ t('choose.archive') }}
-            </v-btn>
-            <v-divider vertical></v-divider>
-            <v-btn class="file-option" size="large" color="primary" @click="chooseChart(true)" prepend-icon="mdi-folder">
-              {{ t('choose.folder') }}
-            </v-btn>
+          <div class="file-selector">
+            <div class="file-option-card hover-scale" @click="chooseChart(false)">
+              <div class="option-icon gradient-bg">
+                <v-icon size="48">mdi-folder-zip</v-icon>
+              </div>
+              <h3 class="option-title">{{ t('choose.archive') }}</h3>
+            </div>
+            
+            <v-divider vertical class="divider-glow"></v-divider>
+            
+            <div class="file-option-card hover-scale" @click="chooseChart(true)">
+              <div class="option-icon gradient-bg">
+                <v-icon size="48">mdi-folder</v-icon>
+              </div>
+              <h3 class="option-title">{{ t('choose.folder') }}</h3>
+            </div>
           </div>
-          <p class="drop-hint">{{ t('choose.can-also-drop') }}</p>
-          <v-overlay v-model="parsingChart" contained class="loading-overlay" persistent>
-            <v-progress-circular indeterminate></v-progress-circular>
+          
+          <p class="drop-hint text-glow">{{ t('choose.can-also-drop') }}</p>
+          
+          <v-overlay v-model="parsingChart" class="loading-overlay">
+            <v-progress-circular 
+              indeterminate 
+              size="64"
+              width="4"
+              class="glow-spinner"
+            ></v-progress-circular>
           </v-overlay>
         </div>
       </template>
 
-      <!-- Step 2: Configure Chart -->
       <template v-slot:item.2>
         <v-form ref="form" v-if="chartInfo" class="step-config">
-          <v-row no-gutters class="form-row">
-            <v-col cols="8">
-              <v-text-field :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="chartInfo.name"></v-text-field>
-            </v-col>
-            <v-col cols="4">
-              <v-text-field :label="t('level')" :rules="[RULES.non_empty]" v-model="chartInfo.level"></v-text-field>
-            </v-col>
-          </v-row>
-
-          <v-row no-gutters class="form-row">
-            <v-col cols="12" sm="4">
-              <v-text-field :label="t('charter')" :rules="[RULES.non_empty]" v-model="chartInfo.charter"></v-text-field>
-            </v-col>
-            <v-col cols="12" sm="4">
-              <v-text-field :label="t('composer')" v-model="chartInfo.composer"></v-text-field>
-            </v-col>
-            <v-col cols="12" sm="4">
-              <v-text-field :label="t('illustrator')" v-model="chartInfo.illustrator"></v-text-field>
-            </v-col>
-          </v-row>
-
-          <v-row no-gutters class="form-row align-center">
-            <v-col cols="4">
-              <div class="aspect-ratio">
-                <p class="aspect-label">{{ t('aspect') }}</p>
-                <div class="aspect-inputs">
-                  <v-text-field type="number" :rules="[RULES.positive]" :label="t('width')" v-model="aspectWidth"></v-text-field>
-                  <span>:</span>
-                  <v-text-field type="number" :rules="[RULES.positive]" :label="t('height')" v-model="aspectHeight"></v-text-field>
-                </div>
-              </div>
-            </v-col>
-            <v-col cols="8">
-              <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.05" v-model="chartInfo.backgroundDim"></v-slider>
-            </v-col>
-          </v-row>
-
-          <v-row no-gutters class="form-row">
-            <v-col cols="12">
-              <v-text-field :label="t('tip')" :placeholder="t('tip-placeholder')" v-model="chartInfo.tip"></v-text-field>
-            </v-col>
-          </v-row>
         </v-form>
       </template>
 
-      <!-- Step 3: Render Options -->
-      <template v-slot:item.3>
-        <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()"></ConfigView>
-      </template>
-
-      <!-- Step 4: Render -->
       <template v-slot:item.4>
-        <div class="step-render">
-          <span class="render-emoji">😎</span>
-          <h2>{{ t('render-started') }}</h2>
-          <v-btn @click="router.push({ name: 'tasks' })">{{ t('see-tasks') }}</v-btn>
+        <div class="render-complete">
+          <div class="particle-effect"></div>
+          <span class="emoji-glow">🎉</span>
+          <h1 class="complete-title text-gradient">{{ t('render-started') }}</h1>
+          <v-btn 
+            @click="router.push({ name: 'tasks' })" 
+            class="task-btn hover-scale"
+            variant="flat"
+          >
+            <v-icon>mdi-playlist-check</v-icon>
+            {{ t('see-tasks') }}
+          </v-btn>
         </div>
       </template>
     </v-stepper>
 
-    <!-- File Drop Overlay -->
-    <v-overlay v-model="fileHovering" contained class="drop-overlay" persistent>
-      <h1>{{ t('choose.drop') }}</h1>
+    <v-overlay v-model="fileHovering" class="drop-overlay">
+      <div class="drop-container">
+        <div class="drop-glow"></div>
+        <h1 class="drop-text neon-text">{{ t('choose.drop') }}</h1>
+      </div>
     </v-overlay>
   </div>
 </template>
@@ -389,90 +391,152 @@ function tryParseAspect(): number | undefined {
   height: 100%;
   max-width: 1280px;
   background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.stepper-glow {
+  :deep(.v-stepper__step) {
+    &::after {
+      background: linear-gradient(90deg, #2196f3, #e91e63);
+      filter: drop-shadow(0 0 8px rgba(33, 150, 243, 0.3));
+    }
+    &.v-stepper__step--active {
+      .v-stepper__step__title {
+        text-shadow: 0 0 12px rgba(33, 150, 243, 0.4);
+      }
+    }
+  }
+}
+
+.file-option-card {
+  width: 300px;
+  height: 200px;
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.step-choose {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 2rem 0;
-}
-
-.file-options {
-  display: flex;
-  gap: 2rem;
-  width: 100%;
-  justify-content: center;
-}
-
-.file-option {
-  width: 45%;
-  padding: 1.5rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-.drop-hint {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.9rem;
-}
-
-.loading-overlay {
-  display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+    
+    &::before {
+      opacity: 1;
+    }
+  }
+  
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(45deg, #2196f333, #e91e6333);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
 }
 
-.step-config {
-  padding: 2rem;
-}
-
-.form-row {
-  margin-bottom: 1.5rem;
-}
-
-.aspect-ratio {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.aspect-label {
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.aspect-inputs {
+.option-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  justify-content: center;
+  margin-bottom: 1rem;
 }
 
-.step-render {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 2rem 0;
+.gradient-bg {
+  background: linear-gradient(45deg, #2196F3, #E91E63);
 }
 
-.render-emoji {
-  font-size: 84px;
+.text-gradient {
+  background: linear-gradient(45deg, #2196F3, #E91E63);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-glow {
+  text-shadow: 0 0 12px rgba(33, 150, 243, 0.4);
+}
+
+.glow-spinner {
+  filter: drop-shadow(0 0 8px #2196F3);
+}
+
+.hover-scale {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  &:hover {
+    transform: scale(1.05);
+  }
+}
+
+.gradient-btn {
+  background: linear-gradient(45deg, #2196F3, #E91E63) !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3) !important;
 }
 
 .drop-overlay {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.9) !important;
+  
+  .drop-container {
+    position: relative;
+    padding: 2rem;
+    
+    .drop-glow {
+      position: absolute;
+      inset: -20px;
+      background: linear-gradient(45deg, #2196F3, #E91E63);
+      filter: blur(40px);
+      opacity: 0.3;
+      animation: pulse 2s infinite;
+    }
+  }
 }
 
-.v-progress-linear,
-.v-progress-linear__determinate {
-  transition: none;
+@keyframes pulse {
+  0% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+  100% { opacity: 0.3; }
+}
+
+.neon-text {
+  color: #fff;
+  text-shadow: 
+    0 0 10px #2196F3,
+    0 0 20px #2196F3,
+    0 0 30px #2196F3;
+}
+
+/* 完成页面特效 */
+.render-complete {
+  position: relative;
+  .particle-effect {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, rgba(33,150,243,0.1) 0%, transparent 70%);
+  }
+  
+  .emoji-glow {
+    font-size: 96px;
+    filter: drop-shadow(0 0 12px rgba(33,150,243,0.5));
+    animation: float 3s ease-in-out infinite;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
 }
 </style>
