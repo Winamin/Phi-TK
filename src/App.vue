@@ -60,7 +60,7 @@ window.goto = (name: string) => {
 </script>
 
 <template>
-  <v-app id="Phi TK" class="dark-theme">
+  <v-app id="Phi TK" class="pink-to-blue">
     <v-sonner position="top-center" />
     <v-app-bar 
       title="Phi TK" 
@@ -113,8 +113,8 @@ window.goto = (name: string) => {
 </template>
 
 <style>
-.dark-theme {
-  background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
+.pink-to-blue {
+  background: linear-gradient(45deg, #ff9a9e, #fad0c4, #a1c4fd, #c2e9fb);
 }
 
 .app-bar-shadow {
