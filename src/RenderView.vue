@@ -283,260 +283,100 @@ function tryParseAspect(): number | undefined {
 </script>
 
 <template>
-  <div class="render-container glass-background">
-    <v-stepper 
-      alt-labels 
-      v-model="stepIndex" 
-      hide-actions 
-      :items="steps.map((x) => t('steps.' + x))"
-      class="stepper-glow"
-    >
-      <div v-if="step === 'config' || step === 'options'" class="step-controls">
-        <v-btn 
-          variant="text" 
-          @click="stepIndex && stepIndex--" 
-          class="nav-btn hover-scale"
-        >
-          <v-icon>mdi-arrow-left</v-icon>
-          {{ t('prev-step') }}
-        </v-btn>
+  <div class="pa-8 w-100 h-100" style="max-width: 1280px">
+    <v-stepper alt-labels v-model="stepIndex" hide-actions :items="steps.map((x) => t('steps.' + x))">
+      <div v-if="step === 'config' || step === 'options'" class="d-flex flex-row pa-6 pb-4 pt-0">
+        <v-btn variant="text" @click="stepIndex && stepIndex--" v-t="'prev-step'"></v-btn>
         <div class="flex-grow-1"></div>
-        <v-btn 
-          v-if="step === 'options'" 
-          variant="tonal" 
-          @click="previewChart" 
-          class="preview-btn hover-scale"
-        >
-          <v-icon>mdi-eye-outline</v-icon>
-          {{ t('preview') }}
-        </v-btn>
-        <v-btn 
-          variant="tonal" 
-          @click="moveNext" 
-          class="next-btn gradient-btn hover-scale"
-        >
-          {{ step === 'options' ? t('render') : t('next-step') }}
-          <v-icon>mdi-arrow-right</v-icon>
-        </v-btn>
+        <v-btn v-if="step === 'options'" variant="tonal" @click="previewChart" class="mr-2" v-t="'preview'"></v-btn>
+        <v-btn variant="tonal" @click="moveNext">{{ step === 'options' ? t('render') : t('next-step') }}</v-btn>
       </div>
 
       <template v-slot:item.1>
-        <div class="step-choose">
-          <div class="file-selector">
-            <div class="file-option-card hover-scale" @click="chooseChart(false)">
-              <div class="option-icon gradient-bg">
-                <v-icon size="48">mdi-folder-zip</v-icon>
-              </div>
-              <h3 class="option-title">{{ t('choose.archive') }}</h3>
-            </div>
-            
-            <v-divider vertical class="divider-glow"></v-divider>
-            
-            <div class="file-option-card hover-scale" @click="chooseChart(true)">
-              <div class="option-icon gradient-bg">
-                <v-icon size="48">mdi-folder</v-icon>
-              </div>
-              <h3 class="option-title">{{ t('choose.folder') }}</h3>
-            </div>
+        <div class="mt-8 d-flex" style="gap: 1rem">
+          <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
+            <v-btn class="w-75" style="overflow: hidden" size="large" color="primary" @click="chooseChart(false)" prepend-icon="mdi-folder-zip">{{ t('choose.archive') }}</v-btn>
           </div>
-          
-          <p class="drop-hint text-glow">{{ t('choose.can-also-drop') }}</p>
-          
-          <v-overlay v-model="parsingChart" class="loading-overlay">
-            <v-progress-circular 
-              indeterminate 
-              size="64"
-              width="4"
-              class="glow-spinner"
-            ></v-progress-circular>
-          </v-overlay>
+          <v-divider vertical></v-divider>
+          <div class="flex-grow-1 d-flex align-center justify-center w-0">
+            <v-btn class="w-75" size="large" color="primary" @click="chooseChart(true)" prepend-icon="mdi-folder">{{ t('choose.folder') }}</v-btn>
+          </div>
         </div>
+        <p class="mb-8 w-100 text-center mt-2 text-disabled" v-t="'choose.can-also-drop'"></p>
+        <v-overlay v-model="parsingChart" contained class="align-center justify-center" persistent :close-on-content-click="false">
+          <v-progress-circular indeterminate> </v-progress-circular>
+        </v-overlay>
       </template>
 
       <template v-slot:item.2>
-        <v-form ref="form" v-if="chartInfo" class="step-config">
+        <v-form ref="form" v-if="chartInfo">
+          <v-row no-gutters class="mx-n2">
+            <v-col cols="8">
+              <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="chartInfo.name"></v-text-field>
+            </v-col>
+            <v-col cols="4">
+              <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]" v-model="chartInfo.level"></v-text-field>
+            </v-col>
+          </v-row>
+
+          <v-row no-gutters class="mx-n2 mt-1">
+            <v-col cols="12" sm="4">
+              <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]" v-model="chartInfo.charter"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="4">
+              <v-text-field class="mx-2" :label="t('composer')" v-model="chartInfo.composer"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="4">
+              <v-text-field class="mx-2" :label="t('illustrator')" v-model="chartInfo.illustrator"></v-text-field>
+            </v-col>
+          </v-row>
+
+          <v-row no-gutters class="mx-n2 mt-1 align-center">
+            <v-col cols="4">
+              <div class="mx-2 d-flex flex-column">
+                <p class="text-caption" v-t="'aspect'"></p>
+                <div class="d-flex flex-row align-center justify-center">
+                  <v-text-field type="number" class="mr-2" :rules="[RULES.positive]" :label="t('width')" v-model="aspectWidth"></v-text-field>
+                  <p>:</p>
+                  <v-text-field type="number" class="ml-2" :rules="[RULES.positive]" :label="t('height')" v-model="aspectHeight"></v-text-field>
+                </div>
+              </div>
+            </v-col>
+            <v-col cols="8" class="px-6">
+              <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.05" v-model="chartInfo.backgroundDim"></v-slider>
+            </v-col>
+          </v-row>
+
+          <v-row no-gutters class="mx-n2 mt-1">
+            <v-col cols="12">
+              <v-text-field class="mx-2" :label="t('tip')" :placeholder="t('tip-placeholder')" v-model="chartInfo.tip"></v-text-field>
+            </v-col>
+          </v-row>
         </v-form>
       </template>
 
+      <template v-slot:item.3>
+        <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()"></ConfigView>
+      </template>
+
       <template v-slot:item.4>
-        <div class="render-complete">
-          <div class="particle-effect"></div>
-          <span class="emoji-glow">🎉</span>
-          <h1 class="complete-title text-gradient">{{ t('render-started') }}</h1>
-          <v-btn 
-            @click="router.push({ name: 'tasks' })" 
-            class="task-btn hover-scale"
-            variant="flat"
-          >
-            <v-icon>mdi-playlist-check</v-icon>
-            {{ t('see-tasks') }}
-          </v-btn>
+        <div class="d-flex flex-column justify-center align-center mb-2" style="gap: 1rem">
+          <span style="font-size: 84px">😎</span>
+          <h2>{{ t('render-started') }}</h2>
+          <v-btn @click="router.push({ name: 'tasks' })" v-t="'see-tasks'"></v-btn>
         </div>
       </template>
     </v-stepper>
-
-    <v-overlay v-model="fileHovering" class="drop-overlay">
-      <div class="drop-container">
-        <div class="drop-glow"></div>
-        <h1 class="drop-text neon-text">{{ t('choose.drop') }}</h1>
-      </div>
+    <v-overlay v-model="fileHovering" contained class="align-center justify-center" persistent :close-on-content-click="false">
+      <h1 v-t="'choose.drop'"></h1>
     </v-overlay>
   </div>
 </template>
 
 <style scoped>
-.render-container {
-  padding: 2rem;
-  width: 100%;
-  height: 100%;
-  max-width: 1280px;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(16px);
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.stepper-glow {
-  :deep(.v-stepper__step) {
-    &::after {
-      background: linear-gradient(90deg, #2196f3, #e91e63);
-      filter: drop-shadow(0 0 8px rgba(33, 150, 243, 0.3));
-    }
-    &.v-stepper__step--active {
-      .v-stepper__step__title {
-        text-shadow: 0 0 12px rgba(33, 150, 243, 0.4);
-      }
-    }
-  }
-}
-
-.file-option-card {
-  width: 300px;
-  height: 200px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  
-  &:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
-    
-    &::before {
-      opacity: 1;
-    }
-  }
-  
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(45deg, #2196f333, #e91e6333);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-}
-
-.option-icon {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 1rem;
-}
-
-.gradient-bg {
-  background: linear-gradient(45deg, #2196F3, #E91E63);
-}
-
-.text-gradient {
-  background: linear-gradient(45deg, #2196F3, #E91E63);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.text-glow {
-  text-shadow: 0 0 12px rgba(33, 150, 243, 0.4);
-}
-
-.glow-spinner {
-  filter: drop-shadow(0 0 8px #2196F3);
-}
-
-.hover-scale {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  
-  &:hover {
-    transform: scale(1.05);
-  }
-}
-
-.gradient-btn {
-  background: linear-gradient(45deg, #2196F3, #E91E63) !important;
-  color: white !important;
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3) !important;
-}
-
-.drop-overlay {
-  background: rgba(0, 0, 0, 0.9) !important;
-  
-  .drop-container {
-    position: relative;
-    padding: 2rem;
-    
-    .drop-glow {
-      position: absolute;
-      inset: -20px;
-      background: linear-gradient(45deg, #2196F3, #E91E63);
-      filter: blur(40px);
-      opacity: 0.3;
-      animation: pulse 2s infinite;
-    }
-  }
-}
-
-@keyframes pulse {
-  0% { opacity: 0.3; }
-  50% { opacity: 0.6; }
-  100% { opacity: 0.3; }
-}
-
-.neon-text {
-  color: #fff;
-  text-shadow: 
-    0 0 10px #2196F3,
-    0 0 20px #2196F3,
-    0 0 30px #2196F3;
-}
-
-/* 完成页面特效 */
-.render-complete {
-  position: relative;
-  .particle-effect {
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle, rgba(33,150,243,0.1) 0%, transparent 70%);
-  }
-  
-  .emoji-glow {
-    font-size: 96px;
-    filter: drop-shadow(0 0 12px rgba(33,150,243,0.5));
-    animation: float 3s ease-in-out infinite;
-  }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-20px); }
+.v-progress-linear,
+.v-progress-linear__determinate {
+  transition: none;
 }
 </style>
+}
