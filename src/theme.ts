@@ -3,7 +3,7 @@
 // Generated using https://theme-generator.vuetifyjs.com/
 
 export default {
-  dark: true,
+  dark: false,
   colors: {
     primary: '#3f51b5',
     secondary: '#f44336',
