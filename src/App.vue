@@ -10,17 +10,17 @@ zh-CN:
   rpe: RPE
   tasks: 任务列表
   about: 关于
-
 </i18n>
 
-<script lang="ts">
+<script setup lang="ts">
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-
 import { useI18n } from 'vue-i18n';
-
 import { VSonner } from 'vuetify-sonner';
-<script lang="ts" setup>
+
+const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
 
 const onLoaded = ref<() => void>();
 const component = ref();
@@ -29,34 +29,21 @@ watch(component, (comp) => {
   if (comp && onLoaded.value) onLoaded.value();
 });
 
-export function useOnLoaded() {
-  return onLoaded;
-}
-
 declare global {
   interface Window {
     goto: (name: string) => void;
   }
 }
 
-export default {};
-</script>
-
-<script setup lang="ts">
-const { t } = useI18n();
-
-const route = useRoute(),
-  router = useRouter();
+window.goto = (name: string) => {
+  router.push({ name });
+};
 
 const icons = {
   render: 'mdi-auto-fix',
   rpe: 'mdi-bookshelf',
   tasks: 'mdi-server',
   about: 'mdi-information-outline',
-};
-
-window.goto = (name: string) => {
-  router.push({ name });
 };
 </script>
 
