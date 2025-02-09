@@ -25,6 +25,10 @@ const router = useRouter();
 const onLoaded = ref<() => void>();
 const component = ref();
 
+export function useOnLoaded() {
+  return onLoaded;
+}
+  
 watch(component, (comp) => {
   if (comp && onLoaded.value) onLoaded.value();
 });
