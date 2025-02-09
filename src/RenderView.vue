@@ -283,7 +283,7 @@ function tryParseAspect(): number | undefined {
 </script>
 
 <template>
-  <div class="pa-8 w-100 h-100" style="max-width: 1280px">
+  <div class="pa-8 w-100 h-100" style="max-width: 1280px" :class="{'glass-effect': step !== 'choose'}">
     <v-stepper alt-labels v-model="stepIndex" hide-actions :items="steps.map((x) => t('steps.' + x))">
       <div v-if="step === 'config' || step === 'options'" class="d-flex flex-row pa-6 pb-4 pt-0">
         <v-btn variant="text" @click="stepIndex && stepIndex--" v-t="'prev-step'"></v-btn>
@@ -309,7 +309,8 @@ function tryParseAspect(): number | undefined {
       </template>
 
       <template v-slot:item.2>
-        <v-form ref="form" v-if="chartInfo">
+        <div class="glass-effect pa-4">
+         <v-form ref="form" v-if="chartInfo">
           <v-row no-gutters class="mx-n2">
             <v-col cols="8">
               <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="chartInfo.name"></v-text-field>
@@ -361,7 +362,7 @@ function tryParseAspect(): number | undefined {
 
       <template v-slot:item.4>
         <div class="d-flex flex-column justify-center align-center mb-2" style="gap: 1rem">
-          <span style="font-size: 84px">😎</span>
+          <span style="font-size: 84px">🎉</span>
           <h2>{{ t('render-started') }}</h2>
           <v-btn @click="router.push({ name: 'tasks' })" v-t="'see-tasks'"></v-btn>
         </div>
@@ -374,6 +375,17 @@ function tryParseAspect(): number | undefined {
 </template>
 
 <style scoped>
+.glass-effect {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  .glass-effect.dark-mode {
+  background: rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
 .v-progress-linear,
 .v-progress-linear__determinate {
   transition: none;
