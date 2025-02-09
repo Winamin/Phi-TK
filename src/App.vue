@@ -64,15 +64,15 @@ window.goto = (name: string) => {
     <v-sonner position="top-center" />
     <v-app-bar 
       title="Phi TK" 
-      color="surface-variant"
+      //color="surface-variant"
       :elevation="4"
-      class="app-bar-shadow blur-background"
+      class="app-bar-shadow"
     ></v-app-bar>
     <v-navigation-drawer 
       expand-on-hover 
       rail 
       permanent
-      color="surface"
+      //color="surface"
       :elevation="8"
       class="nav-drawer-border"
     >
@@ -90,30 +90,32 @@ window.goto = (name: string) => {
       </v-list>
     </v-navigation-drawer>
 
-    <v-main class="d-flex justify-center animated-background">
-      <router-view v-slot="{ Component }">
-        <Suspense timeout="0">
-          <template #default>
-            <component :is="Component" ref="component" />
-          </template>
-          <template #fallback>
-            <div class="flex justify-center pa-8">
-              <v-progress-circular 
-                indeterminate 
-                size="large"
-                color="accent"
-                class="glow-spinner"
-              />
-            </div>
-          </template>
-        </Suspense>
-      </router-view>
+    <v-main class="d-flex justify-center glass-background">
+      <div class="glass-content">
+        <router-view v-slot="{ Component }">
+          <Suspense timeout="0">
+            <template #default>
+              <component :is="Component" ref="component" />
+            </template>
+            <template #fallback>
+              <div class="flex justify-center pa-8">
+                <v-progress-circular 
+                  indeterminate 
+                  size="large"
+                  color="accent"
+                  class="glow-spinner"
+                />
+              </div>
+            </template>
+          </Suspense>
+        </router-view>
+      </div>
     </v-main>
   </v-app>
 </template>
 
 <style>
-dark-theme {
+.dark-theme {
   background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
 }
 
@@ -145,6 +147,25 @@ dark-theme {
   filter: drop-shadow(0 0 8px #2196F3);
 }
 
+.glass-background {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  border-radius: 16px;
+  margin: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.glass-content {
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+}
+
 .animated-background {
   position: relative;
   overflow: hidden;
@@ -172,10 +193,5 @@ dark-theme {
 @keyframes animateFlow {
   0% { transform: translate(-25%, -25%) rotate(0deg); }
   100% { transform: translate(-25%, -25%) rotate(360deg); }
-}
-
-.blur-background {
-  backdrop-filter: blur(10px);
-  background-color: rgba(255, 182, 193, 0.5) !important;
 }
 </style>
