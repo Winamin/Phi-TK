@@ -90,7 +90,7 @@ impl RenderConfig {
             combo: self.combo.clone(),
             flid_x: self.flid_x,
             show_progress_text: self.show_progress_text,
-            show_time_text: self.show_time_text
+            show_time_text: self.show_time_text,
             ..Default::default()
         }
     }
@@ -325,7 +325,7 @@ pub async fn main() -> Result<()> {
     let player = build_player(&params.config).await?;
     let mut main = Main::new(
         Box::new(
-            LoadingScene::new(GameMode::Normal, info, &config, fs, Some(player), None, None).await?,
+            LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?,
         ),
         tm,
         {
