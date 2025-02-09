@@ -10,28 +10,27 @@ zh-CN:
   rpe: RPE
   tasks: 任务列表
   about: 关于
+
 </i18n>
 
-<script setup lang="ts">
+<script lang="ts">
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useI18n } from 'vue-i18n';
-import { VSonner } from 'vuetify-sonner';
 
-const { t } = useI18n();
-const route = useRoute();
-const router = useRouter();
+import { useI18n } from 'vue-i18n';
+
+import { VSonner } from 'vuetify-sonner';
 
 const onLoaded = ref<() => void>();
 const component = ref();
 
-export function useOnLoaded() {
-  return onLoaded;
-}
-  
 watch(component, (comp) => {
   if (comp && onLoaded.value) onLoaded.value();
 });
+
+export function useOnLoaded() {
+  return onLoaded;
+}
 
 declare global {
   interface Window {
@@ -39,9 +38,14 @@ declare global {
   }
 }
 
-window.goto = (name: string) => {
-  router.push({ name });
-};
+export default {};
+</script>
+
+<script setup lang="ts">
+const { t } = useI18n();
+
+const route = useRoute(),
+  router = useRouter();
 
 const icons = {
   render: 'mdi-auto-fix',
@@ -49,39 +53,21 @@ const icons = {
   tasks: 'mdi-server',
   about: 'mdi-information-outline',
 };
+
+window.goto = (name: string) => {
+  router.push({ name });
+};
 </script>
 
 <template>
   <v-app id="Phi TK" class="dark-theme">
-    <div class="glass-container fixed-top w-100 h-100">
-      <v-app-bar 
-        title="Phi TK" 
-        color="surface-variant"
-        :elevation="4"
-        class="app-bar-shadow glass-item"
-      ></v-app-bar>
-    </div>
-
-    <v-main class="d-flex justify-center animated-background">
-      <router-view v-slot="{ Component }">
-        <Suspense timeout="0">
-          <template #default>
-            <component :is="Component" ref="component" />
-          </template>
-          <template #fallback>
-            <div class="flex justify-center pa-8">
-              <v-progress-circular 
-                indeterminate 
-                size="large"
-                color="accent"
-                class="glow-spinner"
-              />
-            </div>
-          </template>
-        </Suspense>
-      </router-view>
-    </v-main>
-
+    <v-sonner position="top-center" />
+    <v-app-bar 
+      title="Phi TK" 
+      color="surface-variant"
+      :elevation="4"
+      class="app-bar-shadow blur-background"
+    ></v-app-bar>
     <v-navigation-drawer 
       expand-on-hover 
       rail 
@@ -103,6 +89,26 @@ const icons = {
         ></v-list-item>
       </v-list>
     </v-navigation-drawer>
+
+    <v-main class="d-flex justify-center animated-background">
+      <router-view v-slot="{ Component }">
+        <Suspense timeout="0">
+          <template #default>
+            <component :is="Component" ref="component" />
+          </template>
+          <template #fallback>
+            <div class="flex justify-center pa-8">
+              <v-progress-circular 
+                indeterminate 
+                size="large"
+                color="accent"
+                class="glow-spinner"
+              />
+            </div>
+          </template>
+        </Suspense>
+      </router-view>
+    </v-main>
   </v-app>
 </template>
 
@@ -111,28 +117,8 @@ const icons = {
   background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
 }
 
-.glass-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  backdrop-filter: blur(8px) saturate(1.5);
-  -webkit-backdrop-filter: blur(8px) saturate(1.5);
-  background-color: rgba(255, 255, 255, 0.06);
-  border-radius: 16px;
-}
-
-.glass-item {
-  backdrop-filter: blur(4px) saturate(1.5);
-  -webkit-backdrop-filter: blur(4px) saturate(1.5);
-  background-color: rgba(255, 255, 255, 0.03);
-}
-
 .app-bar-shadow {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
-  backdrop-filter: blur(4px) saturate(1.5);
-  -webkit-backdrop-filter: blur(4px) saturate(1.5);
 }
 
 .nav-drawer-border {
@@ -186,5 +172,10 @@ const icons = {
 @keyframes animateFlow {
   0% { transform: translate(-25%, -25%) rotate(0deg); }
   100% { transform: translate(-25%, -25%) rotate(360deg); }
+}
+
+.blur-background {
+  backdrop-filter: blur(10px);
+  background-color: rgba(255, 255, 255, 0.1) !important;
 }
 </style>
