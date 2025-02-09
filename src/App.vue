@@ -72,7 +72,7 @@ window.goto = (name: string) => {
       rail 
       permanent
       :elevation="8"
-      class="nav-drawer-border"
+      class="nav-drawer-border blur-background"
     >
       <v-list density="compact" nav class="py-4">
         <v-list-item
@@ -174,6 +174,6 @@ window.goto = (name: string) => {
 
 .blur-background {
   backdrop-filter: blur(10px);
-  background-color: rgba(255, 182, 193, 0.5) !important;
+   background: linear-gradient(45deg, rgba(161, 196, 253, 0.8), rgba(194, 233, 251, 0.8)) !important;
 }
 </style>
