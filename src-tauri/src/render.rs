@@ -43,6 +43,8 @@ pub struct RenderConfig {
     fps: u32,
     hardware_accel: bool,
     hevc: bool,
+    show_progress_text: bool,
+    show_time_text : bool,
     bitrate_control: String,
     bitrate: String,
 
@@ -87,6 +89,8 @@ impl RenderConfig {
             buffer_size: self.buffer_size,
             combo: self.combo.clone(),
             flid_x: self.flid_x,
+            show_progress_text: self.show_progress_text,
+            show_time_text: self.show_time_text
             ..Default::default()
         }
     }
@@ -219,22 +223,15 @@ pub async fn main() -> Result<()> {
     let volume_music = std::mem::take(&mut config.volume_music);
     let volume_sfx = std::mem::take(&mut config.volume_sfx);
 
-    let O: f64 = if params.config.disable_loading {
-        GameScene::BEFORE_TIME as f64
-    } else {
-        LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64
-    };
-    let A: f64 = -0.5; // fade out time
-    //let musica: f64 = 0.7 + 0.3 + EndingScene::BPM_WAIT_TIME;
-
     let length = track_length - chart.offset.min(0.) as f64 + 1.;
     let video_length = O + length + A + params.config.ending_length;
     let offset = chart.offset.max(0.);
 
     let render_start_time = Instant::now();
+
     send(IPCEvent::StartMixing);
     let mixing_output = NamedTempFile::new()?;
-    let sample_rate = 96000;
+    let sample_rate = 48000;
     let sample_rate_f64 = sample_rate as f64;
     assert_eq!(sample_rate, ending.sample_rate());
     assert_eq!(sample_rate, sfx_click.sample_rate());
@@ -255,7 +252,9 @@ pub async fn main() -> Result<()> {
             output[start_index + i * 2 + 1] += frame.1 * volume_music;
         }
         info!("music Time:{:?}", start_time.elapsed())
+
     }
+    
     let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
         let position = (pos * sample_rate_f64).round() as usize * 2;
         if position >= output.len() {
@@ -266,12 +265,14 @@ pub async fn main() -> Result<()> {
 
         let frames = clip.frames();
         for i in 0..len {
-            let sample = frames[i].0 * volume;
-            slice[i * 2] += sample;
-            slice[i * 2 + 1] += sample;
+            slice[i * 2] += frames[i].0 * volume;
+            slice[i * 2 + 1] += frames[i].1 * volume;
         }
+    
         return len;
     };
+    
+
     if volume_sfx != 0.0 {
         let start_time = Instant::now();
         for line in &chart.lines {
@@ -287,7 +288,9 @@ pub async fn main() -> Result<()> {
             }
         }
         info!("sfx Time:{:?}", start_time.elapsed())
+        
     }
+
     //ending
     let mut pos = O + length + A;
     while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
@@ -322,7 +325,7 @@ pub async fn main() -> Result<()> {
     let player = build_player(&params.config).await?;
     let mut main = Main::new(
         Box::new(
-            LoadingScene::new(GameMode::Normal, info, config, fs, Some(player), None, None).await?,
+            LoadingScene::new(GameMode::Normal, info, &config, fs, Some(player), None, None).await?,
         ),
         tm,
         {
@@ -344,8 +347,8 @@ pub async fn main() -> Result<()> {
     main.top_level = false;
     main.viewport = Some((0, 0, vw as _, vh as _));
 
-    //const O: f64 = LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64;
-    //const A: f64 = 0.7 + 0.3 + 0.4 - 0.4;
+    const O: f64 = LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64;
+    const A: f64 = 0.7 + 0.3 + 0.4 - 0.4;
 
     let fps = params.config.fps;
     let frame_delta = 1. / fps as f32;
