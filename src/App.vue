@@ -60,7 +60,7 @@ window.goto = (name: string) => {
 </script>
 
 <template>
-  <v-app id="Phi TK" class="dark-theme">
+  <v-app id="Phi TK" class="glass-effect">
     <v-sonner position="top-center" />
     <v-app-bar 
       title="Phi TK" 
@@ -170,6 +170,15 @@ window.goto = (name: string) => {
   100% { transform: translate(-25%, -25%) rotate(360deg); }
 }
 
+.glass-effect {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+  
 .blur-background {
   backdrop-filter: blur(10px);
   background-color: rgba(255, 255, 255, 0.1) !important;
