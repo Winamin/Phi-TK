@@ -175,11 +175,11 @@ window.goto = (name: string) => {
 }
 
 .blur-background {
-  backdrop-filter: blur(50px) saturate(180%);
+  filter: blur(50px) saturate(180%);
   background: linear-gradient(45deg, rgba(168, 98, 153, 0.603), rgba(101, 66, 182, 0.8)) !important;
   opacity: 0.87;
 }
-
+  
 /* 新增的过渡动画样式 */
 .fade-blur-enter-active,
 .fade-blur-leave-active {
