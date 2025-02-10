@@ -83,7 +83,7 @@ window.goto = (name: string) => {
           active-class="active-item"
         ></v-list-item>
       </v-list>
-    </v-navigation-drawer>
+    </v-blur-background>
 
     <v-main class="d-flex justify-center animated-background">
       <router-view v-slot="{ Component }">
