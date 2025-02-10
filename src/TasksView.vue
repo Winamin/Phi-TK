@@ -120,7 +120,15 @@ function showOutput(task: Task) {
 
 <template>
   <div class="pa-8 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1rem">
+    <v-btn variant="tonal" @click="showFolder()" v-t="'show-in-folder'"></v-btn>
     <h1 v-if="!tasks || !tasks.length" class="text-center font-italic text-disabled" v-t="'empty'"></h1>
+    <v-form ref="form" style="max-height: 48vh;">
+      <v-row class = "text-center">
+        <v-col cols="12" class="mt-n4">
+          <v-btn @click="showFolder()" v-t="'show-in-folder'"></v-btn>
+        </v-col>
+      </v-row>
+    </v-form>
     <v-card v-for="task in tasks" :key="task.id" class="task-card">
       <div class="d-flex flex-row align-stretch">
         <div class="d-flex flex-row align-center" style="width: 35%">
@@ -179,16 +187,6 @@ function showOutput(task: Task) {
                 v-t="'show-output'"
                 class="hover-scale"
               ></v-btn>
-              <v-btn
-                variant="flat"
-                color="accent"
-                prepend-icon="mdi-folder-open-outline"
-                @click="showInFolder(task.output)"
-                v-t="'show-in-folder'"
-                class="hover-scale"
-              ></v-btn>
-            </div>
-            <div class="d-flex justify-center mt-4">
               <v-btn
                 variant="flat"
                 color="accent"
