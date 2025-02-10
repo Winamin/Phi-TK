@@ -176,7 +176,7 @@ window.goto = (name: string) => {
 
 .blur-background {
   backdrop-filter: blur(50px) saturate(180%);
-  background: linear-gradient(45deg, rgba(168, 98, 153, 0.603), rgba(101, 66, 182, 0.8)) !important;
+  background: linear-gradient(45deg, rgba(168, 98, 153, 0.403), rgba(101, 66, 182, 0.6)) !important;
   transform: translateZ(0);
   position: relative;
   z-index: 1;
@@ -215,5 +215,14 @@ window.goto = (name: string) => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+html {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar {
+  display: none;
 }
 </style>
