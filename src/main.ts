@@ -8,7 +8,7 @@ import { changeLocale } from './common';
 
 import App from './App.vue';
 import router from './router';
-import { BrowserWindow, app } from 'electron';
+
 import { createVuetify } from 'vuetify';
 import * as components from 'vuetify/components';
 import * as directives from 'vuetify/directives';
@@ -89,16 +89,6 @@ const vuetify = createVuetify({
     },
   },
 });
-
-const win = new BrowserWindow({
-  width: 1200,
-  height: 800,
-  transparent: true,
-  frame: false,
-  webPreferences: {
-    backgroundThrottling: false // 防止背景节流
-  }
-})
 
 const app = createApp(App);
 app.use(i18n).use(router).use(vuetify);
