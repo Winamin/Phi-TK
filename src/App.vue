@@ -69,7 +69,7 @@ window.goto = (name: string) => {
       rail 
       permanent
       :elevation="8"
-      class="nav-drawer-border blur-background"
+      class="blur-background"
     >
       <v-list density="compact" nav class="py-4">
         <v-list-item
@@ -119,10 +119,6 @@ window.goto = (name: string) => {
 
 .app-bar-shadow {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
-}
-
-.nav-drawer-border {
-  border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 .list-item-hover {
@@ -175,8 +171,9 @@ window.goto = (name: string) => {
 }
 
 .blur-background {
-  backdrop-filter: blur(50px);
+  backdrop-filter: blur(50px); saturate(180%);
   background: linear-gradient(45deg, rgba(168, 98, 153, 0.603), rgba(101, 66, 182, 0.8)) !important;
+  opacity: 0.87;
 }
 
 /* 新增的过渡动画样式 */
