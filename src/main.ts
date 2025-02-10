@@ -8,7 +8,7 @@ import { changeLocale } from './common';
 
 import App from './App.vue';
 import router from './router';
-
+import { BrowserWindow, app } from 'electron';
 import { createVuetify } from 'vuetify';
 import * as components from 'vuetify/components';
 import * as directives from 'vuetify/directives';
