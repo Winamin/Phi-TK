@@ -499,6 +499,7 @@ async function replacePreset() {
 </script>
 
 <template>
+  <div class="mt-2 blur-section">
   <v-form ref="form" style="max-height: 48vh; overflow-x: hidden; overflow-y: scroll">
     <v-row no-gutters class="mx-n2 align-center">
       <v-col cols="8">
@@ -669,7 +670,7 @@ async function replacePreset() {
 <style scoped>
 .blur-section {
   backdrop-filter: blur(8px);
-  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-color: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
   border-radius: 8px;
   padding: 12px;
   margin: 8px 0;
