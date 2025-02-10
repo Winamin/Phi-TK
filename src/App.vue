@@ -176,14 +176,13 @@ window.goto = (name: string) => {
 
 .blur-background {
   backdrop-filter: blur(50px);
-  background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
-  opacity: 1.0;
+  background: linear-gradient(45deg, rgba(168, 98, 153, 0.603), rgba(101, 66, 182, 0.8)) !important;
 }
 
 /* 新增的过渡动画样式 */
 .fade-blur-enter-active,
 .fade-blur-leave-active {
-  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: absolute;
   width: 100%;
 }
