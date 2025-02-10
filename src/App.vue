@@ -173,8 +173,8 @@ window.goto = (name: string) => {
 }
 
 .blur-background {
-  backdrop-filter: blur(60px);
+  backdrop-filter: blur(180px);
   background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
-  opacity: 0.6;
+  opacity: 1;
 }
 </style>
