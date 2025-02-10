@@ -395,7 +395,7 @@ function tryParseAspect(): number | undefined {
 .elevated-stepper {
   border-radius: 16px !important;
   box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1) !important;
-  background: rgba(255,255,255,0.8) !important;
+  background: rgba(23, 9, 99, 0.8) !important;
   backdrop-filter: blur(8px);
 }
 
