@@ -110,6 +110,14 @@ async function showInFolder(path: string) {
   }
 }
 
+async function showFolder() {
+  try {
+    await invoke('show_folder');
+  } catch (e) {
+    toastError(e);
+  }
+}
+  
 function showOutput(task: Task) {
   if (task.status.type === 'done') {
     outputDialogMessage.value = task.status.output;
