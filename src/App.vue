@@ -1,5 +1,4 @@
 <i18n>
-<i18n>
 en:
   render: Render
   rpe: RPE
