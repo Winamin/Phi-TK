@@ -188,6 +188,16 @@ function showOutput(task: Task) {
                 class="hover-scale"
               ></v-btn>
             </div>
+            <div class="d-flex justify-center mt-4">
+              <v-btn
+                variant="flat"
+                color="accent"
+                prepend-icon="mdi-folder-open-outline"
+                @click="showInFolder(task.output)"
+                v-t="'show-in-folder'"
+                class="hover-scale"
+              ></v-btn>
+            </div>
           </div>
         </div>
       </div>
