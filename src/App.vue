@@ -10,15 +10,12 @@ zh-CN:
   rpe: RPE
   tasks: 任务列表
   about: 关于
-
 </i18n>
 
 <script lang="ts">
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-
 import { useI18n } from 'vue-i18n';
-
 import { VSonner } from 'vuetify-sonner';
 
 const onLoaded = ref<() => void>();
@@ -90,21 +87,26 @@ window.goto = (name: string) => {
 
     <v-main class="d-flex justify-center animated-background">
       <router-view v-slot="{ Component }">
-        <Suspense timeout="0">
-          <template #default>
-            <component :is="Component" ref="component" />
-          </template>
-          <template #fallback>
-            <div class="flex justify-center pa-8">
-              <v-progress-circular 
-                indeterminate 
-                size="large"
-                color="accent"
-                class="glow-spinner"
-              />
-            </div>
-          </template>
-        </Suspense>
+        <transition
+          name="fade-blur"
+          mode="out-in"
+        >
+          <Suspense timeout="0">
+            <template #default>
+              <component :is="Component" ref="component" />
+            </template>
+            <template #fallback>
+              <div class="loading-overlay">
+                <v-progress-circular 
+                  indeterminate 
+                  size="64"
+                  color="accent"
+                  class="glow-spinner"
+                />
+              </div>
+            </template>
+          </Suspense>
+        </transition>
       </router-view>
     </v-main>
   </v-app>
@@ -176,5 +178,40 @@ window.goto = (name: string) => {
   backdrop-filter: blur(50px);
   background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
   opacity: 1.0;
+}
+
+/* 新增的过渡动画样式 */
+.fade-blur-enter-active,
+.fade-blur-leave-active {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  position: absolute;
+  width: 100%;
+}
+
+.fade-blur-enter-from {
+  opacity: 0;
+  filter: blur(10px);
+  transform: translateY(-20px);
+}
+
+.fade-blur-leave-to {
+  opacity: 0;
+  filter: blur(10px);
+  transform: translateY(20px);
+}
+
+/* 新增的加载遮罩层样式 */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  backdrop-filter: blur(20px);
+  background: rgba(16, 16, 36, 0.8);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>
