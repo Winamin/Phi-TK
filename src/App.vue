@@ -63,9 +63,14 @@ window.goto = (name: string) => {
       title="Phi TK" 
       :elevation="4"
       class="app-bar-shadow blur-background"
+    ></v-app-bar>
+    <v-navigation-drawer 
+      expand-on-hover 
+      rail 
+      permanent
+      :elevation="8"
+      class="nav-drawer-border blur-background"
     >
-      
-    </v-app-bar>
       <v-list density="compact" nav class="py-4">
         <v-list-item
           v-for="key in ['render', 'rpe', 'tasks', 'about']"
@@ -78,7 +83,7 @@ window.goto = (name: string) => {
           active-class="active-item"
         ></v-list-item>
       </v-list>
-    </v-blur-background>
+    </v-navigation-drawer>
 
     <v-main class="d-flex justify-center animated-background">
       <router-view v-slot="{ Component }">
@@ -114,6 +119,10 @@ window.goto = (name: string) => {
 
 .app-bar-shadow {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+.nav-drawer-border {
+  border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 .list-item-hover {
@@ -156,7 +165,7 @@ window.goto = (name: string) => {
     transparent 75%,
     transparent
   );
-  animation: animateFlow 40s linear infinite;
+  animation: animateFlow 2s linear infinite;
   opacity: 0.1;
 }
 
@@ -166,7 +175,7 @@ window.goto = (name: string) => {
 }
 
 .blur-background {
-  backdrop-filter: blur(50px); saturate(180%);
+  backdrop-filter: blur(50px) saturate(180%);
   background: linear-gradient(45deg, rgba(168, 98, 153, 0.603), rgba(101, 66, 182, 0.8)) !important;
   opacity: 0.87;
 }
