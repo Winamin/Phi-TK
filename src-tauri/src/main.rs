@@ -101,6 +101,7 @@ async fn main() -> Result<()> {
         .invoke_handler(tauri::generate_handler![
             is_the_only_instance,
             exit_program,
+            show_folder,
             show_in_folder,
             preview_chart,
             parse_chart,
@@ -222,6 +223,12 @@ fn is_the_only_instance() -> bool {
 #[tauri::command]
 fn exit_program() {
     std::process::exit(0);
+}
+
+#[tauri::command]
+fn show_folder() -> Result<(), InvokeError> {
+    let dir = output_dir().unwrap();
+    show_in_folder(&dir)
 }
 
 #[tauri::command]
