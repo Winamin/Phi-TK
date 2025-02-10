@@ -1,4 +1,5 @@
 <i18n>
+<i18n>
 en:
   render: Render
   rpe: RPE
@@ -84,7 +85,6 @@ window.goto = (name: string) => {
           @click="router.push({ name: key })"
           class="list-item-hover"
           active-class="active-item"
-          :size="8"
         ></v-list-item>
       </v-list>
     </v-navigation-drawer>
@@ -174,8 +174,8 @@ window.goto = (name: string) => {
 }
 
 .blur-background {
-  backdrop-filter: blur(30px);
+  backdrop-filter: blur(60px);
   background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
-  opacity: 0.9;
+  opacity: 0.6;
 }
 </style>
