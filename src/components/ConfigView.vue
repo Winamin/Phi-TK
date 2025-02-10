@@ -505,19 +505,19 @@ async function replacePreset() {
         <v-combobox @update:model-value="(val) => applyConfig(val.config)" class="mx-2" :label="t('presets')" :items="presets" item-title="name" v-model="preset"></v-combobox>
       </v-col>
       <v-col cols="1" class="mt-n4">
-        <v-btn class="px-2" v-t="'preset-refresh'" @click="updatePresets"></v-btn>
+        <v-btn class="px-2 pink lighten-1 rounded-pill" v-t="'preset-refresh'" @click="updatePresets"></v-btn>
       </v-col>
       <v-col cols="1" class="mt-n4">
-        <v-btn class="px-2" v-t="'preset-create'" @click="createPreset"></v-btn>
+        <v-btn class="px-2 pink lighten-1 rounded-pill" v-t="'preset-create'" @click="createPreset"></v-btn>
       </v-col>
       <v-col cols="1" class="mt-n4">
-        <v-btn class="px-2" v-t="'preset-delete'" :disabled="preset.key === 'default'" @click="deletePreset"></v-btn>
+        <v-btn class="px-2 pink lighten-1 rounded-pill" v-t="'preset-delete'" :disabled="preset.key === 'default'" @click="deletePreset"></v-btn>
       </v-col>
       <v-col cols="1" class="mt-n4">
-        <v-btn class="px-2" v-t="'preset-replace'" :disabled="preset.key === 'default'" @click="replacePreset"></v-btn>
+        <v-btn class="px-2 pink lighten-1 rounded-pill" v-t="'preset-replace'" :disabled="preset.key === 'default'" @click="replacePreset"></v-btn>
       </v-col>
     </v-row>
-
+    
     <div>
       <StickyLabel :title="t('title.output')"></StickyLabel>
       <v-row no-gutters class="mx-n2">
