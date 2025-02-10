@@ -180,7 +180,7 @@ window.goto = (name: string) => {
 .blur-background {
   backdrop-filter: blur(20px) saturate(180%);
   background: rgba(16, 18, 27, 0.4) !important;
-  opacity: 1;
+  opacity: 0.7;
 }
 
 * {
