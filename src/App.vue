@@ -84,7 +84,7 @@ window.goto = (name: string) => {
           @click="router.push({ name: key })"
           class="list-item-hover"
           active-class="active-item"
-          :size="20"
+          :size="8"
         ></v-list-item>
       </v-list>
     </v-navigation-drawer>
@@ -173,10 +173,9 @@ window.goto = (name: string) => {
   100% { transform: translate(-25%, -25%) rotate(360deg); }
 }
 
-.background {
-  backdrop-filter: blur(45px);
-  background: linear-gradient(45deg, #0f0c29, #302b63), radial-gradient(circle at top left, #24243e, transparent);
-  opacity: 0.6;
+.blur-background {
+  backdrop-filter: blur(30px);
+  background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
+  opacity: 0.9;
 }
-  
 </style>
