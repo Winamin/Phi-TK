@@ -10,7 +10,7 @@ mod render;
 mod task;
 
 use anyhow::{bail, Context, Result};
-use common::{ensure_dir, respack_dir, CONFIG_DIR, DATA_DIR};
+use common::{ensure_dir, respack_dir, output_dir, CONFIG_DIR, DATA_DIR};
 use fs4::tokio::AsyncFileExt;
 use macroquad::prelude::set_pc_assets_folder;
 use prpr::{
