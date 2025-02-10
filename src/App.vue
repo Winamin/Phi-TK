@@ -10,15 +10,12 @@ zh-CN:
   rpe: RPE
   tasks: 任务列表
   about: 关于
-
 </i18n>
 
 <script lang="ts">
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-
 import { useI18n } from 'vue-i18n';
-
 import { VSonner } from 'vuetify-sonner';
 
 const onLoaded = ref<() => void>();
@@ -43,7 +40,6 @@ export default {};
 
 <script setup lang="ts">
 const { t } = useI18n();
-
 const route = useRoute(),
   router = useRouter();
 
@@ -111,8 +107,16 @@ window.goto = (name: string) => {
 </template>
 
 <style>
+* {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.v-application {
+  background: transparent !important;
+}
+
 .dark-theme {
-  //background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
   background: transparent !important;
 }
 
@@ -149,10 +153,6 @@ window.goto = (name: string) => {
   overflow: hidden;
 }
 
-.v-application__wrap {
-  background: transparent !important;
-}
-
 .animated-background::before {
   content: '';
   position: absolute;
@@ -178,14 +178,10 @@ window.goto = (name: string) => {
 }
 
 .blur-background {
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   backdrop-filter: blur(20px) saturate(180%);
-  background: rgba(16, 18, 27, 0.4) !important;
-  opacity: 0.7;
-}
-
-* {
-  background: transparent;
-  box-shadow: none !important;
+  background: rgba(16, 18, 27, 0.3) !important;
+  opacity: 0.9;
 }
 
 ::-webkit-scrollbar {
@@ -193,7 +189,7 @@ window.goto = (name: string) => {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 4px;
 }
 </style>
