@@ -112,7 +112,8 @@ window.goto = (name: string) => {
 
 <style>
 .dark-theme {
-  background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
+  //background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
+  background: transparent !important;
 }
 
 .app-bar-shadow {
@@ -148,6 +149,10 @@ window.goto = (name: string) => {
   overflow: hidden;
 }
 
+.v-application__wrap {
+  background: transparent !important;
+}
+
 .animated-background::before {
   content: '';
   position: absolute;
@@ -173,8 +178,22 @@ window.goto = (name: string) => {
 }
 
 .blur-background {
-  backdrop-filter: blur(20px);
-  background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
-  opacity: 0.6;
+  backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(16, 18, 27, 0.4) !important;
+  opacity: 1;
+}
+
+* {
+  background: transparent;
+  box-shadow: none !important;
+}
+
+::-webkit-scrollbar {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
 }
 </style>
