@@ -120,7 +120,6 @@ function showOutput(task: Task) {
 
 <template>
   <div class="pa-8 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1rem">
-    <v-btn variant="tonal" @click="showFolder()" v-t="'show-in-folder'"></v-btn>
     <h1 v-if="!tasks || !tasks.length" class="text-center font-italic text-disabled" v-t="'empty'"></h1>
     <v-form ref="form" style="max-height: 48vh;">
       <v-row class = "text-center">
