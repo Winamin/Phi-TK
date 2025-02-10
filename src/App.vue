@@ -63,14 +63,9 @@ window.goto = (name: string) => {
       title="Phi TK" 
       :elevation="4"
       class="app-bar-shadow blur-background"
-    ></v-app-bar>
-    <v-navigation-drawer 
-      expand-on-hover 
-      rail 
-      permanent
-      :elevation="8"
-      class="blur-background"
     >
+      
+    </v-app-bar>
       <v-list density="compact" nav class="py-4">
         <v-list-item
           v-for="key in ['render', 'rpe', 'tasks', 'about']"
