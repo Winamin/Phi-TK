@@ -167,14 +167,16 @@ window.goto = (name: string) => {
   opacity: 0.1;
 }
 
-@keyframes animateFlow {
-  0% { transform: translate(-25%, -25%) rotate(0deg); }
-  100% { transform: translate(-25%, -25%) rotate(360deg); }
+@keyframes gradientAnimation {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
-.blur-background {
-  backdrop-filter: blur(45px);
-  background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
-  opacity: 0.6;
+.background {
+  background: radial-gradient(circle at center, #0f0c29, #302b63, #24243e);
+  background-size: 200% 200%;
+  animation: gradientAnimation 5s ease infinite;
 }
+  
 </style>
