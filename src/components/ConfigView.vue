@@ -518,8 +518,8 @@ async function replacePreset() {
       </v-col>
     </v-row>
 
-    <div>
-      <StickyLabel :title="t('title.output blur-section')"></StickyLabel>
+    <div class="mt-2 blur-section">
+      <StickyLabel :title="t('title.output')"></StickyLabel>
       <v-row no-gutters class="mx-n2">
         <v-col cols="3">
           <v-combobox :label="t('resolution')" :items="RESOLUTIONS" class="mx-2" :rules="[resolutionRule]" v-model="resolution"></v-combobox>
@@ -549,8 +549,8 @@ async function replacePreset() {
         </v-col>
       </v-row>
     </div>
-    <div class="mt-2">
-      <StickyLabel :title="t('title.player blur-section')"></StickyLabel>
+    <div class="mt-2 blur-section">
+      <StickyLabel :title="t('title.player')"></StickyLabel>
       <v-row no-gutters class="mx-n2">
         <v-col cols="4">
           <v-text-field
@@ -580,8 +580,8 @@ async function replacePreset() {
       </v-row>
     </div>
 
-    <div class="mt-2">
-      <StickyLabel :title="t('title.graphics blur-section')"></StickyLabel>
+    <div class="mt-2 blur-section">
+      <StickyLabel :title="t('title.graphics')"></StickyLabel>
       <v-row no-gutters class="mx-n2 mt-4 align-center">
         <v-col cols="8">
           <v-combobox class="mx-2" :label="t('respack')" :items="respacks" item-title="name" v-model="respack"></v-combobox>
@@ -614,8 +614,8 @@ async function replacePreset() {
       </v-row>
     </div>
 
-    <div class="mt-2">
-      <StickyLabel :title="t('title.audio blur-section')"></StickyLabel>
+    <div class="mt-2 blur-section">
+      <StickyLabel :title="t('title.audio')"></StickyLabel>
       <v-row no-gutters class="mx-n2 mt-8 align-center px-6">
         <v-col cols="6">
           <v-slider :label="t('volume-music')" thumb-label="always" :min="0" :max="2" :step="0.05" v-model="volumeMusic"> </v-slider>
