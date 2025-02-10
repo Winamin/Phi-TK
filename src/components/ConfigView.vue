@@ -83,7 +83,7 @@ zh-CN:
     output: 输出
     player: 玩家
     graphics: 图像
-    audio: 音频 & 调试
+    audio: 音频
 
   resolution: 分辨率
   ffmpeg-preset: 预设
@@ -499,7 +499,6 @@ async function replacePreset() {
 </script>
 
 <template>
-  <div class="mt-2 blur-section">
   <v-form ref="form" style="max-height: 48vh; overflow-x: hidden; overflow-y: scroll">
     <v-row no-gutters class="mx-n2 align-center">
       <v-col cols="8">
@@ -519,7 +518,7 @@ async function replacePreset() {
       </v-col>
     </v-row>
 
-    <div class="mt-2 blur-section">
+    <div>
       <StickyLabel :title="t('title.output')"></StickyLabel>
       <v-row no-gutters class="mx-n2">
         <v-col cols="3">
@@ -550,7 +549,7 @@ async function replacePreset() {
         </v-col>
       </v-row>
     </div>
-    <div class="mt-2 blur-section">
+    <div class="mt-2">
       <StickyLabel :title="t('title.player')"></StickyLabel>
       <v-row no-gutters class="mx-n2">
         <v-col cols="4">
@@ -565,7 +564,7 @@ async function replacePreset() {
             :model-value="playerAvatar ? playerAvatar.split('\\').pop()!.split('/').pop() : ''"></v-text-field>
         </v-col>
         <v-col cols="8">
-          <v-text-field class="mx-2" :label="t('player-name blur-section')" v-model="playerName"></v-text-field>
+          <v-text-field class="mx-2" :label="t('player-name')" v-model="playerName"></v-text-field>
         </v-col>
       </v-row>
       <v-row no-gutters class="mx-n2 mt-1">
@@ -581,7 +580,7 @@ async function replacePreset() {
       </v-row>
     </div>
 
-    <div class="mt-2 blur-section">
+    <div class="mt-2">
       <StickyLabel :title="t('title.graphics')"></StickyLabel>
       <v-row no-gutters class="mx-n2 mt-4 align-center">
         <v-col cols="8">
@@ -615,7 +614,7 @@ async function replacePreset() {
       </v-row>
     </div>
 
-    <div class="mt-2 blur-section">
+    <div class="mt-2">
       <StickyLabel :title="t('title.audio')"></StickyLabel>
       <v-row no-gutters class="mx-n2 mt-8 align-center px-6">
         <v-col cols="6">
@@ -666,13 +665,3 @@ async function replacePreset() {
     </div>
   </v-form>
 </template>
-
-<style scoped>
-.blur-section {
-  backdrop-filter: blur(8px);
-  backdrop-color: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
-  border-radius: 8px;
-  padding: 12px;
-  margin: 8px 0;
-}
-</style>
