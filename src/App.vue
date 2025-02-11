@@ -21,6 +21,14 @@ import { VSonner } from 'vuetify-sonner';
 const onLoaded = ref<() => void>();
 const component = ref();
 
+window.addEventListener('scroll', () => {
+  const scrollY = window.scrollY;
+  const appBar = document.querySelector('.app-bar-shadow');
+  if (appBar) {
+    appBar.style.backgroundColor = `rgba(16, 16, 36, ${Math.min(scrollY / 200, 0.8)})`;
+  }
+});
+  
 watch(component, (comp) => {
   if (comp && onLoaded.value) onLoaded.value();
 });
@@ -134,6 +142,8 @@ window.goto = (name: string) => {
 .list-item-hover:hover {
   background: rgba(255, 255, 255, 0.05) !important;
   transform: translateX(8px);
+  box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+  color: #2196F3;
 }
 
 .active-item {
@@ -165,13 +175,37 @@ window.goto = (name: string) => {
     transparent 75%,
     transparent
   );
-  animation: animateFlow 0.8s linear infinite;
+  animation: animateFlow 10s linear infinite;
   opacity: 0.1;
 }
 
+.animated-background::after {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.01) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.01) 50%,
+    rgba(255, 255, 255, 0.01) 75%,
+    transparent 75%,
+    transparent
+  );
+  animation: animateFlowReverse 15s linear infinite;
+  opacity: 0.1;
+}
+  
 @keyframes animateFlow {
   0% { transform: translate(-25%, -25%) rotate(0deg); }
   100% { transform: translate(-25%, -25%) rotate(360deg); }
+}
+
+@keyframes animateFlowReverse {
+  0% { transform: translate(-25%, -25%) rotate(360deg); }
+  100% { transform: translate(-25%, -25%) rotate(0deg); }
 }
 
 .blur-background {
@@ -182,10 +216,10 @@ window.goto = (name: string) => {
   z-index: 1;
 }
   
-/* 新增的过渡动画样式 */
+
 .fade-blur-enter-active,
 .fade-blur-leave-active {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   position: absolute;
   width: 100%;
 }
@@ -193,13 +227,13 @@ window.goto = (name: string) => {
 .fade-blur-enter-from {
   opacity: 0;
   filter: blur(10px);
-  transform: translateY(-20px);
+  transform: translateY(-20px) scale(0.9);
 }
 
 .fade-blur-leave-to {
   opacity: 0;
   filter: blur(10px);
-  transform: translateY(20px);
+  transform: translateY(20px) scale(1.1);
 }
 
 /* 新增的加载遮罩层样式 */
@@ -224,5 +258,23 @@ html {
 
 html::-webkit-scrollbar {
   display: none;
+}
+
+.app-bar-shadow {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+  transition: box-shadow 0.3s ease;
+}
+
+.app-bar-shadow:hover {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5) !important;
+}
+
+.nav-drawer-border {
+  border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+  transition: border-color 0.3s ease;
+}
+
+.nav-drawer-border:hover {
+  border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
 }
 </style>
