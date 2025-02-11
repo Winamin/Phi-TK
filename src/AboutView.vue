@@ -61,36 +61,19 @@ onMounted(() => {
 <style scoped>
 .about-container {
   padding: 2rem;
-  min-width: 600px;
-  min-height: 300px;
+  width: 100%;
+  height: 100%;
   max-width: 1280px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1.5rem;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  animation: fadeIn 0.5s cubic-bezier(0, 0, 0, 1) forwards;
-  opacity: 0;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    scale: 0.8;
-    transform: translateY(0px);
-  }
-  to {
-    opacity: 1;
-    scale: 1;
-    transform: translateY(0px);
-  }
 }
 
 .app-title {
   font-size: 3rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.05em;
 }
 
 .version-label {
@@ -100,11 +83,10 @@ onMounted(() => {
 }
 
 .github-btn {
-  background: rgba(147, 147, 147, 0.2);
-  padding: 0px 24px;
+  padding: 12px 24px;
   font-weight: 600;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 4px 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .license-text {
