@@ -272,21 +272,31 @@ function showOutput(task: Task) {
   transition: transform 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
   border: 1px solid rgba(255, 255, 255, 0.1);
   transform-style: preserve-3d;
+  animation: rotate360 5s linear infinite; /* byd */
+  animation-play-state: paused; /* byd */
 }
 
+/*
 .task-card:hover {
   transform: rotateY(15deg) translateZ(30px) scale(1.02);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
 }
-
+*/
+  
 .task-card-container {
   perspective: 1000px;
   transform-style: preserve-3d;
 }
   
+.task-card:hover {
+  animation-play-state: running;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+  
 .task-card:hover .task-cover {
   transform: rotateY(15deg) translateZ(30px);
 }
+
 
 @keyframes rotate360 {
   from {
