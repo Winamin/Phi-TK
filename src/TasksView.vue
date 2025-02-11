@@ -276,7 +276,7 @@ function showOutput(task: Task) {
 }
 
 .task-card:hover .task-cover {
-  transform: rotateY(15deg) translateZ(30px);
+  transform: rotateY(360deg) translateZ(5px);
 }
 
 .v-btn {
