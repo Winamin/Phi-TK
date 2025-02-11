@@ -146,7 +146,8 @@ function showOutput(task: Task) {
         </v-row>
       </v-form>
     </v-slide-y-transition>
-    <v-card v-for="task in tasks" :key="task.id" class="task-card">
+   <div class="task-card-container" v-for="task in tasks" :key="task.id">
+    <v-card class="task-card">
       <div class="d-flex flex-row align-stretch">
         <div class="d-flex flex-row align-center" style="width: 35%">
           <div
@@ -262,19 +263,25 @@ function showOutput(task: Task) {
 }
 
 .task-card {
+  transform: translateZ(0);
   border-radius: 16px !important;
   background: rgba(255, 255, 255, 0.03) !important;
   backdrop-filter: blur(8px);
-  transition: transform 0.6s ease, box-shadow 0.3s ease, filter 0.3s ease;
+  transition: transform 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
   border: 1px solid rgba(255, 255, 255, 0.1);
   transform-style: preserve-3d;
 }
 
 .task-card:hover {
-  transform: rotateY(15deg) translateZ(30px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3) !important;
+  transform: rotateY(15deg) translateZ(30px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
 }
 
+.task-card-container {
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+  
 .task-card:hover .task-cover {
   transform: rotateY(15deg) translateZ(30px);
 }
