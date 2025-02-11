@@ -165,7 +165,7 @@ window.goto = (name: string) => {
     transparent 75%,
     transparent
   );
-  animation: animateFlow 2s linear infinite;
+  animation: animateFlow 0.8s linear infinite;
   opacity: 0.1;
 }
 
