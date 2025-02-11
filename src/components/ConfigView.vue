@@ -345,7 +345,7 @@ function onEnter() {
 defineExpose({ buildConfig, onEnter });
 
 function StickyLabel(props: { title: string }) {
-  return h('div', { class: 'mb-4 bg-surface', style: 'position: sticky; top: 0; z-index: 2' }, [h('h3', { class: 'pa-1' }, props.title), h(VDivider)]);
+  return h('div', { class: 'mb-4 bg-surface sticky-label', style: 'position: sticky; top: 0; z-index: 2' }, [h('h3', { class: 'pa-1' }, props.title), h(VDivider)]);
 }
 
 function applyConfig(config: RenderConfig) {
@@ -519,7 +519,7 @@ async function replacePreset() {
     </v-row>
     
     <div>
-      <StickyLabel :title="t('title.output')" class="sticky-label"></StickyLabel>
+      <StickyLabel :title="t('title.output')"></StickyLabel>
       <v-row no-gutters class="mx-n2">
         <v-col cols="3">
           <v-combobox :label="t('resolution')" :items="RESOLUTIONS" class="mx-2" :rules="[resolutionRule]" v-model="resolution"></v-combobox>
@@ -550,7 +550,7 @@ async function replacePreset() {
       </v-row>
     </div>
     <div class="mt-2">
-      <StickyLabel :title="t('title.player')" class="sticky-label"></StickyLabel>
+      <StickyLabel :title="t('title.player')"></StickyLabel>
       <v-row no-gutters class="mx-n2">
         <v-col cols="4">
           <v-text-field
@@ -581,7 +581,7 @@ async function replacePreset() {
     </div>
 
     <div class="mt-2">
-      <StickyLabel :title="t('title.graphics')" class="sticky-label"></StickyLabel>
+      <StickyLabel :title="t('title.graphics')"></StickyLabel>
       <v-row no-gutters class="mx-n2 mt-4 align-center">
         <v-col cols="8">
           <v-combobox class="mx-2" :label="t('respack')" :items="respacks" item-title="name" v-model="respack"></v-combobox>
@@ -615,7 +615,7 @@ async function replacePreset() {
     </div>
 
     <div class="mt-2">
-      <StickyLabel :title="t('title.audio')" class="sticky-label"></StickyLabel>
+      <StickyLabel :title="t('title.audio')"></StickyLabel>
       <v-row no-gutters class="mx-n2 mt-8 align-center px-6">
         <v-col cols="6">
           <v-slider :label="t('volume-music')" thumb-label="always" :min="0" :max="2" :step="0.05" v-model="volumeMusic"> </v-slider>
