@@ -157,7 +157,7 @@ function showOutput(task: Task) {
         </div>
         <div class="d-flex flex-column w-100">
           <v-card-title>{{ task.name }}</v-card-title>
-          <v-card-subtitle class="mt-n2{{ task.path }}</v-card-subtitle>
+          <v-card-subtitle class="mt-n2">{{ task.path }}</v-card-subtitle>
           <div class="w-100 pa-4 pb-2 pr-2 mt-2">
             <p class="mb-2 text-medium-emphasis">{{ describeStatus(task.status) }}</p>
             <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
