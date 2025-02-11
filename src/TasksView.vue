@@ -218,6 +218,7 @@ function showOutput(task: Task) {
         </div>
       </div>
     </v-card>
+  </div>
 
     <v-dialog v-model="errorDialog" width="auto" min-width="400px">
       <v-card class="glass-background">
