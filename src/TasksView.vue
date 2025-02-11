@@ -262,6 +262,17 @@ function showOutput(task: Task) {
 .task-card-container {
   perspective: 1000px;
   transform-style: preserve-3d;
+  padding: 10px;
+}
+
+.task-card-container::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  right: -10px;
+  bottom: -10px;
+  pointer-events: none;
 }
 
 .task-card {
@@ -270,7 +281,7 @@ function showOutput(task: Task) {
   background: rgba(255, 255, 255, 0.03) !important;
   backdrop-filter: blur(8px);
   transition: 
-    transform 0.68s ease,
+    transform 1.5s ease,
     box-shadow 0.3s ease;
   border: 1px solid rgba(255, 255, 255, 0.1);
   transform-style: preserve-3d;
@@ -299,7 +310,7 @@ function showOutput(task: Task) {
 }
 
 .task-card:not(:hover) {
-  transition-duration: 0.37s;
+  transition-duration: 0.5s;
 }
 
 @keyframes rotate360 {
