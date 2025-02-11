@@ -125,56 +125,6 @@ function showOutput(task: Task) {
     outputDialog.value = true;
   }
 }
-
-export default {
-  components: {
-    VueParticles
-  },
-  data() {
-    return {
-      showContent: false,
-      showParticles: true,
-      errorDialog: false,
-      outputDialog: false,
-      errorDialogMessage: '',
-      outputDialogMessage: '',
-      tasks: [] // Your tasks data
-    }
-  },
-  mounted() {
-    setTimeout(() => {
-      this.showContent = true
-    }, 500)
-  },
-  methods: {
-    onCardIntersect(entries) {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.style.transform = 'translateZ(0)'
-          entry.target.style.opacity = '1'
-        }
-      })
-    },
-    showFolder() {
-      // Your implementation
-    },
-    convertFileSrc(src) {
-      // Your implementation
-    },
-    describeStatus(status) {
-      // Your implementation
-    },
-    invoke(action, params) {
-      // Your implementation
-    },
-    showOutput(task) {
-      // Your implementation
-    },
-    showInFolder(output) {
-      // Your implementation
-    }
-  }
-}
 </script>
 
 <template>
