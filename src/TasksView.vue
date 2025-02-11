@@ -137,14 +137,14 @@ function handleMouseMove(e: MouseEvent, index: number) {
   const centerX = rect.width / 2;
   const centerY = rect.height / 2;
   
-  const rotateY = (x - centerX) / 25;
-  const rotateX = (centerY - y) / 25;
+  const rotateY = ((x - centerX) / centerX) * 180;
+  const rotateX = ((centerY - y) / centerY) * 180;
   
   card.style.transform = `
     perspective(1000px)
     rotateX(${rotateX}deg)
     rotateY(${rotateY}deg)
-    translateZ(10px)
+    translateZ(20px)
   `;
   
   const shadowX = (centerX - x) / 10;
@@ -199,7 +199,7 @@ function handleMouseLeave(index: number) {
     :ref="el => cardRefs[index] = el as HTMLElement"
     @mousemove="handleMouseMove($event, index)"
     @mouseleave="handleMouseLeave(index)"
-    >
+  >
       <div class="d-flex flex-row align-stretch">
         <div class="d-flex flex-row align-center" style="width: 35%">
           <div
@@ -319,6 +319,7 @@ function handleMouseLeave(index: number) {
   transform-style: preserve-3d;
   position: relative;
   overflow: visible !important;
+  transform-origin: center center;
 }
 
 .task-card::before {
