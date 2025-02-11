@@ -61,8 +61,8 @@ onMounted(() => {
 <style scoped>
 .about-container {
   padding: 2rem;
-  width: 100%;
-  height: 100%;
+  width: 600px;
+  height: 300px;
   max-width: 1280px;
   display: flex;
   flex-direction: column;
