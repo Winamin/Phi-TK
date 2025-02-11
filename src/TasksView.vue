@@ -265,15 +265,15 @@ function showOutput(task: Task) {
 }
 
 .task-card {
-  transform: translateZ(0);
+  transform: rotateY(0.01deg);
   border-radius: 16px !important;
   background: rgba(255, 255, 255, 0.03) !important;
   backdrop-filter: blur(8px);
-  transition: transform 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: 
+    transform 0.68s ease,
+    box-shadow 0.3s ease;
   border: 1px solid rgba(255, 255, 255, 0.1);
   transform-style: preserve-3d;
-  animation: rotate360 5s linear infinite; /* byd */
-  animation-play-state: paused; /* byd */
 }
 
 /*
@@ -289,7 +289,8 @@ function showOutput(task: Task) {
 }
   
 .task-card:hover {
-  animation-play-state: running;
+  transform: rotateY(360deg);
+  transition-duration: 0.2s;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
 }
   
@@ -297,6 +298,9 @@ function showOutput(task: Task) {
   transform: rotateY(15deg) translateZ(30px);
 }
 
+.task-card:not(:hover) {
+  transition-duration: 0.37s;
+}
 
 @keyframes rotate360 {
   from {
