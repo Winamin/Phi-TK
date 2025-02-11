@@ -296,11 +296,6 @@ function showOutput(task: Task) {
     transform: rotateY(360deg);
   }
 }
-
-.task-card:hover {
-  animation: rotate360 1s linear infinite;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-}
   
 .v-btn {
   background: linear-gradient(45deg, #2196F3, #E91E63);
