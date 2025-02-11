@@ -271,6 +271,53 @@ function showOutput(task: Task) {
   </v-fade-transition>
 </template>
 
+<script setup>
+import { reactive } from 'vue';
+
+const particlesOptions = reactive({
+  background: {
+    color: {
+      value: '#000000',
+    },
+  },
+  particles: {
+    number: {
+      value: 80,
+      density: {
+        enable: true,
+        area: 800,
+      },
+    },
+    color: {
+      value: '#ffffff',
+    },
+    shape: {
+      type: 'circle',
+    },
+    opacity: {
+      value: 0.5,
+    },
+    size: {
+      value: 5,
+    },
+    links: {
+      enable: true,
+      color: '#ffffff',
+      distance: 150,
+      opacity: 0.5,
+      width: 1,
+    },
+    move: {
+      enable: true,
+      speed: 1,
+      direction: 'none',
+      outMode: 'bounce',
+    },
+  },
+  detectRetina: true,
+});
+</script>
+
 <style scoped>
 @keyframes floating {
   0%, 100% { transform: translateY(0) rotate(-2deg); }
