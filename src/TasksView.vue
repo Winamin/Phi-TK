@@ -175,31 +175,14 @@ function handleMouseLeave(index: number) {
 <template>
   <div class="pa-8 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1rem">
     <h1 v-if="!tasks || !tasks.length" class="text-center font-italic text-disabled" v-t="'empty'"></h1>
-    <v-slide-y-transition>
-    <v-form 
-      ref="form" 
-      style="max-height: 48vh;"
-      class="animated-form"
-    >
-      <v-row class="text-center">
-        <v-col cols="12" class="mt-n4">
-          <v-btn 
-            @click="showFolder()" 
-            v-t="'show-in-folder'"
-            class="hover-scale"
-          ></v-btn>
-        </v-col>
-      </v-row>
-    </v-form>
-  </v-slide-y-transition>
     <v-card 
-    v-for="(task, index) in tasks" 
-    :key="task.id" 
-    class="task-card"
-    :ref="el => cardRefs[index] = el as HTMLElement"
-    @mousemove="handleMouseMove($event, index)"
-    @mouseleave="handleMouseLeave(index)"
-  >
+      v-for="(task, index) in tasks" 
+      :key="task.id" 
+      class="task-card"
+      :ref="el => cardRefs[index] = el as HTMLElement"
+      @mousemove="handleMouseMove($event, index)"
+      @mouseleave="handleMouseLeave(index)"
+    >
       <div class="d-flex flex-row align-stretch">
         <div class="d-flex flex-row align-center" style="width: 35%">
           <div
@@ -271,6 +254,7 @@ function handleMouseLeave(index: number) {
       </div>
     </v-card>
 
+
     <v-dialog v-model="errorDialog" width="auto" min-width="400px">
       <v-card class="glass-background">
         <v-card-title class="text-gradient" v-t="'error'"></v-card-title>
@@ -314,7 +298,7 @@ function handleMouseLeave(index: number) {
   border-radius: 16px !important;
   background: rgba(255, 255, 255, 0.03) !important;
   backdrop-filter: blur(8px);
-  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.4s ease;
   border: 1px solid rgba(255, 255, 255, 0.1);
   transform-style: preserve-3d;
   position: relative;
@@ -340,7 +324,7 @@ function handleMouseLeave(index: number) {
 .task-card:hover::before {
   opacity: 0.6;
 }
-
+  
 .task-cover {
   border-radius: 16px 0 0 16px;
   transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
