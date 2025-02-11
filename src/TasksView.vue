@@ -47,12 +47,10 @@ zh-CN:
 
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue';
-
 import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
 import type { Task, TaskStatus } from './model';
-
 import { invoke } from '@tauri-apps/api';
 import { convertFileSrc } from '@tauri-apps/api/tauri';
 
@@ -63,7 +61,6 @@ const tasks = ref<Task[]>();
 
 async function updateList() {
   tasks.value = await invoke<Task[]>('get_tasks');
-  console.log(tasks.value[0]);
 }
 
 await updateList();
@@ -96,35 +93,6 @@ function describeStatus(status: TaskStatus): string {
   }
 }
 
-const errorDialog = ref(false),
-  errorDialogMessage = ref('');
-
-const outputDialog = ref(false),
-  outputDialogMessage = ref('');
-
-async function showInFolder(path: string) {
-  try {
-    await invoke('show_in_folder', { path });
-  } catch (e) {
-    toastError(e);
-  }
-}
-
-async function showFolder() {
-  try {
-    await invoke('show_folder');
-  } catch (e) {
-    toastError(e);
-  }
-}
-  
-function showOutput(task: Task) {
-  if (task.status.type === 'done') {
-    outputDialogMessage.value = task.status.output;
-    outputDialog.value = true;
-  }
-}
-
 const cardRefs = ref<HTMLElement[]>([]);
 
 function handleMouseMove(e: MouseEvent, index: number) {
@@ -137,14 +105,14 @@ function handleMouseMove(e: MouseEvent, index: number) {
   const centerX = rect.width / 2;
   const centerY = rect.height / 2;
   
-  const rotateY = ((x - centerX) / centerX) * 180;
-  const rotateX = ((centerY - y) / centerY) * 180;
+  const rotateY = (x - centerX) / 25;
+  const rotateX = (centerY - y) / 25;
   
   card.style.transform = `
     perspective(1000px)
     rotateX(${rotateX}deg)
     rotateY(${rotateY}deg)
-    translateZ(20px)
+    translateZ(10px)
   `;
   
   const shadowX = (centerX - x) / 10;
@@ -172,14 +140,33 @@ function handleMouseLeave(index: number) {
 }
 </script>
 
+
 <template>
+  <template>
   <div class="pa-8 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1rem">
     <h1 v-if="!tasks || !tasks.length" class="text-center font-italic text-disabled" v-t="'empty'"></h1>
+    <v-slide-y-transition>
+    <v-form 
+      ref="form" 
+      style="max-height: 48vh;"
+      class="animated-form"
+    >
+      <v-row class="text-center">
+        <v-col cols="12" class="mt-n4">
+          <v-btn 
+            @click="showFolder()" 
+            v-t="'show-in-folder'"
+            class="hover-scale"
+          ></v-btn>
+        </v-col>
+      </v-row>
+    </v-form>
+  </v-slide-y-transition>
     <v-card 
-      v-for="(task, index) in tasks" 
-      :key="task.id" 
-      class="task-card"
-      :ref="el => cardRefs[index] = el as HTMLElement"
+    v-for="(task, index) in tasks" 
+    :key="task.id" 
+    class="task-card"
+    :ref="el => cardRefs[index] = el as HTMLElement"
       @mousemove="handleMouseMove($event, index)"
       @mouseleave="handleMouseLeave(index)"
     >
@@ -253,171 +240,113 @@ function handleMouseLeave(index: number) {
         </div>
       </div>
     </v-card>
-
-
-    <v-dialog v-model="errorDialog" width="auto" min-width="400px">
-      <v-card class="glass-background">
-        <v-card-title class="text-gradient" v-t="'error'"></v-card-title>
-        <v-card-text>
-          <pre class="block whitespace-pre overflow-auto" style="max-height: 60vh">{{ errorDialogMessage }}</pre>
-        </v-card-text>
-        <v-card-actions class="justify-end">
-          <v-btn 
-            color="primary" 
-            variant="flat" 
-            @click="errorDialog = false" 
-            v-t="'confirm'"
-            class="hover-scale"
-          ></v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <v-dialog v-model="outputDialog" width="auto" min-width="400px">
-      <v-card class="glass-background">
-        <v-card-title class="text-gradient" v-t="'output'"></v-card-title>
-        <v-card-text>
-          <pre class="block whitespace-pre overflow-auto" style="max-height: 60vh">{{ outputDialogMessage }}</pre>
-        </v-card-text>
-        <v-card-actions class="justify-end">
-          <v-btn 
-            color="primary" 
-            variant="flat" 
-            @click="outputDialog = false" 
-            v-t="'confirm'"
-            class="hover-scale"
-          ></v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
   </div>
 </template>
 
 <style scoped>
 .task-card {
-  will-change: transform, box-shadow;
-  transition: 
-    transform 0.6s cubic-bezier(0.23, 1, 0.32, 1),
-    box-shadow 0.6s cubic-bezier(0.23, 1, 0.32, 1),
-    background 0.3s ease;
+  border-radius: 16px !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  backdrop-filter: blur(8px);
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transform-style: preserve-3d;
+  position: relative;
+  overflow: visible !important;
+}
+
+.task-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    45deg,
+    rgba(33, 150, 243, 0.1),
+    rgba(233, 30, 99, 0.1)
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.task-card:hover::before {
+  opacity: 0.6;
 }
 
 .task-cover {
-  transition: 
-    transform 0.6s cubic-bezier(0.23, 1, 0.32, 1),
-    filter 0.4s ease;
+  border-radius: 16px 0 0 16px;
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   transform-origin: left center;
-  filter: saturate(0.9) brightness(0.98);
 }
 
 .task-card:hover .task-cover {
-  filter: saturate(1.2) brightness(1.05);
-  transform: scale(1.08) translateZ(20px);
-}
-
-@keyframes enhanced-shimmer {
-  0% { transform: translateX(-150%) skewX(-20deg); }
-  100% { transform: translateX(250%) skewX(-20deg); }
-}
-
-.v-progress-linear::after {
-  animation: enhanced-shimmer 2s infinite;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.4) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
+  transform: scale(1.05) translateZ(10px);
 }
 
 .hover-scale {
-  transition:
-    transform 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55),
-    box-shadow 0.3s ease,
-    filter 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.3s ease,
+              filter 0.3s ease;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
 .hover-scale:hover {
-  transform: scale(1.08) translateZ(10px);
-  filter: 
-    drop-shadow(0 4px 12px rgba(33, 150, 243, 0.4))
-    brightness(1.1);
+  transform: scale(1.05) translateZ(5px);
+  filter: drop-shadow(0 4px 8px rgba(33, 150, 243, 0.3));
 }
 
-.glow-spinner {
-  filter: 
-    drop-shadow(0 0 12px rgba(33, 150, 243, 0.6))
-    contrast(1.2);
-  animation: spinner-pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes spinner-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-.dialog-enter-active,
-.dialog-leave-active {
-  transition: 
-    opacity 0.4s cubic-bezier(0.23, 1, 0.32, 1),
-    transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.dialog-enter-from,
-.dialog-leave-to {
-  opacity: 0;
-  transform: translateY(20px) scale(0.97);
+.glass-background {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px) saturate(180%);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transform: translateZ(20px);
 }
 
 .text-gradient {
-  position: relative;
-  background-clip: text;
+  background: linear-gradient(45deg, #2196F3, #E91E63);
   -webkit-background-clip: text;
+  background-clip: text;
   color: transparent;
-  animation: gradient-shift 8s ease infinite;
-  background-image: linear-gradient(
-    45deg,
-    #2196F3 0%,
-    #E91E63 50%,
-    #2196F3 100%
-  );
-  background-size: 300% 300%;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-@keyframes gradient-shift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
+.v-progress-linear {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  transform: translateZ(0);
 }
 
-.task-card::after {
+.v-progress-linear::after {
   content: '';
   position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  z-index: -1;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
   background: linear-gradient(
-    45deg,
-    rgba(33, 150, 243, 0.3),
-    rgba(233, 30, 99, 0.3),
-    rgba(33, 150, 243, 0.3)
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0) 100%
   );
-  opacity: 0;
-  transition: opacity 0.6s ease;
-  animation: border-glow 4s linear infinite;
+  animation: shimmer 2s infinite;
 }
 
-@keyframes border-glow {
-  to { background-position: 200% 0; }
+@keyframes shimmer {
+  100% {
+    left: 200%;
+  }
 }
 
-.task-card:hover::after {
-  opacity: 0.6;
+pre {
+  background: rgba(0, 0, 0, 0.3) !important;
+  padding: 16px !important;
+  border-radius: 8px;
+  font-family: 'Fira Code', monospace;
+  transform: translateZ(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 </style>
-
-<v-dialog 
-  v-model="errorDialog" 
-  transition="dialog"
-  width="auto" 
-  min-width="400px"
->
