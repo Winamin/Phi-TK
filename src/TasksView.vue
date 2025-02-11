@@ -261,6 +261,7 @@ function showOutput(task: Task) {
 <style scoped>
 .task-card-container {
   perspective: 1000px;
+  transform-style: preserve-3d;
 }
 
 .task-card {
@@ -287,6 +288,20 @@ function showOutput(task: Task) {
   transform: rotateY(15deg) translateZ(30px);
 }
 
+@keyframes rotate360 {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(360deg);
+  }
+}
+
+.task-card:hover {
+  animation: rotate360 1s linear infinite;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+  
 .v-btn {
   background: linear-gradient(45deg, #2196F3, #E91E63);
   border-radius: 50px;
