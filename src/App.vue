@@ -23,10 +23,11 @@ const component = ref();
 
 window.addEventListener('scroll', () => {
   const scrollY = window.scrollY;
-  const appBar = document.querySelector('.app-bar-shadow');
-  if (appBar) {
-    appBar.style.backgroundColor = `rgba(16, 16, 36, ${Math.min(scrollY / 200, 0.8)})`;
-  }
+  const appBar = document.querySelector('.app-bar-shadow') as HTMLElement;
+    if (appBar) {
+    appBar.style.backgroundColor = `rgba(16, 16, 36, ${Math.min(window.scrollY / 200, 0.8)})`;
+}
+
 });
   
 watch(component, (comp) => {
