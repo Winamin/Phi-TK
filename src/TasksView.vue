@@ -129,13 +129,23 @@ function showOutput(task: Task) {
 <template>
   <div class="pa-8 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1rem">
     <h1 v-if="!tasks || !tasks.length" class="text-center font-italic text-disabled" v-t="'empty'"></h1>
-    <v-form ref="form" style="max-height: 48vh;">
-      <v-row class = "text-center">
+    <v-slide-y-transition>
+    <v-form 
+      ref="form" 
+      style="max-height: 48vh;"
+      class="animated-form"
+    >
+      <v-row class="text-center">
         <v-col cols="12" class="mt-n4">
-          <v-btn @click="showFolder()" v-t="'show-in-folder'"></v-btn>
+          <v-btn 
+            @click="showFolder()" 
+            v-t="'show-in-folder'"
+            class="hover-scale"
+          ></v-btn>
         </v-col>
       </v-row>
     </v-form>
+  </v-slide-y-transition>
     <v-card v-for="task in tasks" :key="task.id" class="task-card">
       <div class="d-flex flex-row align-stretch">
         <div class="d-flex flex-row align-center" style="width: 35%">
@@ -295,5 +305,14 @@ pre {
   padding: 16px !important;
   border-radius: 8px;
   font-family: 'Fira Code', monospace;
+}
+
+.animated-form {
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+
+.v-slide-y-transition-enter-from {
+  opacity: 0;
+  transform: translateY(-20px);
 }
 </style>
