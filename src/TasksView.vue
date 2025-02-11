@@ -47,10 +47,12 @@ zh-CN:
 
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue';
+
 import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
 import type { Task, TaskStatus } from './model';
+
 import { invoke } from '@tauri-apps/api';
 import { convertFileSrc } from '@tauri-apps/api/tauri';
 
@@ -61,6 +63,7 @@ const tasks = ref<Task[]>();
 
 async function updateList() {
   tasks.value = await invoke<Task[]>('get_tasks');
+  console.log(tasks.value[0]);
 }
 
 await updateList();
@@ -93,82 +96,57 @@ function describeStatus(status: TaskStatus): string {
   }
 }
 
-const cardRefs = ref<HTMLElement[]>([]);
+const errorDialog = ref(false),
+  errorDialogMessage = ref('');
 
-function handleMouseMove(e: MouseEvent, index: number) {
-  const card = cardRefs.value[index];
-  if (!card) return;
+const outputDialog = ref(false),
+  outputDialogMessage = ref('');
 
-  const rect = card.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-  const centerX = rect.width / 2;
-  const centerY = rect.height / 2;
-  
-  const rotateY = (x - centerX) / 25;
-  const rotateX = (centerY - y) / 25;
-  
-  card.style.transform = `
-    perspective(1000px)
-    rotateX(${rotateX}deg)
-    rotateY(${rotateY}deg)
-    translateZ(10px)
-  `;
-  
-  const shadowX = (centerX - x) / 10;
-  const shadowY = (centerY - y) / 10;
-  card.style.boxShadow = `
-    ${shadowX}px ${shadowY}px 30px rgba(0, 0, 0, 0.3),
-    0 0 20px rgba(33, 150, 243, 0.2)
-  `;
+async function showInFolder(path: string) {
+  try {
+    await invoke('show_in_folder', { path });
+  } catch (e) {
+    toastError(e);
+  }
 }
 
-function handleMouseLeave(index: number) {
-  const card = cardRefs.value[index];
-  if (!card) return;
-
-  card.style.transform = `
-    perspective(1000px)
-    rotateX(0deg)
-    rotateY(0deg)
-    translateZ(0)
-  `;
-  card.style.boxShadow = `
-    0 12px 24px rgba(0, 0, 0, 0.3),
-    0 0 20px rgba(33, 150, 243, 0.1)
-  `;
+async function showFolder() {
+  try {
+    await invoke('show_folder');
+  } catch (e) {
+    toastError(e);
+  }
+}
+  
+function showOutput(task: Task) {
+  if (task.status.type === 'done') {
+    outputDialogMessage.value = task.status.output;
+    outputDialog.value = true;
+  }
 }
 </script>
-
 
 <template>
   <div class="pa-8 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1rem">
     <h1 v-if="!tasks || !tasks.length" class="text-center font-italic text-disabled" v-t="'empty'"></h1>
     <v-slide-y-transition>
-    <v-form 
-      ref="form" 
-      style="max-height: 48vh;"
-      class="animated-form"
-    >
-      <v-row class="text-center">
-        <v-col cols="12" class="mt-n4">
-          <v-btn 
-            @click="showFolder()" 
-            v-t="'show-in-folder'"
-            class="hover-scale"
-          ></v-btn>
-        </v-col>
-      </v-row>
-    </v-form>
-  </v-slide-y-transition>
-    <v-card 
-    v-for="(task, index) in tasks" 
-    :key="task.id" 
-    class="task-card"
-    :ref="el => cardRefs[index] = el as HTMLElement"
-      @mousemove="handleMouseMove($event, index)"
-      @mouseleave="handleMouseLeave(index)"
-    >
+      <v-form 
+        ref="form" 
+        style="max-height: 48vh;"
+        class="animated-form"
+      >
+        <v-row class="text-center">
+          <v-col cols="12" class="mt-n4">
+            <v-btn 
+              @click="showFolder()" 
+              v-t="'show-in-folder'"
+              class="hover-scale"
+            ></v-btn>
+          </v-col>
+        </v-row>
+      </v-form>
+    </v-slide-y-transition>
+    <v-card v-for="task in tasks" :key="task.id" class="task-card">
       <div class="d-flex flex-row align-stretch">
         <div class="d-flex flex-row align-center" style="width: 35%">
           <div
@@ -239,68 +217,90 @@ function handleMouseLeave(index: number) {
         </div>
       </div>
     </v-card>
+
+    <v-dialog v-model="errorDialog" width="auto" min-width="400px">
+      <v-card class="glass-background">
+        <v-card-title class="text-gradient" v-t="'error'"></v-card-title>
+        <v-card-text>
+          <pre class="block whitespace-pre overflow-auto" style="max-height: 60vh">{{ errorDialogMessage }}</pre>
+        </v-card-text>
+        <v-card-actions class="justify-end">
+          <v-btn 
+            color="primary" 
+            variant="flat" 
+            @click="errorDialog = false" 
+            v-t="'confirm'"
+            class="hover-scale"
+          ></v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="outputDialog" width="auto" min-width="400px">
+      <v-card class="glass-background">
+        <v-card-title class="text-gradient" v-t="'output'"></v-card-title>
+        <v-card-text>
+          <pre class="block whitespace-pre overflow-auto" style="max-height: 60vh">{{ outputDialogMessage }}</pre>
+        </v-card-text>
+        <v-card-actions class="justify-end">
+          <v-btn 
+            color="primary" 
+            variant="flat" 
+            @click="outputDialog = false" 
+            v-t="'confirm'"
+            class="hover-scale"
+          ></v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
 <style scoped>
+.task-card-container {
+  perspective: 1000px;
+}
+
 .task-card {
   border-radius: 16px !important;
   background: rgba(255, 255, 255, 0.03) !important;
   backdrop-filter: blur(8px);
-  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: transform 0.6s ease, box-shadow 0.3s ease, filter 0.3s ease;
   border: 1px solid rgba(255, 255, 255, 0.1);
   transform-style: preserve-3d;
-  position: relative;
-  overflow: visible !important;
 }
 
-.task-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    45deg,
-    rgba(33, 150, 243, 0.1),
-    rgba(233, 30, 99, 0.1)
-  );
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
+.task-card:hover {
+  transform: rotateY(15deg) translateZ(30px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3) !important;
 }
 
-.task-card:hover::before {
-  opacity: 0.6;
+.task-card:hover .task-cover {
+  transform: rotateY(15deg) translateZ(30px);
+}
+
+.v-btn {
+  background: linear-gradient(45deg, #2196F3, #E91E63);
+  border-radius: 50px;
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.v-btn:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
 }
 
 .task-cover {
   border-radius: 16px 0 0 16px;
-  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  transform-origin: left center;
-}
-
-.task-card:hover .task-cover {
-  transform: scale(1.05) translateZ(10px);
-}
-
-.hover-scale {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 0.3s ease,
-              filter 0.3s ease;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-}
-
-.hover-scale:hover {
-  transform: scale(1.05) translateZ(5px);
-  filter: drop-shadow(0 4px 8px rgba(33, 150, 243, 0.3));
+  transform-origin: center;
 }
 
 .glass-background {
   background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px) saturate(180%);
+  backdrop-filter: blur(12px);
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  transform: translateZ(20px);
 }
 
 .text-gradient {
@@ -308,36 +308,10 @@ function handleMouseLeave(index: number) {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.v-progress-linear {
-  position: relative;
-  overflow: hidden;
-  border-radius: 8px;
-  transform: translateZ(0);
-}
-
-.v-progress-linear::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.3) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-  100% {
-    left: 200%;
-  }
+.glow-spinner {
+  filter: drop-shadow(0 0 8px #2196F3);
 }
 
 pre {
@@ -345,7 +319,14 @@ pre {
   padding: 16px !important;
   border-radius: 8px;
   font-family: 'Fira Code', monospace;
-  transform: translateZ(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.animated-form {
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+
+.v-slide-y-transition-enter-from {
+  opacity: 0;
+  transform: translateY(-20px);
 }
 </style>
