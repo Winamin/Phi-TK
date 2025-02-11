@@ -295,109 +295,129 @@ function handleMouseLeave(index: number) {
 
 <style scoped>
 .task-card {
-  border-radius: 16px !important;
-  background: rgba(255, 255, 255, 0.03) !important;
-  backdrop-filter: blur(8px);
-  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.4s ease;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transform-style: preserve-3d;
-  position: relative;
-  overflow: visible !important;
-  transform-origin: center center;
+  will-change: transform, box-shadow;
+  transition: 
+    transform 0.6s cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 0.6s cubic-bezier(0.23, 1, 0.32, 1),
+    background 0.3s ease;
 }
 
-.task-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    45deg,
-    rgba(33, 150, 243, 0.1),
-    rgba(233, 30, 99, 0.1)
-  );
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-
-.task-card:hover::before {
-  opacity: 0.6;
-}
-  
 .task-cover {
-  border-radius: 16px 0 0 16px;
-  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: 
+    transform 0.6s cubic-bezier(0.23, 1, 0.32, 1),
+    filter 0.4s ease;
   transform-origin: left center;
+  filter: saturate(0.9) brightness(0.98);
 }
 
 .task-card:hover .task-cover {
-  transform: scale(1.05) translateZ(10px);
+  filter: saturate(1.2) brightness(1.05);
+  transform: scale(1.08) translateZ(20px);
 }
 
-.hover-scale {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 0.3s ease,
-              filter 0.3s ease;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-}
-
-.hover-scale:hover {
-  transform: scale(1.05) translateZ(5px);
-  filter: drop-shadow(0 4px 8px rgba(33, 150, 243, 0.3));
-}
-
-.glass-background {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px) saturate(180%);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transform: translateZ(20px);
-}
-
-.text-gradient {
-  background: linear-gradient(45deg, #2196F3, #E91E63);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.v-progress-linear {
-  position: relative;
-  overflow: hidden;
-  border-radius: 8px;
-  transform: translateZ(0);
+@keyframes enhanced-shimmer {
+  0% { transform: translateX(-150%) skewX(-20deg); }
+  100% { transform: translateX(250%) skewX(-20deg); }
 }
 
 .v-progress-linear::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
+  animation: enhanced-shimmer 2s infinite;
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0.4) 50%,
     rgba(255, 255, 255, 0) 100%
   );
-  animation: shimmer 2s infinite;
 }
 
-@keyframes shimmer {
-  100% {
-    left: 200%;
-  }
+.hover-scale {
+  transition:
+    transform 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55),
+    box-shadow 0.3s ease,
+    filter 0.3s ease;
 }
 
-pre {
-  background: rgba(0, 0, 0, 0.3) !important;
-  padding: 16px !important;
-  border-radius: 8px;
-  font-family: 'Fira Code', monospace;
-  transform: translateZ(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+.hover-scale:hover {
+  transform: scale(1.08) translateZ(10px);
+  filter: 
+    drop-shadow(0 4px 12px rgba(33, 150, 243, 0.4))
+    brightness(1.1);
+}
+
+.glow-spinner {
+  filter: 
+    drop-shadow(0 0 12px rgba(33, 150, 243, 0.6))
+    contrast(1.2);
+  animation: spinner-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes spinner-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.dialog-enter-active,
+.dialog-leave-active {
+  transition: 
+    opacity 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.dialog-enter-from,
+.dialog-leave-to {
+  opacity: 0;
+  transform: translateY(20px) scale(0.97);
+}
+
+.text-gradient {
+  position: relative;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: gradient-shift 8s ease infinite;
+  background-image: linear-gradient(
+    45deg,
+    #2196F3 0%,
+    #E91E63 50%,
+    #2196F3 100%
+  );
+  background-size: 300% 300%;
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.task-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  z-index: -1;
+  background: linear-gradient(
+    45deg,
+    rgba(33, 150, 243, 0.3),
+    rgba(233, 30, 99, 0.3),
+    rgba(33, 150, 243, 0.3)
+  );
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  animation: border-glow 4s linear infinite;
+}
+
+@keyframes border-glow {
+  to { background-position: 200% 0; }
+}
+
+.task-card:hover::after {
+  opacity: 0.6;
 }
 </style>
+
+<v-dialog 
+  v-model="errorDialog" 
+  transition="dialog"
+  width="auto" 
+  min-width="400px"
+>
