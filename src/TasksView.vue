@@ -260,68 +260,33 @@ function showOutput(task: Task) {
 
 <style scoped>
 .task-card-container {
-  perspective: 1000px;
-  transform-style: preserve-3d;
-  padding: 10px;
-}
-
-.task-card-container::before {
-  content: '';
-  position: absolute;
-  top: -10px;
-  left: -10px;
-  right: -10px;
-  bottom: -10px;
-  pointer-events: none;
+  perspective: 872px;
 }
 
 .task-card {
-  transform: rotateY(0.01deg);
+  transform: translateZ(0);
   border-radius: 16px !important;
   background: rgba(255, 255, 255, 0.03) !important;
   backdrop-filter: blur(8px);
-  transition: 
-    transform 1.5s ease,
-    box-shadow 0.3s ease;
+  transition: transform 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
   border: 1px solid rgba(255, 255, 255, 0.1);
   transform-style: preserve-3d;
 }
 
-/*
 .task-card:hover {
   transform: rotateY(15deg) translateZ(30px) scale(1.02);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
 }
-*/
-  
+
 .task-card-container {
   perspective: 1000px;
   transform-style: preserve-3d;
-}
-  
-.task-card:hover {
-  transform: rotateY(360deg);
-  transition-duration: 0.2s;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
 }
   
 .task-card:hover .task-cover {
   transform: rotateY(15deg) translateZ(30px);
 }
 
-.task-card:not(:hover) {
-  transition-duration: 0.5s;
-}
-
-@keyframes rotate360 {
-  from {
-    transform: rotateY(0deg);
-  }
-  to {
-    transform: rotateY(360deg);
-  }
-}
-  
 .v-btn {
   background: linear-gradient(45deg, #2196F3, #E91E63);
   border-radius: 50px;
