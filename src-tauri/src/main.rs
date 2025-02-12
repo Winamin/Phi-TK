@@ -461,6 +461,26 @@ fn set_rpe_dir(path: PathBuf) -> Result<(), InvokeError> {
 }
 
 #[tauri::command]
+async fn preview_play(params: RenderParams) -> Result<(), InvokeError> {
+    wrap_async(async move {
+        let mut child = cmd_hidden(std::env::current_exe()?)
+            .arg("play")
+            .arg(ASSET_PATH.get().unwrap())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()?;
+        let mut stdin = child.stdin.take().unwrap();
+        let info = format!("{}\n", serde_json::to_string(&params)?);
+        stdin
+            .write_all(info.as_bytes())
+            .await?;
+        Ok(())
+    })
+    .await
+}
+
+#[tauri::command]
 fn unset_rpe_dir() -> Result<(), InvokeError> {
     (|| {
         std::fs::remove_file(CONFIG_DIR.get().unwrap().join("rpe_path.txt"))?;
