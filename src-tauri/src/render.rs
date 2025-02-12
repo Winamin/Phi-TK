@@ -377,7 +377,7 @@ pub async fn main() -> Result<()> {
     let frame_delta = 1. / fps as f32;
     let frames = (video_length / frame_delta as f64).ceil() as u64;
     send(IPCEvent::StartRender(frames));
-/*
+
     let codecs = String::from_utf8(
         cmd_hidden(&ffmpeg)
             .arg("-codecs")
@@ -385,7 +385,7 @@ pub async fn main() -> Result<()> {
             .with_context(|| tl!("run-ffmpeg-failed"))?
             .stdout,
     )?;
-*/
+
     let candidates = if params.config.hardware_accel {
         if params.config.hevc {
             vec!["hevc_qsv", "hevc_nvenc", "hevc_amf"]
