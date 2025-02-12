@@ -133,7 +133,7 @@ pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
     })
 }
 
-fn cmd_hidden(program: impl AsRef<OsStr>) -> Command {
+pub fn cmd_hidden(program: impl AsRef<OsStr>) -> Command {
     let cmd = Command::new(program);
     #[cfg(target_os = "windows")]
     {
