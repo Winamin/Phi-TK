@@ -367,7 +367,7 @@ pub async fn main() -> Result<()> {
             .expect("Failed to test encoder");
     
         output.status.success()
-    };
+    )?;
 
     let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
     let has_qsv = params.config.hardware_accel && codecs.contains("h264_qsv");
