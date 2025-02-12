@@ -228,96 +228,93 @@ function handleMouseLeave(taskId: string) {
         </v-row>
       </v-form>
     </v-slide-y-transition>
-
-    <transition-group name="card" tag="div">
-      <div 
-        class="task-card-container" 
-        v-for="task in tasks" 
-        :key="task.id"
-        @mouseenter="handleMouseEnter(task.id.toString())"
-        @mousemove="handleMouseMove($event, task.id.toString())"
-        @mouseleave="handleMouseLeave(task.id.toString())"
-      >
-        <v-card 
-          class="task-card"
-          :id="'card-' + task.id.toString()"
-          :style="{
-            transform: cardTransforms[task.id.toString()]?.transform,
-            transition: cardTransforms[task.id.toString()]?.transition
-          }"
-        >
-          <div class="d-flex flex-row align-stretch">
-            <div class="d-flex flex-row align-center" style="width: 35%">
-              <div
-                style="width: 100%; height: 100%; max-height: 240px; background-position: center; background-repeat: no-repeat; background-size: cover"
-                :style="{ 'background-image': 'url(' + convertFileSrc(task.cover) + ')' }"
-                class="task-cover"
-              ></div>
-            </div>
-            <div class="d-flex flex-column w-100">
-              <v-card-title>{{ task.name }}</v-card-title>
-              <v-card-subtitle class="mt-n2">{{ task.path }}</v-card-subtitle>
-              <div class="w-100 pa-4 pb-2 pr-2 mt-2">
-                <p class="mb-2 text-medium-emphasis">{{ describeStatus(task.status) }}</p>
-                <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
-                  <v-progress-circular
-                    v-if="task.status.type !== 'rendering'"
-                    :indeterminate="true"
-                    color="accent"
-                    class="glow-spinner"
-                  ></v-progress-circular>
-                  <v-progress-linear
-                    v-else
-                    :model-value="task.status.progress * 100"
-                    color="accent"
-                    height="12"
-                    rounded
-                  ></v-progress-linear>
-                  <div class="pt-4 d-flex justify-end">
-                    <v-btn 
-                      variant="flat" 
-                      color="error" 
-                      prepend-icon="mdi-cancel" 
-                      @click="invoke('cancel_task', { id: task.id })" 
-                      v-t="'cancel'"
-                      class="hover-scale"
-                    ></v-btn>
-                  </div>
-                </template>
-                <div v-if="task.status.type === 'failed'" class="pt-4 d-flex justify-end">
-                  <v-btn
-                    variant="flat"
-                    color="error"
-                    prepend-icon="mdi-alert-circle-outline"
-                    @click="errorDialogMessage = task.status.error; errorDialog = true;"
-                    v-t="'details'"
-                    class="hover-scale"
-                  ></v-btn>
-                </div>
-                <div v-if="task.status.type === 'done'" class="pt-4 d-flex justify-end gap-2">
-                  <v-btn
-                    variant="flat"
-                    color="secondary"
-                    prepend-icon="mdi-text-box-outline"
-                    @click="showOutput(task)"
-                    v-t="'show-output'"
-                    class="hover-scale"
-                  ></v-btn>
-                  <v-btn
-                    variant="flat"
-                    color="accent"
-                    prepend-icon="mdi-folder-open-outline"
-                    @click="showInFolder(task.output)"
-                    v-t="'show-in-folder'"
-                    class="hover-scale"
-                  ></v-btn>
-                </div>
+    <div 
+    class="task-card-container" 
+    v-for="task in tasks" 
+    :key="task.id"
+    @mouseenter="handleMouseEnter(task.id.toString())"
+    @mousemove="handleMouseMove($event, task.id.toString())"
+    @mouseleave="handleMouseLeave(task.id.toString())"
+  >
+    <v-card 
+      class="task-card"
+      :id="'card-' + task.id.toString()"
+      :style="{
+        transform: cardTransforms[task.id.toString()]?.transform,
+        transition: cardTransforms[task.id.toString()]?.transition
+      }"
+    >
+      <div class="d-flex flex-row align-stretch">
+        <div class="d-flex flex-row align-center" style="width: 35%">
+          <div
+            style="width: 100%; height: 100%; max-height: 240px; background-position: center; background-repeat: no-repeat; background-size: cover"
+            :style="{ 'background-image': 'url(' + convertFileSrc(task.cover) + ')' }"
+            class="task-cover"
+          ></div>
+        </div>
+        <div class="d-flex flex-column w-100">
+          <v-card-title>{{ task.name }}</v-card-title>
+          <v-card-subtitle class="mt-n2">{{ task.path }}</v-card-subtitle>
+          <div class="w-100 pa-4 pb-2 pr-2 mt-2">
+            <p class="mb-2 text-medium-emphasis">{{ describeStatus(task.status) }}</p>
+            <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
+              <v-progress-circular
+                v-if="task.status.type !== 'rendering'"
+                :indeterminate="true"
+                color="accent"
+                class="glow-spinner"
+              ></v-progress-circular>
+              <v-progress-linear
+                v-else
+                :model-value="task.status.progress * 100"
+                color="accent"
+                height="12"
+                rounded
+              ></v-progress-linear>
+              <div class="pt-4 d-flex justify-end">
+                <v-btn 
+                  variant="flat" 
+                  color="error" 
+                  prepend-icon="mdi-cancel" 
+                  @click="invoke('cancel_task', { id: task.id })" 
+                  v-t="'cancel'"
+                  class="hover-scale"
+                ></v-btn>
               </div>
+            </template>
+            <div v-if="task.status.type === 'failed'" class="pt-4 d-flex justify-end">
+              <v-btn
+                variant="flat"
+                color="error"
+                prepend-icon="mdi-alert-circle-outline"
+                @click="errorDialogMessage = task.status.error; errorDialog = true;"
+                v-t="'details'"
+                class="hover-scale"
+              ></v-btn>
+            </div>
+            <div v-if="task.status.type === 'done'" class="pt-4 d-flex justify-end gap-2">
+              <v-btn
+                variant="flat"
+                color="secondary"
+                prepend-icon="mdi-text-box-outline"
+                @click="showOutput(task)"
+                v-t="'show-output'"
+                class="hover-scale"
+              ></v-btn>
+              <v-btn
+                variant="flat"
+                color="accent"
+                prepend-icon="mdi-folder-open-outline"
+                @click="showInFolder(task.output)"
+                v-t="'show-in-folder'"
+                class="hover-scale"
+              ></v-btn>
             </div>
           </div>
-        </v-card>
+        </div>
       </div>
-    </transition-group>
+    </v-card>
+  </div>
 
     <v-dialog v-model="errorDialog" width="auto" min-width="400px">
       <v-card class="glass-background">
@@ -436,22 +433,5 @@ pre {
 .v-slide-y-transition-enter-from {
   opacity: 0;
   transform: translateY(-20px);
-}
-
-.card-enter-from, .card-leave-to {
-  opacity: 0;
-  transform: translateY(20px);
-}
-
-.card-enter-active, .card-leave-active {
-  transition: opacity 0.5s ease, transform 0.5s ease;
-}
-
-.card-appear-from {
-  opacity: 0;
-  transform: translateY(20px);
-}
-.card-appear-active {
-  transition: opacity 0.5s ease, transform 0.5s ease;
 }
 </style>
