@@ -41,21 +41,21 @@ const containerRef = ref<HTMLElement | null>(null)
 onMounted(() => {
   fetchVersion()
   letters.value = t('app').split('')
-  
+
   const handleMouseMove = (e: MouseEvent) => {
     if (!containerRef.value) return
-    
+
     const { left, top, width, height } = containerRef.value.getBoundingClientRect()
     const centerX = left + width / 2
     const centerY = top + height / 2
-    const rotateX = (e.clientY - centerY) / 30 
-    const rotateY = (e.clientX - centerX) / -30
-    
-    containerRef.value.style.setProperty('--x', `${rotateY}deg`)
-    containerRef.value.style.setProperty('--y', `${rotateX}deg`)
+    const offsetX = (e.clientX - centerX) / 20
+    const offsetY = (e.clientY - centerY) / 20
+
+    containerRef.value.style.setProperty('--offset-x', `${offsetX}px`)
+    containerRef.value.style.setProperty('--offset-y', `${offsetY}px`)
   }
 
-  window.addEventListener('mousemove', throttle(handleMouseMove, 50))
+  window.addEventListener('mousemove', handleMouseMove)
 })
 
 const throttle = (fn: Function, delay: number) => {
@@ -118,9 +118,31 @@ const throttle = (fn: Function, delay: number) => {
 }
 
 .app-title {
+  display: inline-block;
   font-size: 3rem;
   font-weight: 700;
   letter-spacing: -0.05em;
+  position: relative;
+  overflow: hidden;
+  height: 1.2em;
+  transform: translate(var(--offset-x, 0), var(--offset-y, 0));
+  transition: transform 0.2s ease-out;
+}
+
+.letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(1em);
+  animation: appear 0.6s forwards cubic-bezier(0.5, 1, 0.5, 1.2);
+  animation-delay: calc(var(--i) * 0.1s);
+  will-change: transform, opacity;
+}
+
+@keyframes appear {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .version-label {
@@ -166,41 +188,4 @@ const throttle = (fn: Function, delay: number) => {
   background-clip: text;
   color: transparent;
 }
-
-.app-title {
-  perspective: 1000px;
-  display: inline-block;
-  font-size: 3rem;
-  position: relative;
-  overflow: hidden;
-  height: 1.2em;
-}
-
-.letter {
-  display: inline-block;
-  opacity: 0;
-  transform: translateY(1em);
-  animation: appear 0.6s forwards cubic-bezier(0.5, 1, 0.5, 1.2);
-  animation-delay: calc(var(--i) * 0.1s);
-  will-change: transform, opacity;
-  transition: transform 0.3s ease-out;
-}
-
-@keyframes appear {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.app-title:hover .letter {
-  transform: 
-    translate(
-      calc(var(--x) * 0.5px), 
-      calc(var(--y) * 0.5px)
-    )
-    rotateX(calc(var(--x) * 0.3deg)) 
-    rotateY(calc(var(--y) * 0.3deg));
-}
-
 </style>
