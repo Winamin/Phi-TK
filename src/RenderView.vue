@@ -281,6 +281,34 @@ function tryParseAspect(): number | undefined {
     return undefined;
   }
 }
+
+const hoverContainer = ref<HTMLElement>();
+const moveOffset = ref({ x: 0, y: 0 });
+
+function onHoverMove(e: MouseEvent) {
+  if (!hoverContainer.value) return;
+  
+  const rect = hoverContainer.value.getBoundingClientRect();
+  const centerX = rect.width / 2;
+  const centerY = rect.height / 2;
+  
+  const offsetX = (e.clientX - rect.left - centerX) * 0.1;
+  const offsetY = (e.clientY - rect.top - centerY) * 0.1;
+  
+  moveOffset.value = { x: offsetX, y: offsetY };
+}
+
+function resetHover() {
+  moveOffset.value = { x: 0, y: 0 };
+}
+
+const archiveStyle = computed(() => ({
+  transform: `translate(${moveOffset.value.x * 0.8}px, ${moveOffset.value.y * 0.8}px)`
+}));
+
+const folderStyle = computed(() => ({
+  transform: `translate(${-moveOffset.value.x * 0.8}px, ${-moveOffset.value.y * 0.8}px)`
+}));
 </script>
 
 <template>
@@ -294,15 +322,34 @@ function tryParseAspect(): number | undefined {
       </div>
 
       <template v-slot:item.1>
-        <div class="mt-8 d-flex" style="gap: 1rem">
-          <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
-            <v-btn class="w-75 gradient-primary" style="overflow: hidden" size="large" @click="chooseChart(false)" prepend-icon="mdi-folder-zip">{{ t('choose.archive') }}</v-btn>
-          </div>
-          <v-divider vertical></v-divider>
-          <div class="flex-grow-1 d-flex align-center justify-center w-0">
-            <v-btn class="w-75 gradient-primary" size="large" @click="chooseChart(true)" prepend-icon="mdi-folder">{{ t('choose.folder') }}</v-btn>
-          </div>
+        <div 
+        class="mt-8 d-flex" 
+        style="gap: 1rem"
+        @mousemove="onHoverMove"
+        @mouseleave="resetHover"
+        ref="hoverContainer"
+      >
+        <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
+          <v-btn 
+            :style="archiveStyle"
+            class="w-75 gradient-primary hover-movable" 
+            style="overflow: hidden" 
+            size="large" 
+            @click="chooseChart(false)" 
+            prepend-icon="mdi-folder-zip"
+          >{{ t('choose.archive') }}</v-btn>
         </div>
+        <v-divider vertical></v-divider>
+         <div class="flex-grow-1 d-flex align-center justify-center w-0">
+          <v-btn 
+            :style="folderStyle"
+            class="w-75 gradient-primary hover-movable" 
+            size="large" 
+            @click="chooseChart(true)" 
+            prepend-icon="mdi-folder"
+          >{{ t('choose.folder') }}</v-btn>
+        </div>
+      </div>
         <p class="mb-8 w-100 text-center mt-2 text-disabled" v-t="'choose.can-also-drop'"></p>
         <v-overlay v-model="parsingChart" contained class="align-center justify-center" persistent :close-on-content-click="false">
           <v-progress-circular indeterminate> </v-progress-circular>
@@ -482,6 +529,14 @@ h2 {
 .v-btn {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-  
-</style>
+
+.hover-movable {
+  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
 }
+
+.v-btn:hover {
+  transform: translateY(-1px) scale(1.02) !important;
+}
+
+</style>
