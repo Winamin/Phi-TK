@@ -113,29 +113,6 @@ pub enum IPCEvent {
     Done(f64),
 }
 
-#[derive(PartialEq)]
-enum EncoderType {
-    Qsv,
-    Nvenc,
-    Amf,
-    Cpu,
-}
-
-fn test_encoder(encoder: &str, ffmpeg_path: &std::path::Path) -> Result<bool> {
-    let output = std::process::Command::new(ffmpeg_path)
-        .args(&[
-            "-y",
-            "-f", "lavfi",
-            "-i", "testsrc=size=2x2:rate=1:duration=0.1",
-            "-frames:v", "1",
-            "-c:v", encoder,
-            "-f", "null", "-"
-        ])
-        .output()
-        .with_context(|| format!("Failed to test encoder {}", encoder))?;
-    Ok(output.status.success())
-}
-
 pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
     Ok(BasicPlayer {
         avatar: if let Some(path) = &config.player_avatar {
@@ -377,7 +354,7 @@ pub async fn main() -> Result<()> {
     let frame_delta = 1. / fps as f32;
     let frames = (video_length / frame_delta as f64).ceil() as u64;
     send(IPCEvent::StartRender(frames));
-    let ffmpeg_path = Path::new(&ffmpeg);
+
     let codecs = String::from_utf8(
         cmd_hidden(&ffmpeg)
             .arg("-codecs")
@@ -386,80 +363,55 @@ pub async fn main() -> Result<()> {
             .stdout,
     )?;
 
-    let candidates = if params.config.hardware_accel {
-        if params.config.hevc {
-            vec!["hevc_qsv", "hevc_nvenc", "hevc_amf"]
-        } else {
-            vec!["h264_qsv", "h264_nvenc", "h264_amf"]
-        }
-    } else {
-        vec![if params.config.hevc { "libx265" } else { "libx264" }]
-    };
+    let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
+    let has_qsv = params.config.hardware_accel && codecs.contains("h264_qsv");
+    let has_amf = params.config.hardware_accel && codecs.contains("h264_amf");
 
-    let mut selected_encoder = None;
-    for encoder in &candidates {
-        if codecs.contains(encoder) && test_encoder(encoder, &ffmpeg)? {
-            selected_encoder = Some(*encoder);
-            break;
-        }
+    let use_cuda_hevc = params.config.hardware_accel && codecs.contains("hevc_nvenc");
+    let has_qsv_hevc = params.config.hardware_accel && codecs.contains("hevc_qsv");
+    let has_amf_hevc = params.config.hardware_accel && codecs.contains("hevc_amf");
+
+    let ffmpeg_preset =  if !has_qsv && !use_cuda && has_amf {"-quality"} else {"-preset"};
+    let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
+
+    let (qsv, nvenc, _amf, cpu) = if params.config.hevc {
+        ("hevc_qsv", "hevc_nvenc", "hevc_amf", "libx265")
+    } else {
+        ("h264_qsv", "h264_nvenc", "h264_amf", "libx264")
+    };
+    if params.config.hardware_accel && !has_qsv_hevc && !use_cuda_hevc && !has_amf_hevc {bail!(tl!("no-hwacc"));}
+
+    let ffmpeg_preset_name = if has_qsv {ffmpeg_preset_name_list.nth(0)
+    } else if use_cuda {ffmpeg_preset_name_list.nth(1)
+    } else if has_amf {ffmpeg_preset_name_list.nth(2)
+    } else {ffmpeg_preset_name_list.nth(0)};
+
+    let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
+    if use_cuda {
+        args += " -hwaccel_output_format cuda";
     }
+    write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
-    let selected_encoder = match selected_encoder {
-        Some(enc) => enc,
-        None if params.config.hardware_accel => bail!(tl!("no-hwacc")),
-        None => {
-            let cpu_encoder = if params.config.hevc { "libx265" } else { "libx264" };
-            if codecs.contains(encoder) && test_encoder(encoder, &ffmpeg)? {
-                cpu_encoder
-            } else {
-                bail!(tl!("no-encoder"))
-            }
-        }
-    };
-
-    let encoder_type = match selected_encoder {
-        "h264_qsv" | "hevc_qsv" => EncoderType::Qsv,
-        "h264_nvenc" | "hevc_nvenc" => EncoderType::Nvenc,
-        "h264_amf" | "hevc_amf" => EncoderType::Amf,
-        _ => EncoderType::Cpu,
-    };
-
-    let ffmpeg_preset = if encoder_type == EncoderType::Amf {
-        "-quality"
-    } else {
-        "-preset"
-    };
-
-    let preset_names: Vec<&str> = params.config.ffmpeg_preset.split_whitespace().collect();
-    let preset_index = match encoder_type {
-        EncoderType::Qsv => 0,
-        EncoderType::Nvenc => 1,
-        EncoderType::Amf => 2,
-        EncoderType::Cpu => 0,
-    };
-    let ffmpeg_preset_name = preset_names.get(preset_index).unwrap_or(&"medium");
-    //let args = "-y -f rawvideo -c:v rawvideo".to_owned();
     let args2 = format!(
         "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
-        selected_encoder,
+        if has_qsv {qsv} 
+        else if use_cuda {nvenc} 
+        //else if has_amf {amf}
+        else if params.config.hardware_accel {bail!(tl!("no-hwacc"));} 
+        else {cpu},
         if params.config.bitrate_control == "CRF" {
-            match encoder_type {
-                EncoderType::Qsv => "-q",
-                EncoderType::Nvenc => "-cq",
-                EncoderType::Amf => "-qp_i",
-                _ => "-crf",
-            }
+            if has_qsv {"-q"}
+            else if use_cuda {"-cq"}
+            //else if has_amf {"-qp_p"}
+            else {"-crf"}
         } else {
             "-b:v"
         },
         params.config.bitrate,
         ffmpeg_preset,
-        ffmpeg_preset_name,
-        if params.config.disable_loading {
-            format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
-        } else {
-            "-ss 0.1".to_string()
-        }
+        ffmpeg_preset_name.unwrap(),
+        if params.config.disable_loading{format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)}
+        else{"-ss 0.1".to_string()},
     );
 
     let mut proc = cmd_hidden(&ffmpeg)
