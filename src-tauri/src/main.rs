@@ -469,16 +469,17 @@ async fn preview_play(params: RenderParams) -> Result<(), InvokeError> {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()?;
+
         let mut stdin = child.stdin.take().unwrap();
         let info = format!("{}\n", serde_json::to_string(&params)?);
         stdin
             .write_all(info.as_bytes())
             .await?;
+        
         Ok(())
     })
     .await
 }
-
 #[tauri::command]
 fn unset_rpe_dir() -> Result<(), InvokeError> {
     (|| {
