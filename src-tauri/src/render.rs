@@ -357,16 +357,10 @@ pub async fn main() -> Result<()> {
 
     let codecs = String::from_utf8(
         cmd_hidden(&ffmpeg)
-            .args(&["-f", "lavfi", "-i", "testsrc=duration=1:size=1280x720:rate=1", "-c:v", encoder, "-f", "null", "-"])
-            .arg("-loglevel")
-            .arg("fatal")
-            .arg("-hide_banner")
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
+            .arg("-codecs")
             .output()
-            .expect("Failed to test encoder");
-    
-        output.status.success()
+            .with_context(|| tl!("run-ffmpeg-failed"))?
+            .stdout,
     )?;
 
     let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
