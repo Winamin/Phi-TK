@@ -355,9 +355,9 @@ pub async fn main() -> Result<()> {
     let frames = (video_length / frame_delta as f64).ceil() as u64;
     send(IPCEvent::StartRender(frames));
 
-    let test_encoder = |encoder: &str| -> bool {
-        let output = Command::new(&ffmpeg)
-            .args(&["-f", "lavfi", "-i", "color=c=black:s=320x240:d=0", "-c:v", encoder, "-f", "null", "-"])
+    let codecs = String::from_utf8(
+        cmd_hidden(&ffmpeg)
+            .args(&["-f", "lavfi", "-i", "testsrc=duration=1:size=1280x720:rate=1", "-c:v", encoder, "-f", "null", "-"])
             .arg("-loglevel")
             .arg("fatal")
             .arg("-hide_banner")
@@ -369,87 +369,34 @@ pub async fn main() -> Result<()> {
         output.status.success()
     };
 
-    let use_cuda = params.config.hardware_accel && test_encoder("h264_nvenc");
-    let has_qsv = cparams.config.hardware_accel && test_encoder("h264_qsv");
-    let has_amf = params.config.hardware_accel && test_encoder("h264_amf");
+    let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
+    let has_qsv = params.config.hardware_accel && codecs.contains("h264_qsv");
+    let has_amf = params.config.hardware_accel && codecs.contains("h264_amf");
 
-    let use_cuda_hevc = params.config.hardware_accel && config.hevc && test_encoder("hevc_nvenc");
-    let has_qsv_hevc = params.config.hardware_accel && config.hevc && test_encoder("hevc_qsv");
-    let has_amf_hevc = params.config.hardware_accel && config.hevc && test_encoder("hevc_amf");
+    let use_cuda_hevc = params.config.hardware_accel && codecs.contains("hevc_nvenc");
+    let has_qsv_hevc = params.config.hardware_accel && codecs.contains("hevc_qsv");
+    let has_amf_hevc = params.config.hardware_accel && codecs.contains("hevc_amf");
 
-    let ffmpeg_preset = "-preset";
-    let mut ffmpeg_preset_name_list = config.ffmpeg_preset.split_whitespace();
+    let ffmpeg_preset =  if !has_qsv && !use_cuda && has_amf {"-quality"} else {"-preset"};
+    let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
 
-    if config.hardware_accel && !config.mpeg4 {
-        if !(use_cuda_hevc || has_qsv_hevc || has_amf_hevc) && config.hevc {
-            bail!(tl!("no-hwacc"));
-        } else if !(use_cuda || has_qsv || has_amf) {
-            bail!(tl!("no-hwacc"));
-        }
-    }
-
-    let ffmpeg_encoder = if config.mpeg4 {
-        "mpeg4"
-    } else if use_cuda_hevc {
-        "hevc_nvenc"
-    } else if use_cuda {
-        "h264_nvenc"
-    } else if has_qsv_hevc {
-        "hevc_qsv"
-    } else if has_qsv {
-        "h264_qsv"
-    } else if has_amf_hevc {
-        "hevc_amf"
-    } else if has_amf {
-        "h264_amf"
+    let (qsv, nvenc, _amf, cpu) = if params.config.hevc {
+        ("hevc_qsv", "hevc_nvenc", "hevc_amf", "libx265")
     } else {
-        if config.hevc {
-            "libx265"
-        } else {
-            "libx264"
-        }
+        ("h264_qsv", "h264_nvenc", "h264_amf", "libx264")
     };
+    if params.config.hardware_accel && !has_qsv_hevc && !use_cuda_hevc && !has_amf_hevc {bail!(tl!("no-hwacc"));}
 
-    info!("Encoder: {}", ffmpeg_encoder);
+    let ffmpeg_preset_name = if has_qsv {ffmpeg_preset_name_list.nth(0)
+    } else if use_cuda {ffmpeg_preset_name_list.nth(1)
+    } else if has_amf {ffmpeg_preset_name_list.nth(2)
+    } else {ffmpeg_preset_name_list.nth(0)};
 
-    let ffmpeg_preset_name = if use_cuda {
-        ffmpeg_preset_name_list.nth(1).unwrap_or(
-            ffmpeg_preset_name_list.nth(0).unwrap_or("p4")
-        )
-    } else if has_qsv {
-        ffmpeg_preset_name_list.nth(2).unwrap_or("medium")
-    } else if has_amf {
-        ffmpeg_preset_name_list.nth(3).unwrap_or(
-            ffmpeg_preset_name_list.nth(0).unwrap_or("balanced")
-        )
-    } else {
-        ffmpeg_preset_name_list.nth(0).unwrap_or("medium")
-    };
-
-    let bitrate_control = 
-    if config.bitrate_control.to_lowercase() == "crf" {
-        if use_cuda && !config.mpeg4 {
-            "-cq"
-        } else if has_qsv || config.mpeg4 {
-            "-q"
-        }
-        else if has_amf {
-            "-qp_p"
-        } else {
-            "-crf"
-        }
-    } else {
-        "-b:v"
-    };
-
-    let mut args = "-probesize 50M -y -f rawvideo -c:v rawvideo".to_owned();
+    let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
     if use_cuda {
         args += " -hwaccel_output_format cuda";
     }
-    write!(
-        &mut args,
-        " -s {vw}x{vh} -r {fps} -pix_fmt rgba -thread_queue_size 1024 -i - -i"
-    )?;
+    write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
     let args2 = format!(
         "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
@@ -467,9 +414,8 @@ pub async fn main() -> Result<()> {
             "-b:v"
         },
         params.config.bitrate,
-        ffmpeg_encoder,
         ffmpeg_preset,
-        ffmpeg_preset_name,
+        ffmpeg_preset_name.unwrap(),
         if params.config.disable_loading{format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)}
         else{"-ss 0.1".to_string()},
     );
