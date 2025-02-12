@@ -46,7 +46,7 @@ zh-CN:
 </i18n>
 
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue';
+import { ref, onUnmounted, reactive } from 'vue';
 
 import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
@@ -124,6 +124,47 @@ function showOutput(task: Task) {
     outputDialog.value = true;
   }
 }
+
+const cardTransforms = reactive<{ [key: string]: string }>({});
+const defaultTransform = ref('rotateX(0) rotateY(0) scale(1)');
+
+
+const effectConfig = {
+  rotateYSensitivity: 15,
+  rotateXSensitivity: 10,
+  translateSensitivity: 15,
+  scaleFactor: 1.02,
+  translateZ: 30
+};
+
+function handleMouseMove(event: MouseEvent, taskId: string) {
+  const card = document.getElementById(`card-${taskId}`);
+  if (!card) return;
+
+  const rect = card.getBoundingClientRect();
+  const { rotateYSensitivity, rotateXSensitivity, translateSensitivity, scaleFactor, translateZ } = effectConfig;
+  
+  const mouseX = event.clientX - rect.left;
+  const mouseY = event.clientY - rect.top;
+  
+  const rotateY = ((mouseX / rect.width) - 0.5) * rotateYSensitivity;
+  const rotateX = ((mouseY / rect.height) - 0.5) * -rotateXSensitivity;
+  
+  const translateX = (mouseX / rect.width - 0.5) * translateSensitivity;
+  const translateY = (mouseY / rect.height - 0.5) * translateSensitivity;
+
+  cardTransforms[taskId] = `
+    rotateY(${rotateY}deg)
+    rotateX(${rotateX}deg)
+    translateZ(${translateZ}px)
+    scale(${scaleFactor})
+    translate(${translateX}px, ${translateY}px)
+  `;
+}
+
+function resetCardRotation(taskId: string) {
+  cardTransforms[taskId] = defaultTransform.value;
+}
 </script>
 
 <template>
@@ -146,8 +187,18 @@ function showOutput(task: Task) {
         </v-row>
       </v-form>
     </v-slide-y-transition>
-   <div class="task-card-container" v-for="task in tasks" :key="task.id">
-    <v-card class="task-card">
+   <div 
+      class="task-card-container" 
+      v-for="task in tasks" 
+      :key="task.id"
+      @mousemove="handleMouseMove($event, task.id)"
+      @mouseleave="resetCardRotation(task.id)"
+    >
+      <v-card 
+        class="task-card"
+        :id="'card-' + task.id"
+        :style="{ transform: cardTransforms[task.id] }"
+      >
       <div class="d-flex flex-row align-stretch">
         <div class="d-flex flex-row align-center" style="width: 35%">
           <div
@@ -260,33 +311,33 @@ function showOutput(task: Task) {
 
 <style scoped>
 .task-card-container {
-  perspective: 872px;
-}
-
-.task-card {
-  transform: translateZ(0);
-  border-radius: 16px !important;
-  background: rgba(255, 255, 255, 0.03) !important;
-  backdrop-filter: blur(8px);
-  transition: transform 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  perspective: 916px;
   transform-style: preserve-3d;
+  margin: 1rem 0;
 }
 
+task-card {
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-style: preserve-3d;
+  will-change: transform;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  backface-visibility: hidden;
+}
+/*
 .task-card:hover {
   transform: rotateY(15deg) translateZ(30px) scale(1.02);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
 }
-
+*/
 .task-card-container {
   perspective: 1000px;
   transform-style: preserve-3d;
 }
-  
+/*  
 .task-card:hover .task-cover {
   transform: rotateY(15deg) translateZ(30px);
 }
-
+*/
 .v-btn {
   background: linear-gradient(45deg, #2196F3, #E91E63);
   border-radius: 50px;
