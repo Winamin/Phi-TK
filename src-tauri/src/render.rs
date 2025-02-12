@@ -433,11 +433,16 @@ pub async fn main() -> Result<()> {
         } else {
             ["h264_qsv", "h264_nvenc", "h264_amf"]
         };
-    
-        candidates.iter()
-            .find(|&&enc| test_encoder(enc))
-            .copied()
-            .unwrap_or_else(|| if params.config.hevc { "libx265" } else { "libx264" })
+
+        let mut encoder = None;
+        for candidate in &candidates {
+            if test_encoder(candidate) {
+                encoder = Some(*candidate);
+                break;
+            }
+        }
+
+        encoder.unwrap_or(if params.config.hevc { "libx265" } else { "libx264" })
     } else {
         if params.config.hevc { "libx265" } else { "libx264" }
     };
@@ -446,7 +451,7 @@ pub async fn main() -> Result<()> {
         && !selected_encoder.ends_with("nvenc") 
         && !selected_encoder.ends_with("amf") 
     {
-        bail!(tl!("no-hwacc"));
+        eprintln!("不支持硬件加速，回退到软件编码器: {}", selected_encoder);
     }
 
     let (bitrate_param, preset_key) = match selected_encoder {
@@ -471,9 +476,8 @@ pub async fn main() -> Result<()> {
     );
 
     let mut proc = cmd_hidden(&ffmpeg)
-        //.args(args.split_whitespace())
-        .arg(mixing_output.path())
         .args(args2.split_whitespace())
+        .arg(mixing_output.path())
         .arg(output_path)
         .arg("-loglevel")
         .arg("warning")
