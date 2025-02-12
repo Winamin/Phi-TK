@@ -228,6 +228,7 @@ function handleMouseLeave(taskId: string) {
         </v-row>
       </v-form>
     </v-slide-y-transition>
+    <transition-group name="card" tag="div">
     <div 
     class="task-card-container" 
     v-for="task in tasks" 
@@ -314,6 +315,7 @@ function handleMouseLeave(taskId: string) {
         </div>
       </div>
     </v-card>
+   </transition-group>
   </div>
 
     <v-dialog v-model="errorDialog" width="auto" min-width="400px">
@@ -433,5 +435,22 @@ pre {
 .v-slide-y-transition-enter-from {
   opacity: 0;
   transform: translateY(-20px);
+}
+
+.card-enter-from, .card-leave-to {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.card-enter-active, .card-leave-active {
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.card-appear-from {
+  opacity: 0;
+  transform: translateY(20px);
+}
+.card-appear-active {
+  transition: opacity 0.5s ease, transform 0.5s ease;
 }
 </style>
