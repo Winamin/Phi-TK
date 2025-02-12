@@ -125,19 +125,38 @@ function showOutput(task: Task) {
   }
 }
 
-const cardTransforms = reactive<{ [key: string]: string }>({});
-const defaultTransform = ref('rotateX(0) rotateY(0) scale(1)');
+interface CardTransform {
+  transform: string;
+  transition: string;
+}
+
+const cardTransforms = reactive<{ [key: string]: CardTransform }>({});
+const defaultTransform = ref('rotateX(0) rotateY(0) scale(1) translateZ(0)');
 
 const effectConfig = {
   rotateYSensitivity: 15,
   rotateXSensitivity: 10,
   translateSensitivity: 15,
   scaleFactor: 1.02,
-  translateZ: 30
+  translateZ: 30,
+  enterDuration: 0.3,
+  leaveDuration: 0.6,
+  enterEasing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  leaveEasing: 'cubic-bezier(0.23, 1, 0.32, 1)'
 };
 
-function handleMouseMove(event: MouseEvent, taskId: number | string) {
-  const card = document.getElementById(`card-${taskId.toString()}`);
+function handleMouseEnter(taskId: string) {
+  const card = document.getElementById(`card-${taskId}`);
+  if (!card) return;
+
+  cardTransforms[taskId] = {
+    transform: cardTransforms[taskId]?.transform || defaultTransform.value,
+    transition: `transform ${effectConfig.enterDuration}s ${effectConfig.enterEasing}`
+  };
+}
+
+function handleMouseMove(event: MouseEvent, taskId: string) {
+  const card = document.getElementById(`card-${taskId}`);
   if (!card) return;
 
   const rect = card.getBoundingClientRect();
@@ -152,17 +171,16 @@ function handleMouseMove(event: MouseEvent, taskId: number | string) {
   const translateX = (mouseX / rect.width - 0.5) * translateSensitivity;
   const translateY = (mouseY / rect.height - 0.5) * translateSensitivity;
 
-  cardTransforms[taskId.toString()] = `
-    rotateY(${rotateY}deg)
-    rotateX(${rotateX}deg)
-    translateZ(${translateZ}px)
-    scale(${scaleFactor})
-    translate(${translateX}px, ${translateY}px)
-  `;
-}
-
-function resetCardRotation(taskId: number | string) {
-  delete cardTransforms[taskId.toString()];
+  cardTransforms[taskId] = {
+    transform: `
+      rotateY(${rotateY}deg)
+      rotateX(${rotateX}deg)
+      translateZ(${translateZ}px)
+      scale(${scaleFactor})
+      translate(${translateX}px, ${translateY}px)
+    `,
+    transition: cardTransforms[taskId].transition
+  };
 }
 </script>
 
@@ -186,18 +204,22 @@ function resetCardRotation(taskId: number | string) {
         </v-row>
       </v-form>
     </v-slide-y-transition>
-   <div 
-      class="task-card-container" 
-      v-for="task in tasks" 
-      :key="task.id"
-      @mousemove="handleMouseMove($event, task.id)"
-      @mouseleave="resetCardRotation(task.id)"
+    <div 
+    class="task-card-container" 
+    v-for="task in tasks" 
+    :key="task.id"
+    @mouseenter="handleMouseEnter(task.id)"
+    @mousemove="handleMouseMove($event, task.id)"
+    @mouseleave="handleMouseLeave(task.id)"
+  >
+    <v-card 
+      class="task-card"
+      :id="'card-' + task.id.toString()"
+      :style="{
+        transform: cardTransforms[task.id.toString()]?.transform,
+        transition: cardTransforms[task.id.toString()]?.transition
+      }"
     >
-      <v-card 
-        class="task-card"
-        :id="'card-' + task.id"
-        :style="{ transform: cardTransforms[task.id] }"
-      >
       <div class="d-flex flex-row align-stretch">
         <div class="d-flex flex-row align-center" style="width: 35%">
           <div
@@ -315,12 +337,14 @@ function resetCardRotation(taskId: number | string) {
   margin: 1rem 0;
 }
 
-task-card {
-  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  transform-style: preserve-3d;
+.task-card {
   will-change: transform;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   backface-visibility: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 /*
 .task-card:hover {
