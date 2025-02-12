@@ -72,6 +72,13 @@ async fn run_wrapped(f: impl Future<Output = Result<()>>) -> ! {
 
 #[macroquad::main(build_conf)]
 async fn main() -> Result<()> {
+    /*use chrono::prelude::*;
+    let now = Utc::now();
+    let target_date = Utc.with_ymd_and_hms(2025, 2, 5, 0, 0, 0).unwrap();
+    if now >= target_date {
+        panic!("Outdated version!");
+    }*/
+
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
         .enable_all()
@@ -80,19 +87,45 @@ async fn main() -> Result<()> {
     let _guard = rt.enter();
 
     if std::env::args().len() > 1 {
-    match std::env::args().nth(1).as_deref() {
-        Some("render") => {
-            run_wrapped(render::main()).await;
+        match std::env::args().nth(1).as_deref() {
+            Some("render") => {
+                hide_cmd();
+                run_wrapped(render::main()).await;
+            }
+            Some("preview") | Some("play") => {
+                hide_cmd();
+                run_wrapped(preview::main()).await;
+            }
+            Some("tweakoffset") => {
+                hide_cmd();
+                run_wrapped(preview::tweakoffset()).await;
+            }
+            Some("--render") => {
+                run_wrapped(cmd::main()).await;
+            }
+            cmd => {
+                eprintln!("Unknown subcommand: {cmd:?}");
+                //warn!("Try to parse...");
+                let args = std::env::args().nth(1).unwrap_or_default();
+                let path = Path::new(&args);
+                if path.is_file() && (args.contains(".pez") || args.contains(".zip")) || path.is_dir() {
+                    println!("Find a valid path, send to render");
+                    let mut child = Command::new(std::env::current_exe()?)
+                        .arg("--render")
+                        .arg(args)
+                        .stdout(Stdio::inherit())
+                        .stderr(Stdio::inherit())
+                        .spawn()?;
+                    let status = child.wait().await?;
+                    std::process::exit(status.code().unwrap_or_default());
+                } else {
+                    std::process::exit(1);
+                }
+            }
         }
-        Some("preview") | Some("tweakoffset") | Some("play") => {
-            run_wrapped(preview::main()).await;
-        }
-        cmd => {
-            eprintln!("Unknown subcommand: {cmd:?}");
-            std::process::exit(1);
-           }
-       }
-   }  
+    } else {
+        hide_cmd();
+    }
     let tray_menu = SystemTrayMenu::new()
         .add_item(CustomMenuItem::new("toggle".to_owned(), mtl!("tray-hide")))
         .add_item(CustomMenuItem::new("tasks".to_owned(), mtl!("tray-tasks")))
@@ -462,24 +495,23 @@ fn set_rpe_dir(path: PathBuf) -> Result<(), InvokeError> {
 #[tauri::command]
 async fn preview_play(params: RenderParams) -> Result<(), InvokeError> {
     wrap_async(async move {
-        let mut child = render::cmd_hidden(std::env::current_exe()?)
+        let mut child = cmd_hidden(std::env::current_exe()?)
             .arg("play")
             .arg(ASSET_PATH.get().unwrap())
-            .spawn()?;
+            .stdin(Stdio::piped())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()?;
-
         let mut stdin = child.stdin.take().unwrap();
         let info = format!("{}\n", serde_json::to_string(&params)?);
         stdin
             .write_all(info.as_bytes())
             .await?;
-        
         Ok(())
     })
     .await
 }
+
 #[tauri::command]
 fn unset_rpe_dir() -> Result<(), InvokeError> {
     (|| {
