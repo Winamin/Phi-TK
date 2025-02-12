@@ -128,7 +128,6 @@ function showOutput(task: Task) {
 const cardTransforms = reactive<{ [key: string]: string }>({});
 const defaultTransform = ref('rotateX(0) rotateY(0) scale(1)');
 
-
 const effectConfig = {
   rotateYSensitivity: 15,
   rotateXSensitivity: 10,
@@ -137,8 +136,8 @@ const effectConfig = {
   translateZ: 30
 };
 
-function handleMouseMove(event: MouseEvent, taskId: string) {
-  const card = document.getElementById(`card-${taskId}`);
+function handleMouseMove(event: MouseEvent, taskId: number | string) {
+  const card = document.getElementById(`card-${taskId.toString()}`);
   if (!card) return;
 
   const rect = card.getBoundingClientRect();
@@ -153,7 +152,7 @@ function handleMouseMove(event: MouseEvent, taskId: string) {
   const translateX = (mouseX / rect.width - 0.5) * translateSensitivity;
   const translateY = (mouseY / rect.height - 0.5) * translateSensitivity;
 
-  cardTransforms[taskId] = `
+  cardTransforms[taskId.toString()] = `
     rotateY(${rotateY}deg)
     rotateX(${rotateX}deg)
     translateZ(${translateZ}px)
@@ -162,8 +161,8 @@ function handleMouseMove(event: MouseEvent, taskId: string) {
   `;
 }
 
-function resetCardRotation(taskId: string) {
-  cardTransforms[taskId] = defaultTransform.value;
+function resetCardRotation(taskId: number | string) {
+  delete cardTransforms[taskId.toString()];
 }
 </script>
 
