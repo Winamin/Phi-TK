@@ -377,7 +377,7 @@ pub async fn main() -> Result<()> {
     let frame_delta = 1. / fps as f32;
     let frames = (video_length / frame_delta as f64).ceil() as u64;
     send(IPCEvent::StartRender(frames));
-
+    let ffmpeg_path = Path::new(&ffmpeg);
     let codecs = String::from_utf8(
         cmd_hidden(&ffmpeg)
             .arg("-codecs")
@@ -409,7 +409,7 @@ pub async fn main() -> Result<()> {
         None if params.config.hardware_accel => bail!(tl!("no-hwacc")),
         None => {
             let cpu_encoder = if params.config.hevc { "libx265" } else { "libx264" };
-            if codecs.contains(cpu_encoder) && test_encoder(cpu_encoder, &ffmpeg)? {
+            if codecs.contains(encoder) && test_encoder(encoder, &ffmpeg)? {
                 cpu_encoder
             } else {
                 bail!(tl!("no-encoder"))
@@ -438,7 +438,7 @@ pub async fn main() -> Result<()> {
         EncoderType::Cpu => 0,
     };
     let ffmpeg_preset_name = preset_names.get(preset_index).unwrap_or(&"medium");
-
+    //let args = "-y -f rawvideo -c:v rawvideo".to_owned();
     let args2 = format!(
         "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
         selected_encoder,
