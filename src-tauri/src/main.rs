@@ -53,10 +53,14 @@ pub fn build_conf() -> macroquad::window::Conf {
         window_title: "Phi TK".to_string(),
         window_width: 1280,
         window_height: 720,
-        headless: std::env::args().skip(1).next().as_deref() != Some("preview"),
+        headless: !matches!(
+            std::env::args().skip(1).next().as_deref(),
+            Some("preview") | Some("tweakoffset") | Some("play")
+        ),
         ..Default::default()
     }
 }
+
 
 async fn run_wrapped(f: impl Future<Output = Result<()>>) -> ! {
     if let Err(err) = f.await {
@@ -81,7 +85,7 @@ async fn main() -> Result<()> {
                 run_wrapped(render::main()).await;
             }
             Some("preview") => {
-                run_wrapped(preview::main()).await;
+                Some("preview") | Some("tweakoffset") | Some("play")
             }
             cmd => {
                 eprintln!("Unknown subcommand: {cmd:?}");
@@ -103,6 +107,7 @@ async fn main() -> Result<()> {
             exit_program,
             show_folder,
             show_in_folder,
+            preview_play,
             preview_chart,
             parse_chart,
             post_render,
