@@ -23,7 +23,7 @@ use std::{
     collections::HashMap,
     fs::File,
     future::Future,
-    io::{BufRead, BufReader, BufWriter},
+    io::{BufRead, BufReader, BufWriter, Write},
     ops::DerefMut,
     path::{Path, PathBuf},
     process::Stdio,
