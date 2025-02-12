@@ -34,11 +34,58 @@ const openGitHub = () => {
 onMounted(() => {
   fetchVersion()
 })
+
+const letters = ref<string[]>([])
+const containerRef = ref<HTMLElement | null>(null)
+
+onMounted(() => {
+  fetchVersion()
+  letters.value = t('app').split('')
+  
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!containerRef.value) return
+    
+    const { left, top, width, height } = containerRef.value.getBoundingClientRect()
+    const centerX = left + width / 2
+    const centerY = top + height / 2
+    const rotateX = (e.clientY - centerY) / 30 
+    const rotateY = (e.clientX - centerX) / -30
+    
+    containerRef.value.style.setProperty('--x', `${rotateY}deg`)
+    containerRef.value.style.setProperty('--y', `${rotateX}deg`)
+  }
+
+  window.addEventListener('mousemove', throttle(handleMouseMove, 50))
+})
+
+const throttle = (fn: Function, delay: number) => {
+  let lastTime = 0
+  return (...args: any[]) => {
+    const now = Date.now()
+    if (now - lastTime >= delay) {
+      fn(...args)
+      lastTime = now
+    }
+  }
+}
 </script>
 
 <template>
   <div class="about-container">
-    <h1 class="app-title gradient-text">{{ t('app') }}</h1>
+    <h1 
+      ref="containerRef"
+      class="app-title"
+      aria-label="Phi TK"
+    >
+      <span 
+        v-for="(char, index) in letters"
+        :key="index"
+        class="letter"
+        :style="{ '--i': index }"
+      >
+        {{ char === ' ' ? '&nbsp;' : char }}
+      </span>
+    </h1>
     
     <v-scale-transition>
       <h4 class="version-label text-glow">v{{ appVersion }}</h4>
@@ -119,4 +166,41 @@ onMounted(() => {
   background-clip: text;
   color: transparent;
 }
+
+.app-title {
+  perspective: 1000px;
+  display: inline-block;
+  font-size: 3rem;
+  position: relative;
+  overflow: hidden;
+  height: 1.2em;
+}
+
+.letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(1em);
+  animation: appear 0.6s forwards cubic-bezier(0.5, 1, 0.5, 1.2);
+  animation-delay: calc(var(--i) * 0.1s);
+  will-change: transform, opacity;
+  transition: transform 0.3s ease-out;
+}
+
+@keyframes appear {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app-title:hover .letter {
+  transform: 
+    translate(
+      calc(var(--x) * 0.5px), 
+      calc(var(--y) * 0.5px)
+    )
+    rotateX(calc(var(--x) * 0.3deg)) 
+    rotateY(calc(var(--y) * 0.3deg));
+}
+
 </style>
