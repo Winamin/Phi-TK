@@ -315,8 +315,9 @@ function handleMouseLeave(taskId: string) {
         </div>
       </div>
     </v-card>
-   </transition-group>
-  </div>
+   </div>
+  </transition-group>
+</div>
 
     <v-dialog v-model="errorDialog" width="auto" min-width="400px">
       <v-card class="glass-background">
