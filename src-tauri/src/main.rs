@@ -465,7 +465,7 @@ async fn preview_play(params: RenderParams) -> Result<(), InvokeError> {
         let mut child = render::cmd_hidden(std::env::current_exe()?)
             .arg("play")
             .arg(ASSET_PATH.get().unwrap())
-            .stdin(Stdio::piped())
+            .spawn()?;
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()?;
