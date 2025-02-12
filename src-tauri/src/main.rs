@@ -90,9 +90,9 @@ async fn main() -> Result<()> {
         cmd => {
             eprintln!("Unknown subcommand: {cmd:?}");
             std::process::exit(1);
-            }
-        }
-    }
+           }
+       }
+   }  
     let tray_menu = SystemTrayMenu::new()
         .add_item(CustomMenuItem::new("toggle".to_owned(), mtl!("tray-hide")))
         .add_item(CustomMenuItem::new("tasks".to_owned(), mtl!("tray-tasks")))
