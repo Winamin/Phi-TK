@@ -9,8 +9,7 @@ en:
     config: 'Configure chart'
     options: 'Render options'
     render: 'Render'
-    play: Play
-
+  
   choose:
     archive: Archive (.zip, .pez)
     folder: Folder
@@ -81,7 +80,6 @@ zh-CN:
 
   preview: 预览
   render: 渲染
-  play: 游玩
 
   render-started: 视频开始渲染了！
   see-tasks: 查看任务列表
@@ -145,18 +143,6 @@ async function chooseChart(folder?: boolean) {
   await loadChart(file as string);
 
   choosingChart.value = false;
-}
-
-async function previewPlay() {
-  try {
-    let params = await buildParams();
-    if (!params) return false;
-    await invoke('preview_play', { params });
-    return true;
-  } catch (e) {
-    toastError(e);
-    return false;
-  }
 }
 
 async function loadChart(file: string) {
@@ -305,7 +291,6 @@ function tryParseAspect(): number | undefined {
         <div class="flex-grow-1"></div>
         <v-btn v-if="step === 'options'" variant="tonal" @click="previewChart" class="mr-2" v-t="'preview'"></v-btn>
         <v-btn variant="tonal" @click="moveNext" class="gradient-primary">{{ step === 'options' ? t('render') : t('next-step') }}</v-btn>
-        <v-btn v-if="step === 'options'" variant="tonal" @click="previewPlay" class="mr-2" v-t="'play'"></v-btn>
       </div>
 
       <template v-slot:item.1>
