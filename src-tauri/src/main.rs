@@ -80,20 +80,19 @@ async fn main() -> Result<()> {
     let _guard = rt.enter();
 
     if std::env::args().len() > 1 {
-        match std::env::args().skip(1).next().as_deref() {
-            Some("render") => {
-                run_wrapped(render::main()).await;
-            }
-            Some("preview") => {
-                Some("preview") | Some("tweakoffset") | Some("play")
-            }
-            cmd => {
-                eprintln!("Unknown subcommand: {cmd:?}");
-                std::process::exit(1);
+    match std::env::args().nth(1).as_deref() {
+        Some("render") => {
+            run_wrapped(render::main()).await;
+        }
+        Some("preview") | Some("tweakoffset") | Some("play") => {
+            run_wrapped(preview::main()).await;
+        }
+        cmd => {
+            eprintln!("Unknown subcommand: {cmd:?}");
+            std::process::exit(1);
             }
         }
     }
-
     let tray_menu = SystemTrayMenu::new()
         .add_item(CustomMenuItem::new("toggle".to_owned(), mtl!("tray-hide")))
         .add_item(CustomMenuItem::new("tasks".to_owned(), mtl!("tray-tasks")))
@@ -463,7 +462,7 @@ fn set_rpe_dir(path: PathBuf) -> Result<(), InvokeError> {
 #[tauri::command]
 async fn preview_play(params: RenderParams) -> Result<(), InvokeError> {
     wrap_async(async move {
-        let mut child = cmd_hidden(std::env::current_exe()?)
+        let mut child = render::cmd_hidden(std::env::current_exe()?)
             .arg("play")
             .arg(ASSET_PATH.get().unwrap())
             .stdin(Stdio::piped())
