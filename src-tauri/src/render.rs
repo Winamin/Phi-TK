@@ -354,7 +354,7 @@ pub async fn main() -> Result<()> {
     let frame_delta = 1. / fps as f32;
     let frames = (video_length / frame_delta as f64).ceil() as u64;
     send(IPCEvent::StartRender(frames));
-
+/*
     let codecs = String::from_utf8(
         cmd_hidden(&ffmpeg)
             .arg("-codecs")
@@ -412,6 +412,62 @@ pub async fn main() -> Result<()> {
         ffmpeg_preset_name.unwrap(),
         if params.config.disable_loading{format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)}
         else{"-ss 0.1".to_string()},
+    );
+*/
+
+    fn test_encoder(encoder: &str) -> bool {
+        Command::new("ffmpeg")
+            .args(&["-y", "-f", "lavfi", "-i", "testsrc=duration=0.1:size=2x2", "-frames:v", "1"])
+            .arg("-c:v").arg(encoder)
+            .arg("/dev/null")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
+    let selected_encoder = if params.config.hardware_accel {
+        let candidates = if params.config.hevc {
+            ["hevc_qsv", "hevc_nvenc", "hevc_amf"]
+        } else {
+            ["h264_qsv", "h264_nvenc", "h264_amf"]
+        };
+    
+        candidates.iter()
+            .find(|&&enc| test_encoder(enc))
+            .copied()
+            .unwrap_or_else(|| if params.config.hevc { "libx265" } else { "libx264" })
+    } else {
+        if params.config.hevc { "libx265" } else { "libx264" }
+    };
+
+    if params.config.hardware_accel && !selected_encoder.ends_with("qsv") 
+        && !selected_encoder.ends_with("nvenc") 
+        && !selected_encoder.ends_with("amf") 
+    {
+        bail!(tl!("no-hwacc"));
+    }
+
+    let (bitrate_param, preset_key) = match selected_encoder {
+        enc if enc.ends_with("qsv") => ("-q", "-preset"),
+        enc if enc.ends_with("nvenc") => ("-cq", "-preset"),
+        enc if enc.ends_with("amf") => ("-qp_p", "-quality"),
+        _ => ("-crf", "-preset")
+    };
+
+    let args2 = format!(
+        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
+        selected_encoder,
+        bitrate_param,
+        params.config.bitrate,
+        preset_key,
+        params.config.ffmpeg_preset.split_whitespace().next().unwrap(),
+        if params.config.disable_loading {
+            format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
+        } else {
+            "-ss 0.1".to_string()
+        }
     );
 
     let mut proc = cmd_hidden(&ffmpeg)
