@@ -182,6 +182,30 @@ function handleMouseMove(event: MouseEvent, taskId: string) {
     transition: cardTransforms[taskId].transition
   };
 }
+
+function handleMouseLeave(taskId: string) {
+  const card = document.getElementById(`card-${taskId}`);
+  if (!card) return;
+
+  cardTransforms[taskId] = {
+    transform: cardTransforms[taskId].transform,
+    transition: `transform ${effectConfig.leaveDuration}s ${effectConfig.leaveEasing}`
+  };
+
+  requestAnimationFrame(() => {
+    cardTransforms[taskId] = {
+      transform: defaultTransform.value,
+      transition: `transform ${effectConfig.leaveDuration}s ${effectConfig.leaveEasing}`
+    };
+    
+    setTimeout(() => {
+      if (cardTransforms[taskId]?.transform === defaultTransform.value) {
+        delete cardTransforms[taskId];
+      }
+    }, effectConfig.leaveDuration * 1000);
+  });
+}
+
 </script>
 
 <template>
@@ -208,9 +232,9 @@ function handleMouseMove(event: MouseEvent, taskId: string) {
     class="task-card-container" 
     v-for="task in tasks" 
     :key="task.id"
-    @mouseenter="handleMouseEnter(task.id)"
-    @mousemove="handleMouseMove($event, task.id)"
-    @mouseleave="handleMouseLeave(task.id)"
+    @mouseenter="handleMouseEnter(task.id.toString())"
+    @mousemove="handleMouseMove($event, task.id.toString())"
+    @mouseleave="handleMouseLeave(task.id.toString())"
   >
     <v-card 
       class="task-card"
