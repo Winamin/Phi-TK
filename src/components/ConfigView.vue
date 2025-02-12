@@ -53,7 +53,7 @@ en:
   volume-sfx: SFX Volume
 
   ending-length: Result Screen Duration
-  disable-loading: Remove loading screen
+  disable-loading: Loading disabled
   disable-loading-tips: It's a bit problematic and not recommended
   chart_debug: Debug Mode
   chart_ratio: Chart Zoom
@@ -135,7 +135,7 @@ zh-CN:
   volume-sfx: 音效音量
 
   ending-length: 结算画面时长
-  disable-loading: 启用UI加载
+  disable-loading: 禁用加载
   disable-loading-tips: 有点问题，不建议使用
   chart_debug: 调试模式
   chart_ratio: 谱面缩放
