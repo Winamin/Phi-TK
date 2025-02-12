@@ -374,7 +374,7 @@ pub async fn main() -> Result<()> {
     let ffmpeg_preset =  if !has_qsv && !use_cuda && has_amf {"-quality"} else {"-preset"};
     let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
 
-    let (qsv, nevnc, _amf, cpu) = if params.config.hevc {
+    let (qsv, nvenc, _amf, cpu) = if params.config.hevc {
         ("hevc_qsv", "hevc_nvenc", "hevc_amf", "libx265")
     } else {
         ("h264_qsv", "h264_nvenc", "h264_amf", "libx264")
