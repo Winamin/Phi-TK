@@ -471,7 +471,7 @@ pub async fn main() -> Result<()> {
     );
 
     let mut proc = cmd_hidden(&ffmpeg)
-        .args(args.split_whitespace())
+        //.args(args.split_whitespace())
         .arg(mixing_output.path())
         .args(args2.split_whitespace())
         .arg(output_path)
