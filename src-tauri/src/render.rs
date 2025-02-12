@@ -354,7 +354,7 @@ pub async fn main() -> Result<()> {
     let frame_delta = 1. / fps as f32;
     let frames = (video_length / frame_delta as f64).ceil() as u64;
     send(IPCEvent::StartRender(frames));
-/*
+
     let codecs = String::from_utf8(
         cmd_hidden(&ffmpeg)
             .arg("-codecs")
@@ -413,8 +413,8 @@ pub async fn main() -> Result<()> {
         if params.config.disable_loading{format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)}
         else{"-ss 0.1".to_string()},
     );
-*/
 
+/*
     fn test_encoder(encoder: &str) -> bool {
         Command::new("ffmpeg")
             .args(&["-y", "-f", "lavfi", "-i", "testsrc=duration=0.1:size=2x2", "-frames:v", "1"])
@@ -474,10 +474,11 @@ pub async fn main() -> Result<()> {
             "-ss 0.1".to_string()
         }
     );
-
+*/
     let mut proc = cmd_hidden(&ffmpeg)
-        .args(args2.split_whitespace())
+        .args(args.split_whitespace())
         .arg(mixing_output.path())
+        .args(args2.split_whitespace())
         .arg(output_path)
         .arg("-loglevel")
         .arg("warning")
