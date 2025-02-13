@@ -292,22 +292,39 @@ function onHoverMove(e: MouseEvent) {
   const centerX = rect.width / 2;
   const centerY = rect.height / 2;
   
-  const offsetX = (e.clientX - rect.left - centerX) * 0.1;
-  const offsetY = (e.clientY - rect.top - centerY) * 0.1;
+  const offsetX = (e.clientX - rect.left - centerX) * 0.15;
+  const offsetY = (e.clientY - rect.top - centerY) * 0.15;
   
-  moveOffset.value = { x: offsetX, y: offsetY };
-}
-
-function resetHover() {
-  moveOffset.value = { x: 0, y: 0 };
+  moveOffset.value = { 
+    x: offsetX * (window.innerWidth / 1280),
+    y: offsetY * (window.innerHeight / 720) 
+  };
 }
 
 const archiveStyle = computed(() => ({
-  transform: `translate(${moveOffset.value.x * 0.8}px, ${moveOffset.value.y * 0.8}px)`
+  transform: `translate(
+    ${moveOffset.value.x * 1.2}px, 
+    ${moveOffset.value.y * 1.2}px
+  ) rotate3d(
+    ${-moveOffset.value.y / 20}, 
+    ${moveOffset.value.x / 20}, 
+    0, 
+    ${Math.sqrt(moveOffset.value.x**2 + moveOffset.value.y**2) / 4}deg
+  )`,
+  filter: `drop-shadow(${-moveOffset.value.x/4}px ${-moveOffset.value.y/4}px 6px rgba(99, 102, 241, 0.2))`
 }));
 
 const folderStyle = computed(() => ({
-  transform: `translate(${-moveOffset.value.x * 0.8}px, ${-moveOffset.value.y * 0.8}px)`
+  transform: `translate(
+    ${-moveOffset.value.x * 0.8}px, 
+    ${-moveOffset.value.y * 0.8}px
+  ) rotate3d(
+    ${moveOffset.value.y / 20}, 
+    ${-moveOffset.value.x / 20}, 
+    0, 
+    ${Math.sqrt(moveOffset.value.x**2 + moveOffset.value.y**2) / 6}deg
+  )`,
+  filter: `drop-shadow(${moveOffset.value.x/4}px ${moveOffset.value.y/4}px 6px rgba(99, 102, 241, 0.2))`
 }));
 </script>
 
@@ -424,119 +441,153 @@ const folderStyle = computed(() => ({
 </template>
 
 <style scoped>
-.v-progress-linear,
-.v-progress-linear__determinate {
-  transition: none;
-}
-
 .gradient-primary {
-  background: linear-gradient(45deg, #6366f1, #8b5cf6) !important;
-  box-shadow: 0 4px 6px -1px rgb(99 102 241 / 0.2);
-  transition: transform 0.2s, box-shadow 0.2s;
+  background: linear-gradient(
+    45deg, 
+    #6366f1, 
+    #8b5cf6, 
+    #ec4899
+  ) !important;
+  box-shadow: 0 4px 6px -1px rgb(99 102 241 / 0.3);
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
 }
 
-.gradient-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 15px -3px rgb(99 102 241 / 0.3);
+.gradient-primary::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    45deg,
+    transparent 25%,
+    rgba(255,255,255,0.1) 50%,
+    transparent 75%
+  );
+  background-size: 200% 200%;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.gradient-primary:hover::after {
+  opacity: 1;
+  animation: shine 1.5s infinite;
+}
+
+@keyframes shine {
+  0% { background-position: 150% 150%; }
+  100% { background-position: -50% -50%; }
+}
+
+.hover-movable {
+  transition: 
+    transform 0.6s cubic-bezier(0.23, 1, 0.32, 1),
+    filter 0.4s ease,
+    box-shadow 0.4s ease;
+  will-change: transform, filter;
+}
+
+.v-btn:hover {
+  transform: 
+    translateY(-2px) 
+    scale(1.05) 
+    rotateZ(1deg) !important;
+  box-shadow: 
+    0 12px 24px -6px rgb(99 102 241 / 0.4),
+    0 4px 12px -4px rgb(99 102 241 / 0.3) !important;
 }
 
 .elevated-stepper {
-  border-radius: 16px !important;
-  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1) !important;
-  background: rgba(23, 9, 99, 0.8) !important;
-  backdrop-filter: blur(8px);
-}
-
-.v-text-field :deep(.v-field--focused) {
-  border-color: #6366f1 !important;
-  box-shadow: 0 0 0 2px rgb(99 102 241 / 0.2);
-}
-
-.v-stepper {
-  font-family: 'Inter var', system-ui, sans-serif;
-}
-
-h2 {
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  background: linear-gradient(45deg, #3b82f6, #6366f1);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-:deep(.v-stepper-header__item) .v-stepper-header__title {
-  font-weight: 500;
-  color: #64748b;
-}
-
-:deep(.v-stepper-header__item--active) .v-stepper-header__title {
-  color: #6366f1;
-  font-weight: 600;
+  border-radius: 24px !important;
+  box-shadow: 
+    0 25px 50px -12px rgb(0 0 0 / 0.3),
+    0 0 40px -10px rgb(99 102 241 / 0.3) !important;
+  background: rgba(23, 9, 99, 0.9) !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 .drop-zone-overlay {
-  background: rgba(99, 102, 241, 0.15) !important;
-  backdrop-filter: blur(4px);
+  background: rgba(99, 102, 241, 0.2) !important;
+  backdrop-filter: blur(8px);
 }
 
 .drop-pulse {
-  animation: pulse 2s infinite;
+  animation: 
+    pulse 2s infinite,
+    float 3s ease-in-out infinite;
+  text-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
 }
 
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
 }
 
-.v-progress-circular {
-  color: #6366f1;
-  --v-progress-circular-size: 48px;
+:deep(.v-stepper-header__item) {
+  transition: all 0.4s ease;
 }
 
-:deep(.v-slider__thumb) {
-  background: #6366f1 !important;
-  box-shadow: 0 4px 6px -1px rgb(99 102 241 / 0.2) !important;
-}
-
-:deep(.v-slider__track-fill) {
-  background: linear-gradient(90deg, #6366f1, #8b5cf6) !important;
-}
-
-.v-text-field.type-number {
-  --v-field-padding-start: 1rem;
-  --v-field-border-radius: 8px;
+:deep(.v-stepper-header__item):hover {
+  transform: translateY(-2px);
 }
 
 .v-stepper__content {
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition: 
+    opacity 0.6s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.8s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .v-stepper__content-leave-active {
-  position: absolute;
+  transition: 
+    opacity 0.3s ease,
+    transform 0.4s ease;
 }
 
 .v-stepper__content-leave-to {
   opacity: 0;
-  transform: translateX(-20px);
+  transform: 
+    translateX(-20px) 
+    perspective(500px) 
+    rotateY(10deg) 
+    scale(0.98);
 }
 
-  .v-stepper__content-enter-from {
+.v-stepper__content-enter-from {
   opacity: 0;
-  transform: translateX(20px);
+  transform: 
+    translateX(20px) 
+    perspective(500px) 
+    rotateY(-10deg) 
+    scale(0.98);
 }
 
-.v-btn {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+.v-text-field :deep(.v-field) {
+  transition: 
+    box-shadow 0.4s ease,
+    transform 0.3s ease;
 }
 
-.hover-movable {
-  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  will-change: transform;
+.v-text-field :deep(.v-field--focused) {
+  box-shadow: 
+    0 0 0 2px rgb(99 102 241 / 0.3),
+    0 8px 24px -6px rgb(99 102 241 / 0.2) !important;
+  transform: scale(1.02);
 }
 
-.v-btn:hover {
-  transform: translateY(-1px) scale(1.02) !important;
+.v-slider__thumb {
+  transition: 
+    transform 0.2s ease,
+    box-shadow 0.3s ease !important;
+}
+
+.v-slider__thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 
+    0 0 0 6px rgb(99 102 241 / 0.15) !important;
 }
 
 </style>
