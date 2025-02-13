@@ -88,7 +88,7 @@ window.goto = (name: string) => {
     <v-main class="d-flex justify-center animated-background">
       <router-view v-slot="{ Component }">
         <transition
-          name="fade-blur"
+          name="slide"
           mode="out-in"
         >
           <Suspense timeout="0">
@@ -181,24 +181,22 @@ window.goto = (name: string) => {
   position: relative;
   z-index: 1;
 }
-  
-.fade-blur-enter-active,
-.fade-blur-leave-active {
-  transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: absolute;
   width: 100%;
 }
 
-.fade-blur-enter-from {
+.slide-enter-from {
   opacity: 0;
-  filter: blur(10px);
-  transform: translateY(-20px);
+  transform: translateX(100%);
 }
 
-.fade-blur-leave-to {
+.slide-leave-to {
   opacity: 0;
-  filter: blur(10px);
-  transform: translateY(20px);
+  transform: translateX(-100%);
 }
 
 .loading-overlay {
