@@ -285,6 +285,10 @@ function tryParseAspect(): number | undefined {
 const hoverContainer = ref<HTMLElement>();
 const moveOffset = ref({ x: 0, y: 0 });
 
+function resetHover() {
+  moveOffset.value = { x: 0, y: 0 };
+}
+
 function onHoverMove(e: MouseEvent) {
   if (!hoverContainer.value) return;
   
@@ -300,7 +304,6 @@ function onHoverMove(e: MouseEvent) {
     y: offsetY * (window.innerHeight / 720) 
   };
 }
-
 const archiveStyle = computed(() => ({
   transform: `translate(
     ${moveOffset.value.x * 1.2}px, 
