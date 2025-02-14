@@ -126,7 +126,10 @@ window.goto = (name: string) => {
 }
 
 .list-item-hover {
-  transition: all 0.3s ease;
+  transition: 
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.3s ease,
+    box-shadow 0.3s ease;
   margin: 8px 12px;
   border-radius: 12px;
 }
@@ -138,9 +141,30 @@ window.goto = (name: string) => {
 
 .active-item {
   background: linear-gradient(45deg, rgba(33, 150, 243, 0.2), transparent) !important;
+  box-shadow: 2px 0 12px rgba(33, 150, 243, 0.2);
   border-left: 4px solid #2196F3;
+  box-sizing: border-box;
+  margin-left: 4px;
+  transform: translateX(8px);
+  transition: all 0.3s ease;
 }
 
+.active-item::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 0;
+  height: 100%;
+  width: 4px;
+  background: #2196F3;
+  transform: scaleY(0);
+  transition: transform 0.3s ease;
+}
+
+.active-item.active-item::before {
+  transform: scaleY(1);
+}
+  
 .glow-spinner {
   filter: drop-shadow(0 0 8px #2196F3);
 }
