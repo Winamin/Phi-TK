@@ -69,7 +69,7 @@ window.goto = (name: string) => {
       rail 
       permanent
       :elevation="8"
-      class="nav-drawer-border blur-background"
+      class="windows-nav-drawer blur-background"
     >
       <v-list density="compact" nav class="py-4">
         <v-list-item
@@ -121,15 +121,92 @@ window.goto = (name: string) => {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
 }
 
-.nav-drawer-border {
+.windows-nav-drawer {
+  --drawer-width: 280px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border-radius: 0 12px 12px 0 !important;
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.2) !important;
+}
+
+.windows-nav-drawer.v-navigation-drawer--rail {
+  width: 56px !important;
+  overflow: visible !important;
+}
+
+.windows-nav-drawer:not(.v-navigation-drawer--rail) {
+  width: var(--drawer-width) !important;
+}
+
+.windows-nav-drawer.v-navigation-drawer--expand-on-hover:hover {
+  transform: translateX(0);
+  animation: drawerSlideIn 0.3s ease-out;
+}
+
+@keyframes drawerSlideIn {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.8;
+    transform: translateX(-20px);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.v-list-item {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin: 8px 12px !important;
+  border-radius: 8px !important;
+  min-height: 40px !important;
+}
+
+.v-list-item:hover {
+  background: linear-gradient(
+    90deg,
+    rgba(33, 150, 243, 0.15) 0%,
+    rgba(33, 150, 243, 0.05) 100%
+  ) !important;
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+  transform: translateX(8px) scale(1.02);
+}
+
+.active-item {
+  position: relative;
+  background: linear-gradient(
+    90deg,
+    rgba(33, 150, 243, 0.2) 0%,
+    transparent 100%
+  ) !important;
+  border-left: 3px solid #2196f3 !important;
+}
+
+.active-item::after {
+  content: "";
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background: #2196f3;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #2196f3;
+}
+
+.blur-background {
+  backdrop-filter: blur(12px) saturate(180%) !important;
+  background: linear-gradient(
+    45deg,
+    rgba(168, 98, 153, 0.15),
+    rgba(101, 66, 182, 0.25)
+  ) !important;
   border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 .list-item-hover {
-  transition: 
-    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    background 0.3s ease,
-    box-shadow 0.3s ease;
+  transition: all 0.3s ease;
   margin: 8px 12px;
   border-radius: 12px;
 }
@@ -139,32 +216,6 @@ window.goto = (name: string) => {
   transform: translateX(8px);
 }
 
-.active-item {
-  background: linear-gradient(45deg, rgba(33, 150, 243, 0.2), transparent) !important;
-  box-shadow: 2px 0 12px rgba(33, 150, 243, 0.2);
-  border-left: 4px solid #2196F3;
-  box-sizing: border-box;
-  margin-left: 4px;
-  transform: translateX(8px);
-  transition: all 0.3s ease;
-}
-
-.active-item::before {
-  content: '';
-  position: absolute;
-  left: -4px;
-  top: 0;
-  height: 100%;
-  width: 4px;
-  background: #2196F3;
-  transform: scaleY(0);
-  transition: transform 0.3s ease;
-}
-
-.active-item.active-item::before {
-  transform: scaleY(1);
-}
-  
 .glow-spinner {
   filter: drop-shadow(0 0 8px #2196F3);
 }
@@ -196,14 +247,6 @@ window.goto = (name: string) => {
 @keyframes animateFlow {
   0% { transform: translate(-25%, -25%) rotate(0deg); }
   100% { transform: translate(-25%, -25%) rotate(360deg); }
-}
-
-.blur-background {
-  backdrop-filter: blur(50px) saturate(180%);
-  background: linear-gradient(45deg, rgba(168, 98, 153, 0.403), rgba(101, 66, 182, 0.6)) !important;
-  transform: translateZ(0);
-  position: relative;
-  z-index: 1;
 }
 
 .slide-enter-active,
