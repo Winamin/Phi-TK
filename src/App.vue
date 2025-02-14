@@ -1,6 +1,7 @@
 <i18n>
 en:
   render: Render
+  render1: Fast Render
   rpe: RPE
   tasks: Tasks
   about: About
@@ -10,12 +11,15 @@ zh-CN:
   rpe: RPE
   tasks: 任务列表
   about: 关于
+
 </i18n>
 
 <script lang="ts">
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { useI18n } from 'vue-i18n';
+
 import { VSonner } from 'vuetify-sonner';
 
 const onLoaded = ref<() => void>();
@@ -35,7 +39,19 @@ declare global {
   }
 }
 
-export default {};
+export default {
+  data() {
+    return {
+      drawer: true,
+    };
+  },
+  methods: {
+    toggleNav() {
+      this.drawer = !this.drawer;
+    },
+  },
+
+};
 </script>
 
 <script setup lang="ts">
@@ -57,21 +73,14 @@ window.goto = (name: string) => {
 </script>
 
 <template>
-  <v-app id="Phi TK" class="dark-theme">
+  <v-app id="phi-recorder" class="dark-theme">
     <v-sonner position="top-center" />
-    <v-app-bar 
-      title="Phi TK" 
-      :elevation="4"
-      class="app-bar-shadow blur-background"
-    ></v-app-bar>
-    <v-navigation-drawer 
-      expand-on-hover 
-      rail 
-      permanent
-      :elevation="8"
-      class="windows-nav-drawer blur-background"
-    >
-      <v-list density="compact" nav class="py-4">
+    <v-app-bar :elevation="0" class="app-bar-shadow blur-background">
+      <!--<v-app-bar-nav-icon @click="toggleNav" class="mx-1"></v-app-bar-nav-icon>-->
+      <v-app-bar-title class="mx-5">Phi Recorder</v-app-bar-title>
+    </v-app-bar>
+    <v-navigation-drawer v-model="drawer" expand-on-hover rail permanent class="nav-drawer-border blur-background list-item">
+      <v-list density="compact" nav>
         <v-list-item
           v-for="key in ['render', 'rpe', 'tasks', 'about']"
           :active="route.name === key"
@@ -80,33 +89,22 @@ window.goto = (name: string) => {
           :title="t(key)"
           @click="router.push({ name: key })"
           class="list-item-hover"
-          active-class="active-item"
-        ></v-list-item>
+          ></v-list-item>
       </v-list>
     </v-navigation-drawer>
 
-    <v-main class="d-flex justify-center animated-background">
+    <v-main class="d-flex justify-center">
       <router-view v-slot="{ Component }">
-        <transition
-          name="slide"
-          mode="out-in"
-        >
-          <Suspense timeout="0">
-            <template #default>
-              <component :is="Component" ref="component" />
-            </template>
-            <template #fallback>
-              <div class="loading-overlay">
-                <v-progress-circular 
-                  indeterminate 
-                  size="64"
-                  color="accent"
-                  class="glow-spinner"
-                />
-              </div>
-            </template>
-          </Suspense>
-        </transition>
+        <Suspense timeout="0">
+          <template #default>
+            <component :is="Component" ref="component" />
+          </template>
+          <template #fallback>
+            <div class="flex justify-center pa-8">
+              <v-progress-circular indeterminate size="large" />
+            </div>
+          </template>
+        </Suspense>
       </router-view>
     </v-main>
   </v-app>
@@ -114,106 +112,40 @@ window.goto = (name: string) => {
 
 <style>
 .dark-theme {
-  background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
+  background: linear-gradient(45deg, #292364, #302b63, #24243e);
 }
 
 .app-bar-shadow {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+  box-shadow: 0px 10px 10px rgba(0, 0, 0, 0.2) !important;
 }
 
-.windows-nav-drawer {
-  --drawer-width: 280px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  border-radius: 0 12px 12px 0 !important;
-  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.2) !important;
-}
-
-.windows-nav-drawer.v-navigation-drawer--rail {
-  width: 56px !important;
-  overflow: visible !important;
-}
-
-.windows-nav-drawer:not(.v-navigation-drawer--rail) {
-  width: var(--drawer-width) !important;
-}
-
-.windows-nav-drawer.v-navigation-drawer--expand-on-hover:hover {
-  transform: translateX(0);
-  animation: drawerSlideIn 0.3s ease-out;
-}
-
-@keyframes drawerSlideIn {
-  from {
-    clip-path: inset(0 100% 0 0);
-    opacity: 0.8;
-    transform: translateX(-20px);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.v-list-item {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  margin: 8px 12px !important;
-  border-radius: 8px !important;
-  min-height: 40px !important;
-}
-
-.v-list-item:hover {
-  background: linear-gradient(
-    90deg,
-    rgba(33, 150, 243, 0.15) 0%,
-    rgba(33, 150, 243, 0.05) 100%
-  ) !important;
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
-  transform: translateX(8px) scale(1.02);
-}
-
-.active-item {
-  position: relative;
-  background: linear-gradient(
-    90deg,
-    rgba(33, 150, 243, 0.2) 0%,
-    transparent 100%
-  ) !important;
-  border-left: 3px solid #2196f3 !important;
-}
-
-.active-item::after {
-  content: "";
-  position: absolute;
-  right: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 6px;
-  height: 6px;
-  background: #2196f3;
-  border-radius: 50%;
-  box-shadow: 0 0 8px #2196f3;
-}
-
-.blur-background {
-  backdrop-filter: blur(12px) saturate(180%) !important;
-  background: linear-gradient(
-    45deg,
-    rgba(168, 98, 153, 0.15),
-    rgba(101, 66, 182, 0.25)
-  ) !important;
+.nav-drawer-border {
   border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.list-item {
+  transition: all 0.3s ease;
+  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2) !important;
 }
 
 .list-item-hover {
   transition: all 0.3s ease;
-  margin: 8px 12px;
+  margin: 8px 0px;
   border-radius: 12px;
 }
 
 .list-item-hover:hover {
   background: rgba(255, 255, 255, 0.05) !important;
-  transform: translateX(8px);
+  margin: 8px 4px;
+  transform: translateX(4px);
+}
+
+.active-item {
+  background: linear-gradient(45deg, rgba(33, 150, 243, 0.2), transparent) !important;
+}
+
+.active-item:hover {
+  background: linear-gradient(45deg, rgba(33, 150, 243, 0.2), transparent) !important;
 }
 
 .glow-spinner {
@@ -240,7 +172,7 @@ window.goto = (name: string) => {
     transparent 75%,
     transparent
   );
-  animation: animateFlow 0.8s linear infinite;
+  animation: animateFlow 2s linear infinite;
   opacity: 0.1;
 }
 
@@ -249,21 +181,31 @@ window.goto = (name: string) => {
   100% { transform: translate(-25%, -25%) rotate(360deg); }
 }
 
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.blur-background {
+  backdrop-filter: blur(40px) saturate(180%);
+  background: linear-gradient(45deg, rgba(168, 98, 153, 0.3), rgba(101, 66, 182, 0.4)) !important;
+  transform: translateZ(0);
+  position: relative;
+  z-index: 1;
+}
+  
+.fade-blur-enter-active,
+.fade-blur-leave-active {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: absolute;
   width: 100%;
 }
 
-.slide-enter-from {
+.fade-blur-enter-from {
   opacity: 0;
-  transform: translateX(100%);
+  filter: blur(10px);
+  transform: translateY(-20px);
 }
 
-.slide-leave-to {
+.fade-blur-leave-to {
   opacity: 0;
-  transform: translateX(-100%);
+  filter: blur(10px);
+  transform: translateY(20px);
 }
 
 .loading-overlay {
