@@ -496,6 +496,20 @@ async function replacePreset() {
     toastError(e);
   }
 }
+
+interface SwitchOption {
+  label: string
+  model: Ref<boolean>
+  tip?: string
+}
+
+const switchOptions: SwitchOption[] = [
+  { label: 'double-hint', model: doubleHint },
+  { label: 'aggressive', model: aggressive, tip: 'aggressive-tips' },
+  { label: 'disable-particle', model: disableParticle },
+  { label: 'disable-effect', model: disableEffect }
+]
+  
 </script>
 
 <template>
@@ -669,12 +683,11 @@ async function replacePreset() {
       </v-row>
 
       <v-row no-gutters class="mx-n2 mt-2">
-        <v-col cols="3" v-for="(option, i) in [
-          { label: 'double-hint', model: doubleHint },
-          { label: 'aggressive', model: aggressive, tip: 'aggressive-tips' },
-          { label: 'disable-particle', model: disableParticle },
-          { label: 'disable-effect', model: disableEffect }
-        ]" :key="i">
+        <v-col 
+          cols="3" 
+          v-for="(option, i) in switchOptions" 
+          :key="i"
+        >
           <v-btn 
             variant="text" 
             class="text-none"
@@ -684,6 +697,9 @@ async function replacePreset() {
               {{ option.model.value ? 'mdi-checkbox-marked' : 'mdi-checkbox-blank-outline' }}
             </v-icon>
             {{ t(option.label) }}
+            <v-tooltip v-if="option.tip" activator="parent">
+              {{ t(option.tip) }}
+            </v-tooltip>
           </v-btn>
         </v-col>
       </v-row>
