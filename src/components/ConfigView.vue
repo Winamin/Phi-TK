@@ -703,7 +703,6 @@ const switchOptions: SwitchOption[] = [
           </v-btn>
         </v-col>
       </v-row>
-    </div>
 
     <div class="mt-2">
       <StickyLabel :title="t('title.audio')"></StickyLabel>
