@@ -327,4 +327,51 @@ html {
 html::-webkit-scrollbar {
   display: none;
 }
+
+.v-list-item__prepend {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  margin-right: 12px;
+  transition: 
+    background 0.3s ease,
+    transform 0.3s ease;
+}
+
+.v-list-item:hover .v-list-item__prepend {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+/* 激活状态图标容器的效果 */
+.v-list-item.active-item .v-list-item__prepend {
+  background: rgba(33, 150, 243, 0.2);
+  box-shadow: 0 0 8px rgba(33, 150, 243, 0.3);
+}
+
+/* 导航栏收起时的图标容器样式 */
+.v-navigation-drawer--rail .v-list-item__prepend {
+  margin-right: 0;
+  border-radius: 8px;
+}
+
+/* 导航栏收起时的图标样式 */
+.v-navigation-drawer--rail .v-list-item {
+  justify-content: center;
+}
+
+/* 导航栏收起时的激活状态样式 */
+.v-navigation-drawer--rail .v-list-item.active-item {
+  background: rgba(33, 150, 243, 0.1);
+  border-left: none;
+}
+
+
+.v-navigation-drawer--rail .v-list-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
 </style>
