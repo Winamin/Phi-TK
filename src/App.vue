@@ -127,46 +127,126 @@ window.goto = (name: string) => {
 
 .list-item-hover {
   transition: 
-    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55),
     background 0.3s ease,
-    box-shadow 0.3s ease;
-  margin: 8px 12px;
-  border-radius: 12px;
+    box-shadow 0.4s ease,
+    filter 0.3s ease;
+  margin: 12px 16px;
+  border-radius: 16px;
+  transform-style: preserve-3d;
+  filter: brightness(1);
 }
 
 .list-item-hover:hover {
-  background: rgba(255, 255, 255, 0.05) !important;
-  transform: translateX(8px);
+  background: rgba(255, 255, 255, 0.08) !important;
+  transform: 
+    translateX(12px)
+    scale(1.05)
+    translateZ(20px);
+  box-shadow: 
+    0 8px 24px rgba(33, 150, 243, 0.2),
+    0 4px 12px rgba(255, 255, 255, 0.1);
+  filter: brightness(1.2);
 }
 
 .active-item {
-  background: linear-gradient(45deg, rgba(33, 150, 243, 0.2), transparent) !important;
-  box-shadow: 2px 0 12px rgba(33, 150, 243, 0.2);
-  border-left: 4px solid #2196F3;
-  box-sizing: border-box;
-  margin-left: 4px;
-  transform: translateX(8px);
-  transition: all 0.3s ease;
+  background: linear-gradient(
+    135deg,
+    rgba(33, 150, 243, 0.15) 0%,
+    rgba(156, 39, 176, 0.15) 100%
+  ) !important;
+  border-left: 4px solid transparent;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .active-item::before {
   content: '';
   position: absolute;
-  left: -4px;
-  top: 0;
-  height: 100%;
-  width: 4px;
-  background: #2196F3;
-  transform: scaleY(0);
-  transition: transform 0.3s ease;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    rgba(33, 150, 243, 0.1) 25%,
+    rgba(156, 39, 176, 0.1) 50%,
+    rgba(33, 150, 243, 0.1) 75%
+  );
+  animation: holographic-flow 6s linear infinite;
+  z-index: -1;
 }
 
-.active-item.active-item::before {
-  transform: scaleY(1);
+@keyframes holographic-flow {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
-  
+
+.active-item::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid transparent;
+  border-image: linear-gradient(135deg, #2196F3 0%, #9C27B0 100%);
+  border-image-slice: 1;
+  border-radius: 12px;
+  animation: border-glow 2s ease-in-out infinite;
+}
+
+@keyframes border-glow {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 0.2; }
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+.slide-enter-from {
+  opacity: 0;
+  transform: 
+    rotateY(45deg)
+    translateZ(-200px)
+    scale(0.95);
+  filter: blur(8px);
+}
+
+.slide-leave-to {
+  opacity: 0;
+  transform: 
+    rotateY(-45deg)
+    translateZ(-200px)
+    scale(0.95);
+  filter: blur(8px);
+}
+
 .glow-spinner {
-  filter: drop-shadow(0 0 8px #2196F3);
+  animation: 
+    spin 1.5s linear infinite,
+    color-pulse 2s ease-in-out infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes color-pulse {
+  0%, 100% { 
+    filter: drop-shadow(0 0 12px #2196F3);
+  }
+  50% { 
+    filter: 
+      drop-shadow(0 0 16px #9C27B0)
+      drop-shadow(0 0 24px #2196F3);
+  }
 }
 
 .animated-background {
@@ -198,29 +278,31 @@ window.goto = (name: string) => {
   100% { transform: translate(-25%, -25%) rotate(360deg); }
 }
 
+.animated-background::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(circle at 20% 80%, rgba(156, 39, 176, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 80% 20%, rgba(33, 150, 243, 0.05) 0%, transparent 40%);
+  animation: particle-drift 20s linear infinite;
+}
+
+@keyframes particle-drift {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(3%, 3%); }
+  100% { transform: translate(0, 0); }
+}
+
 .blur-background {
   backdrop-filter: blur(50px) saturate(180%);
   background: linear-gradient(45deg, rgba(168, 98, 153, 0.403), rgba(101, 66, 182, 0.6)) !important;
   transform: translateZ(0);
   position: relative;
   z-index: 1;
-}
-
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: absolute;
-  width: 100%;
-}
-
-.slide-enter-from {
-  opacity: 0;
-  transform: translateX(100%);
-}
-
-.slide-leave-to {
-  opacity: 0;
-  transform: translateX(-100%);
 }
 
 .loading-overlay {
