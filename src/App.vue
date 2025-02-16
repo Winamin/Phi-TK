@@ -178,6 +178,11 @@ window.goto = (name: string) => {
   z-index: -1;
 }
 
+active-item::before,
+.active-item::after {
+  pointer-events: none;
+}
+
 @keyframes holographic-flow {
   0% { transform: translate(0, 0) rotate(0deg); }
   100% { transform: translate(-50%, -50%) rotate(360deg); }
