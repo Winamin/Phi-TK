@@ -354,7 +354,7 @@ pub async fn main() -> Result<()> {
     let frame_delta = 1. / fps as f32;
     let frames = (video_length / frame_delta as f64).ceil() as u64;
     send(IPCEvent::StartRender(frames));
-
+/*
     let codecs = String::from_utf8(
         cmd_hidden(&ffmpeg)
             .arg("-codecs")
@@ -413,8 +413,8 @@ pub async fn main() -> Result<()> {
         if params.config.disable_loading{format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)}
         else{"-ss 0.1".to_string()},
     );
+*/
 
-/*
     fn test_encoder(encoder: &str) -> bool {
         Command::new("ffmpeg")
             .args(&["-y", "-f", "lavfi", "-i", "testsrc=duration=0.1:size=2x2", "-frames:v", "1"])
@@ -427,45 +427,21 @@ pub async fn main() -> Result<()> {
             .unwrap_or(false)
     }
 
-    let selected_encoder = if params.config.hardware_accel {
-        let candidates = if params.config.hevc {
-            ["hevc_qsv", "hevc_nvenc", "hevc_amf"]
-        } else {
-            ["h264_qsv", "h264_nvenc", "h264_amf"]
-        };
-
-        let mut encoder = None;
-        for candidate in &candidates {
-            if test_encoder(candidate) {
-                encoder = Some(*candidate);
-                break;
-            }
-        }
-
-        encoder.unwrap_or(if params.config.hevc { "libx265" } else { "libx264" })
+    let (bitrate_param, bitrate_value) = if selected_encoder.ends_with("qsv") {
+        ("-q", params.config.bitrate.to_string())
+    } else if selected_encoder.ends_with("nvenc") {
+        ("-cq", params.config.bitrate.to_string())
+    } else if selected_encoder.ends_with("amf") {
+        ("-qp_p", params.config.bitrate.to_string())
     } else {
-        if params.config.hevc { "libx265" } else { "libx264" }
-    };
-
-    if params.config.hardware_accel && !selected_encoder.ends_with("qsv") 
-        && !selected_encoder.ends_with("nvenc") 
-        && !selected_encoder.ends_with("amf") 
-    {
-        eprintln!("不支持硬件加速，回退到软件编码器: {}", selected_encoder);
-    }
-
-    let (bitrate_param, preset_key) = match selected_encoder {
-        enc if enc.ends_with("qsv") => ("-q", "-preset"),
-        enc if enc.ends_with("nvenc") => ("-cq", "-preset"),
-        enc if enc.ends_with("amf") => ("-qp_p", "-quality"),
-        _ => ("-crf", "-preset")
+        ("-crf", params.config.crf_value.to_string())
     };
 
     let args2 = format!(
         "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
         selected_encoder,
         bitrate_param,
-        params.config.bitrate,
+        bitrate_value,
         preset_key,
         params.config.ffmpeg_preset.split_whitespace().next().unwrap(),
         if params.config.disable_loading {
@@ -474,9 +450,24 @@ pub async fn main() -> Result<()> {
             "-ss 0.1".to_string()
         }
     );
-*/
+
+    println!("ffmpeg 参数: {}", args2);
+
+    let status = Command::new("ffmpeg")
+        .args(&["-y", "-f", "lavfi", "-i", "testsrc=duration=0.1:size=2x2", "-frames:v", "1"])
+        .arg("-c:v").arg(selected_encoder)
+        .args(args2.split_whitespace())
+        .arg("/dev/null")
+        .status();
+
+    if let Ok(s) = status {
+        if !s.success() {
+            eprintln!("ffmpeg 执行失败，退出码: {}", s.code().unwrap_or(-1));
+        }
+    }
+
     let mut proc = cmd_hidden(&ffmpeg)
-        .args(args.split_whitespace())
+        //.args(args.split_whitespace())
         .arg(mixing_output.path())
         .args(args2.split_whitespace())
         .arg(output_path)
