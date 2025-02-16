@@ -247,7 +247,6 @@ html::-webkit-scrollbar {
 }
 
 .v-navigation-drawer {
-  position: relative;
   overflow: visible !important;
 }
 
@@ -261,8 +260,10 @@ html::-webkit-scrollbar {
   backdrop-filter: blur(50px) saturate(180%);
   background: linear-gradient(45deg, rgba(168, 98, 153, 0.403), rgba(101, 66, 182, 0.6)) !important;
   z-index: -1;
-  width: calc(100% + 8px);
-  margin-right: -8px;
+  width: calc(100% + 12px) !important;
+  margin-right: -12px !important;
+  right: -6px !important;
+  border-radius: 0 16px 16px 0;
 }
 
 .nav-drawer-border {
