@@ -127,131 +127,46 @@ window.goto = (name: string) => {
 
 .list-item-hover {
   transition: 
-    transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55),
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     background 0.3s ease,
-    box-shadow 0.4s ease,
-    filter 0.3s ease;
-  margin: 12px 16px;
-  border-radius: 16px;
-  transform-style: preserve-3d;
-  filter: brightness(1);
+    box-shadow 0.3s ease;
+  margin: 8px 12px;
+  border-radius: 12px;
 }
 
 .list-item-hover:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
-  transform: 
-    translateX(12px)
-    scale(1.05)
-    translateZ(20px);
-  box-shadow: 
-    0 8px 24px rgba(33, 150, 243, 0.2),
-    0 4px 12px rgba(255, 255, 255, 0.1);
-  filter: brightness(1.2);
+  background: rgba(255, 255, 255, 0.05) !important;
+  transform: translateX(8px);
 }
 
 .active-item {
-  background: linear-gradient(
-    135deg,
-    rgba(33, 150, 243, 0.15) 0%,
-    rgba(156, 39, 176, 0.15) 100%
-  ) !important;
-  border-left: 4px solid transparent;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(45deg, rgba(33, 150, 243, 0.2), transparent) !important;
+  box-shadow: 2px 0 12px rgba(33, 150, 243, 0.2);
+  border-left: 4px solid #2196F3;
+  box-sizing: border-box;
+  margin-left: 4px;
+  transform: translateX(8px);
+  transition: all 0.3s ease;
 }
 
 .active-item::before {
   content: '';
   position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    45deg,
-    rgba(33, 150, 243, 0.1) 25%,
-    rgba(156, 39, 176, 0.1) 50%,
-    rgba(33, 150, 243, 0.1) 75%
-  );
-  animation: holographic-flow 6s linear infinite;
-  z-index: -1;
-}
-
-active-item::before,
-.active-item::after {
-  pointer-events: none;
-}
-
-@keyframes holographic-flow {
-  0% { transform: translate(0, 0) rotate(0deg); }
-  100% { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-.active-item::after {
-  content: '';
-  position: absolute;
+  left: -4px;
   top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  border: 2px solid transparent;
-  border-image: linear-gradient(135deg, #2196F3 0%, #9C27B0 100%);
-  border-image-slice: 1;
-  border-radius: 12px;
-  animation: border-glow 2s ease-in-out infinite;
+  height: 100%;
+  width: 4px;
+  background: #2196F3;
+  transform: scaleY(0);
+  transition: transform 0.3s ease;
 }
 
-@keyframes border-glow {
-  0%, 100% { opacity: 0.8; }
-  50% { opacity: 0.2; }
+.active-item.active-item::before {
+  transform: scaleY(1);
 }
-
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  perspective: 1200px;
-  transform-style: preserve-3d;
-}
-
-.slide-enter-from {
-  opacity: 0;
-  transform: 
-    rotateY(45deg)
-    translateZ(-200px)
-    scale(0.95);
-  filter: blur(8px);
-}
-
-.slide-leave-to {
-  opacity: 0;
-  transform: 
-    rotateY(-45deg)
-    translateZ(-200px)
-    scale(0.95);
-  filter: blur(8px);
-}
-
+  
 .glow-spinner {
-  animation: 
-    spin 1.5s linear infinite,
-    color-pulse 2s ease-in-out infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-@keyframes color-pulse {
-  0%, 100% { 
-    filter: drop-shadow(0 0 12px #2196F3);
-  }
-  50% { 
-    filter: 
-      drop-shadow(0 0 16px #9C27B0)
-      drop-shadow(0 0 24px #2196F3);
-  }
+  filter: drop-shadow(0 0 8px #2196F3);
 }
 
 .animated-background {
@@ -283,31 +198,29 @@ active-item::before,
   100% { transform: translate(-25%, -25%) rotate(360deg); }
 }
 
-.animated-background::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: 
-    radial-gradient(circle at 20% 80%, rgba(156, 39, 176, 0.05) 0%, transparent 40%),
-    radial-gradient(circle at 80% 20%, rgba(33, 150, 243, 0.05) 0%, transparent 40%);
-  animation: particle-drift 20s linear infinite;
-}
-
-@keyframes particle-drift {
-  0% { transform: translate(0, 0); }
-  50% { transform: translate(3%, 3%); }
-  100% { transform: translate(0, 0); }
-}
-
 .blur-background {
   backdrop-filter: blur(50px) saturate(180%);
   background: linear-gradient(45deg, rgba(168, 98, 153, 0.403), rgba(101, 66, 182, 0.6)) !important;
   transform: translateZ(0);
   position: relative;
   z-index: 1;
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: absolute;
+  width: 100%;
+}
+
+.slide-enter-from {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.slide-leave-to {
+  opacity: 0;
+  transform: translateX(-100%);
 }
 
 .loading-overlay {
@@ -333,50 +246,26 @@ html::-webkit-scrollbar {
   display: none;
 }
 
-.v-list-item__prepend {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  margin-right: 12px;
-  transition: 
-    background 0.3s ease,
-    transform 0.3s ease;
+.v-navigation-drawer {
+  position: relative;
+  overflow: visible !important;
 }
 
-.v-list-item:hover .v-list-item__prepend {
-  background: rgba(255, 255, 255, 0.2);
-  transform: scale(1.1);
+.v-navigation-drawer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  backdrop-filter: blur(50px) saturate(180%);
+  background: linear-gradient(45deg, rgba(168, 98, 153, 0.403), rgba(101, 66, 182, 0.6)) !important;
+  z-index: -1;
+  width: calc(100% + 8px);
+  margin-right: -8px;
 }
 
-/* 激活状态图标容器的效果 */
-.v-list-item.active-item .v-list-item__prepend {
-  background: rgba(33, 150, 243, 0.2);
-  box-shadow: 0 0 8px rgba(33, 150, 243, 0.3);
-}
-
-/* 导航栏收起时的图标容器样式 */
-.v-navigation-drawer--rail .v-list-item__prepend {
-  margin-right: 0;
-  border-radius: 8px;
-}
-
-/* 导航栏收起时的图标样式 */
-.v-navigation-drawer--rail .v-list-item {
-  justify-content: center;
-}
-
-/* 导航栏收起时的激活状态样式 */
-.v-navigation-drawer--rail .v-list-item.active-item {
-  background: rgba(33, 150, 243, 0.1);
-  border-left: none;
-}
-
-
-.v-navigation-drawer--rail .v-list-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+.nav-drawer-border {
+  border-right: 1px solid rgba(255, 255, 255, 0.15) !important;
 }
 </style>
