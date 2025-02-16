@@ -499,22 +499,28 @@ async function replacePreset() {
 </script>
 
 <template>
-  <v-form ref="form" style="max-height: 48vh; overflow-x: hidden; overflow-y: scroll">
-    <!-- 按form -->
-    <v-btn-toggle 
+  <v-form ref="form" class="settings-form">_
+    <v-btn-toggle
       v-model="activeSection"
       mandatory
-      class="my-4"
+      class="section-switcher"
       color="primary"
       density="compact"
     >
-      <v-btn :value="'output'" variant="outlined">{{ t('title.output') }}</v-btn>
-      <v-btn :value="'player'" variant="outlined">{{ t('title.player') }}</v-btn>
-      <v-btn :value="'graphics'" variant="outlined">{{ t('title.graphics') }}</v-btn>
-      <v-btn :value="'audio'" variant="outlined">{{ t('title.audio') }}</v-btn>
+      <v-btn value="output" variant="text">
+        <v-icon icon="mdi-export" size="24"/>
+      </v-btn>
+      <v-btn value="player" variant="text">
+        <v-icon icon="mdi-account" size="24"/>
+      </v-btn>
+      <v-btn value="graphics" variant="text">
+        <v-icon icon="mdi-palette" size="24"/>
+      </v-btn>
+      <v-btn value="audio" variant="text">
+        <v-icon icon="mdi-speaker" size="24"/>
+      </v-btn>
     </v-btn-toggle>
 
-    <!-- add++ -->
     <v-row no-gutters class="mx-n2 align-center">
       <v-col cols="8">
         <v-combobox @update:model-value="(val) => applyConfig(val.config)" class="mx-2" :label="t('presets')" :items="presets" item-title="name" v-model="preset"></v-combobox>
@@ -533,191 +539,207 @@ async function replacePreset() {
       </v-col>
     </v-row>
 
-    <!-- output -->
-    <div v-if="activeSection === 'output'">
-      <v-row no-gutters class="mx-n2">
-        <v-col cols="3">
-          <v-combobox :label="t('resolution')" :items="RESOLUTIONS" class="mx-2" :rules="[resolutionRule]" v-model="resolution"></v-combobox>
-        </v-col>
-        <v-col cols="3">
-          <v-combobox :label="t('ffmpeg-preset')" :items="ffmpegPresetPresetList" class="mx-2" :rules="[RULES.non_empty]" v-model="ffmpegPreset"></v-combobox>
-        </v-col>
-        <v-col cols="3">
-          <v-text-field :label="t('fps')" class="mx-2" type="number" :rules="[RULES.positiveInt]" v-model="fps"></v-text-field>
-        </v-col>
-        <v-col cols="3">
-          <TipSwitch :label="t('hw-accel')" :tooltip="t('hw-accel-tips')" v-model="hwAccel"></TipSwitch>
-        </v-col>
-      </v-row>
-      <v-row no-gutters class="mx-n2 mt-1">
-        <v-col cols="3">
-          <TipTextField :label="t('sample-count')" class="mx-2" type="number" :rules="[sampleCountRule]" v-model="sampleCount" :tooltip="t('sample-count-tips')"></TipTextField>
-        </v-col>
-        <v-col cols="3">
-          <TipTextField :label="t('bitrate')" class="mx-2" :rules="[RULES.non_empty]" v-model="bitrate" :tooltip="t('bitrate-tips')"></TipTextField>
-        </v-col>
-        <v-col cols="3">
-          <v-combobox :label="t('bitrate-control')" :items="bitrateControlList" class="mx-2" :rules="[RULES.non_empty]" v-model="bitrateControl"></v-combobox>
-        </v-col>
-        <v-col cols="3">
-          <TipSwitch :label="t('fxaa')" :tooltip="t('fxaa-tips')" v-model="fxaa"></TipSwitch>
-        </v-col>
-      </v-row>
-    </div>
+    <v-expand-transition>
+      <div v-if="activeSection === 'output'" class="section-content">
+        <div class="grid-3col">
+          <v-combobox :label="t('resolution')" :items="RESOLUTIONS" :rules="[resolutionRule]" density="compact" variant="outlined" v-model="resolution"/>
+          <v-combobox :label="t('ffmpeg-preset')" :items="ffmpegPresetPresetList" density="compact" variant="outlined" v-model="ffmpegPreset"/>
+          <v-text-field :label="t('fps')" type="number" :rules="[RULES.positiveInt]" density="compact" variant="outlined" v-model="fps"/>
+        </div>
+        
+        <div class="switch-group">
+          <TipSwitch :label="t('hw-accel')" :tooltip="t('hw-accel-tips')" color="primary" v-model="hwAccel"/>
+          <TipSwitch :label="t('fxaa')" :tooltip="t('fxaa-tips')" color="primary" v-model="fxaa"/>
+          <TipSwitch :label="t('hevc')" :tooltip="t('hevc-tips')" color="primary" v-model="hevc"/>
+        </div>
+      </div>
+    </v-expand-transition>
 
-    <!-- game -->
-    <div v-if="activeSection === 'player'">
-      <v-row no-gutters class="mx-n2">
-        <v-col cols="4">
-          <v-text-field
-            readonly
-            class="mx-2"
-            accept="image/*"
-            :label="t('player-avatar')"
-            @click="chooseAvatar"
-            @click.clear="playerAvatar = undefined"
-            clearable
-            :model-value="playerAvatar ? playerAvatar.split('\\').pop()!.split('/').pop() : ''"></v-text-field>
-        </v-col>
-        <v-col cols="8">
-          <v-text-field class="mx-2" :label="t('player-name')" v-model="playerName"></v-text-field>
-        </v-col>
-      </v-row>
-      <v-row no-gutters class="mx-n2 mt-1">
-        <v-col cols="4">
-          <v-text-field class="mx-2" :label="t('player-rks')" :rules="[RULES.positive]" type="number" v-model="playerRks"></v-text-field>
-        </v-col>
-        <v-col cols="4">
-          <v-combobox class="mx-2" :label="t('challenge-color')" :items="t('challenge-colors').split(',')" v-model="challengeColor" :rules="[RULES.non_empty]"></v-combobox>
-        </v-col>
-        <v-col cols="4">
-          <v-text-field class="mx-2" :label="t('challenge-rank')" :rules="[RULES.positiveInt]" type="number" v-model="challengeRank"></v-text-field>
-        </v-col>
-      </v-row>
-    </div>
+    <v-expand-transition>
+      <div v-if="activeSection === 'player'" class="section-content">
+        <div class="avatar-section">
+          <v-avatar size="64" class="avatar-preview">
+            <v-img v-if="playerAvatar" :src="playerAvatar"/>
+            <v-icon v-else icon="mdi-account" size="40"/>
+          </v-avatar>
+          <v-btn @click="chooseAvatar" variant="tonal" class="ml-4">
+            {{ t('player-avatar') }}
+          </v-btn>
+        </div>
 
-    <!-- ++-->
-    <div v-if="activeSection === 'graphics'">
-      <v-row no-gutters class="mx-n2 mt-4 align-center">
-        <v-col cols="8">
-          <v-combobox class="mx-2" :label="t('respack')" :items="respacks" item-title="name" v-model="respack"></v-combobox>
-        </v-col>
-        <v-col cols="2" class="mt-n5 d-flex justify-center">
-          <v-btn class="pa-1" size="large" @click="updateRespacks" v-t="'respack-refresh'"></v-btn>
-        </v-col>
-        <v-col cols="2" class="mt-n5 d-flex justify-center">
-          <v-btn class="pa-1" size="large" @click="openRespackFolder" v-t="'respack-open'"></v-btn>
-        </v-col>
-      </v-row>
-      <v-row no-gutters class="mx-n2 mt-4 align-center">
-        <v-col cols="12" class="px-6">
-          <v-slider :label="t('note-scale')" thumb-label="always" :min="0" :max="5" :step="0.05" v-model="noteScale"> </v-slider>
-        </v-col>
-      </v-row>
-      <v-row no-gutters class="mx-n2 mt-2">
-        <v-col cols="3">
-          <TipSwitch :label="t('double-hint')" v-model="doubleHint"></TipSwitch>
-        </v-col>
-        <v-col cols="3">
-          <TipSwitch :label="t('aggressive')" :tooltip="t('aggressive-tips')" v-model="aggressive"></TipSwitch>
-        </v-col>
-        <v-col cols="3">
-          <TipSwitch :label="t('disable-particle')" v-model="disableParticle"></TipSwitch>
-        </v-col>
-        <v-col cols="3">
-          <TipSwitch :label="t('disable-effect')" v-model="disableEffect"></TipSwitch>
-        </v-col>
-      </v-row>
-    </div>
+        <div class="grid-2col">
+          <v-text-field :label="t('player-name')" variant="outlined" density="compact" v-model="playerName"/>
+          <v-text-field :label="t('player-rks')" :rules="[RULES.positive]" type="number" variant="outlined" density="compact" v-model="playerRks"/>
+        </div>
+      </div>
+    </v-expand-transition>
 
-    <!-- audio -->
-    <div v-if="activeSection === 'audio'">
-      <v-row no-gutters class="mx-n2 mt-8 align-center px-6">
-        <v-col cols="6">
-          <v-slider :label="t('volume-music')" thumb-label="always" :min="0" :max="2" :step="0.05" v-model="volumeMusic"> </v-slider>
-        </v-col>
-        <v-col cols="6">
-          <v-slider :label="t('volume-sfx')" thumb-label="always" :min="0" :max="2" :step="0.05" v-model="volumeSfx"> </v-slider>
-        </v-col>
-      </v-row>
-      <v-row no-gutters class="mx-n2 align-center">
-        <v-col cols="12">
-          <v-text-field :label="t('ending-length')" v-model="endingLength" type="number" :rules="[RULES.non_empty]"></v-text-field>
-        </v-col>
-      </v-row>
-      <v-row no-gutters class="mx-n2 mt-2">
-        <v-col cols="3">
-          <TipSwitch :label="t('disable-loading')" :tooltip="t('disable-loading-tips')" v-model="disableLoading"></TipSwitch>
-        </v-col>
-        <v-col cols="3">
-          <TipSwitch :label="t('chart_debug')" v-model="chartDebug"></TipSwitch>
-        </v-col>
-        <v-col cols="3">
-          <TipSwitch :label="t('flid_x')" v-model="flidX"></TipSwitch>
-        </v-col>
-        <v-col cols="3">
-          <TipSwitch :label="t('show_progress_text')" :tooltip="t('show_progress_text-tips')" v-model="showProgressText"></TipSwitch>
-        </v-col>
-        <v-col cols="3">
-          <TipSwitch :label="t('show_time_text')" :tooltip="t('show_time_text-tips')" v-model="showTimeText"></TipSwitch>
-        </v-col>
-        <v-col cols="3">
-          <TipSwitch :label="t('hevc')" :tooltip="t('hevc-tips')" v-model="hevc"></TipSwitch>
-        </v-col>
-      </v-row>
-      <v-row no-gutters class="mx-n2 mt-2 align-center px-6">
-        <v-col cols="6">
-          <v-slider :label="t('chart_ratio')" thumb-label="always" :min="0.05" :max="1" :step="0.05" v-model="chartRatio"> </v-slider>
-        </v-col>
-      </v-row>
-      <v-row no-gutters class="mx-n2 mt-2 align-center px-6">
-        <v-col cols="12">
-          <v-slider :label="t('buffer_size')" :tooltip="t('buffer_size-tips')" thumb-label="always" :min="128" :max="2048" :step="1" v-model="bufferSize"> </v-slider>
-        </v-col>
-        <v-col cols="6">
-          <v-text-field class="mx-2" :label="t('combo')" v-model="combo"></v-text-field>
-        </v-col>
-      </v-row>
-    </div>
+    <v-expand-transition>
+      <div v-if="activeSection === 'graphics'" class="section-content">
+        <div class="respack-controls">
+          <v-combobox :label="t('respack')" :items="respacks" item-title="name" variant="outlined" density="compact" v-model="respack"/>
+          <v-btn @click="updateRespacks" icon="mdi-refresh" variant="text"/>
+          <v-btn @click="openRespackFolder" icon="mdi-folder-open" variant="text"/>
+        </div>
+
+        <v-slider :label="t('note-scale')" thumb-label="always" :min="0" :max="5" :step="0.05" color="primary" track-color="secondary" v-model="noteScale"/>
+
+        <div class="switch-grid">
+          <TipSwitch :label="t('double-hint')" v-model="doubleHint" color="primary"/>
+          <TipSwitch :label="t('aggressive')" :tooltip="t('aggressive-tips')" v-model="aggressive" color="primary"/>
+          <TipSwitch :label="t('disable-particle')" v-model="disableParticle" color="primary"/>
+          <TipSwitch :label="t('disable-effect')" v-model="disableEffect" color="primary"/>
+        </div>
+      </div>
+    </v-expand-transition>
+
+    <v-expand-transition>
+      <div v-if="activeSection === 'audio'" class="section-content">
+        <div class="volume-controls">
+          <div class="volume-item">
+            <v-icon icon="mdi-music" size="20"/>
+            <v-slider :model-value="volumeMusic" @update:model-value="v => volumeMusic = v" :min="0" :max="2" :step="0.1" color="primary" hide-details/>
+            <span class="volume-value">{{ (volumeMusic * 100).toFixed(0) }}%</span>
+          </div>
+          
+          <div class="volume-item">
+            <v-icon icon="mdi-volume-high" size="20"/>
+            <v-slider :model-value="volumeSfx" @update:model-value="v => volumeSfx = v" :min="0" :max="2" :step="0.1" color="primary" hide-details/>
+            <span class="volume-value">{{ (volumeSfx * 100).toFixed(0) }}%</span>
+          </div>
+        </div>
+
+        <div class="advanced-controls">
+          <v-text-field :label="t('ending-length')" variant="outlined" density="compact" type="number" v-model="endingLength"/>
+          
+          <div class="mini-switches">
+            <v-tooltip :text="t('disable-loading-tips')">
+              <template v-slot:activator="{ props }">
+                <v-switch :label="t('disable-loading')" v-model="disableLoading" v-bind="props" color="primary" density="compact"/>
+              </template>
+            </v-tooltip>
+            <v-tooltip :text="t('show_progress_text-tips')">
+              <template v-slot:activator="{ props }">
+                <v-switch :label="t('show_progress_text')" v-model="showProgressText" v-bind="props" color="primary" density="compact"/>
+              </template>
+            </v-tooltip>
+            <v-tooltip :text="t('show_time_text-tips')">
+              <template v-slot:activator="{ props }">
+                <v-switch :label="t('show_time_text')" v-model="showTimeText" v-bind="props" color="primary" density="compact"/>
+              </template>
+            </v-tooltip>
+          </div>
+        </div>
+      </div>
+    </v-expand-transition>
   </v-form>
 </template>
 
 <style scoped>
-.gradient-primary {
-  background: linear-gradient(45deg, #6366f1, #8b5cf6) !important;
-  box-shadow: 0 4px 6px -1px rgb(99 102 241 / 0.2);
-  transition: transform 0.2s, box-shadow 0.2s;
+.settings-form {
+  background: linear-gradient(135deg, rgba(16, 16, 32, 0.95), rgba(24, 24, 48, 0.95));
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
-.elevated-stepper {
-  border-radius: 16px !important;
-  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1) !important;
-  background: rgba(23, 9, 99, 0.8) !important;
-  backdrop-filter: blur(8px);
+
+.section-switcher {
+  margin-bottom: 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 4px;
 }
-.sticky-label {
-  background: rgba(54, 50, 98, 0.9) !important;
+
+.section-content {
+  transition: all 0.3s ease;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
 }
-.navigation {
-  background: rgba(54, 50, 98, 1) !important;
+
+.grid-3col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
 }
-.v-btn {
-  background: rgba(54, 50, 98, 1) !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+.switch-group {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 12px 0;
 }
-.v-switch {
-  color:#c7c0ff;
+
+.avatar-section {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
 }
-.v-slider {
-  color:#c7c0ff;
+
+.avatar-preview {
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  transition: transform 0.3s ease;
+}
+
+.avatar-preview:hover {
+  transform: scale(1.05);
+}
+
+.respack-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.switch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.volume-controls {
+  display: grid;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.volume-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.volume-value {
+  min-width: 48px;
+  text-align: right;
+  color: #c7c0ff;
+}
+
+.advanced-controls {
+  display: grid;
+  gap: 16px;
+}
+
+.mini-switches {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
 .v-btn--active {
-  background: rgba(99, 102, 241, 0.2) !important;
-  border-color: #6366f1 !important;
+  background: rgba(99, 102, 241, 0.15) !important;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
 }
-.v-btn {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  margin: 0 4px;
-  transition: all 0.3s ease;
+
+.v-switch {
+  --v-switch-track-color: rgba(255, 255, 255, 0.1);
+}
+
+.v-slider-thumb {
+  background: #6366f1 !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 </style>
