@@ -415,59 +415,105 @@ pub async fn main() -> Result<()> {
     );
 */
 
-    fn test_encoder(encoder: &str) -> bool {
-        Command::new("ffmpeg")
-            .args(&["-y", "-f", "lavfi", "-i", "testsrc=duration=0.1:size=2x2", "-frames:v", "1"])
-            .arg("-c:v").arg(encoder)
-            .arg("/dev/null")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
+    fn test_encoder(ffmpeg: &Path, encoder: &str) -> Result<bool> {
+        let output = cmd_hidden(&ffmpeg)
+            .args(&["-f", "lavfi", "-i", "color=c=black:s=320x240:d=0", "-c:v", encoder, "-f", "null", "-"])
+            .arg("-loglevel")
+            .arg("fatal")
+            .arg("-hide_banner")
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .output()
+            .with_context(|| format!("Failed to test encoder {}", encoder))?;
+        Ok(output.status.success())
     }
 
-    let (bitrate_param, bitrate_value) = if selected_encoder.ends_with("qsv") {
-        ("-q", params.config.bitrate.to_string())
-    } else if selected_encoder.ends_with("nvenc") {
-        ("-cq", params.config.bitrate.to_string())
-    } else if selected_encoder.ends_with("amf") {
-        ("-qp_p", params.config.bitrate.to_string())
+    let use_cuda = params.config.hardware_accel && test_encoder(&ffmpeg, "h264_nvenc")?;
+    let has_qsv = params.config.hardware_accel && test_encoder(&ffmpeg, "h264_qsv")?;
+    let has_amf = params.config.hardware_accel && test_encoder(&ffmpeg, "h264_amf")?;
+    
+    let use_cuda_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(&ffmpeg, "hevc_nvenc")?;
+    let has_qsv_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(&ffmpeg, "hevc_qsv")?;
+    let has_amf_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(&ffmpeg, "hevc_amf")?;
+
+    let ffmpeg_preset = if has_amf && !has_qsv && !use_cuda {
+        "-quality"
     } else {
-        ("-crf", params.config.crf_value.to_string())
+        "-preset"
     };
+
+    let ffmpeg_encoder = if use_cuda_hevc {
+        "hevc_nvenc"
+    } else if use_cuda {
+        "h264_nvenc"
+    } else if has_qsv_hevc {
+        "hevc_qsv"
+    } else if has_qsv {
+        "h264_qsv"
+    } else if has_amf_hevc {
+        "hevc_amf"
+    } else if has_amf {
+        "h264_amf"
+    } else {
+        if params.config.hevc {
+            "libx265"
+        } else {
+            "libx264"
+        }
+    };
+
+    if params.config.hardware_accel {
+        if params.config.hevc && !(use_cuda_hevc || has_qsv_hevc || has_amf_hevc) {
+            bail!(tl!("no-hwacc"));
+        } else if !params.config.hevc && !(use_cuda || has_qsv || has_amf) {
+            bail!(tl!("no-hwacc"));
+        }
+    }
+
+    let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
+    let ffmpeg_preset_name = if use_cuda {
+        ffmpeg_preset_name_list.nth(1).unwrap_or_else(|| ffmpeg_preset_name_list.next().unwrap_or("p4"))
+    } else if has_qsv {
+        ffmpeg_preset_name_list.nth(0).unwrap_or("medium")
+    } else if has_amf {
+        ffmpeg_preset_name_list.nth(2).unwrap_or_else(|| ffmpeg_preset_name_list.next().unwrap_or("balanced"))
+    } else {
+        ffmpeg_preset_name_list.nth(0).unwrap_or("medium")
+    };
+
+    let bitrate_control = if params.config.bitrate_control == "CRF" {
+        match ffmpeg_encoder {
+            "h264_nvenc" | "hevc_nvenc" => "-cq",
+            "h264_qsv" | "hevc_qsv" => "-q",
+            "h264_amf" | "hevc_amf" => "-qp_p",
+             _ => "-crf",
+        }
+    } else {
+        "-b:v"
+    };
+
+    let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
+    if use_cuda {
+        args += " -hwaccel_output_format cuda";
+    }
+    write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
     let args2 = format!(
         "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
-        selected_encoder,
-        bitrate_param,
-        bitrate_value,
-        preset_key,
-        params.config.ffmpeg_preset.split_whitespace().next().unwrap(),
+        ffmpeg_encoder,
+        bitrate_control,
+        params.config.bitrate,
+        ffmpeg_preset,
+        ffmpeg_preset_name,
         if params.config.disable_loading {
             format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
         } else {
             "-ss 0.1".to_string()
-        }
+        },
     );
 
-    println!("ffmpeg 参数: {}", args2);
-
-    let status = Command::new("ffmpeg")
-        .args(&["-y", "-f", "lavfi", "-i", "testsrc=duration=0.1:size=2x2", "-frames:v", "1"])
-        .arg("-c:v").arg(selected_encoder)
-        .args(args2.split_whitespace())
-        .arg("/dev/null")
-        .status();
-
-    if let Ok(s) = status {
-        if !s.success() {
-            eprintln!("ffmpeg 执行失败，退出码: {}", s.code().unwrap_or(-1));
-        }
-    }
-
     let mut proc = cmd_hidden(&ffmpeg)
-        //.args(args.split_whitespace())
+        .args(args.split_whitespace())
         .arg(mixing_output.path())
         .args(args2.split_whitespace())
         .arg(output_path)
