@@ -26,7 +26,7 @@ use std::{
     time::Instant,
     creat::Path,
 };
-use std::{ffi::OsStr, fmt::Write as _, path::Path};
+use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -364,13 +364,13 @@ pub async fn main() -> Result<()> {
             .stdout,
     )?;
 
-    let use_cuda = params.config.hardware_accel && codecs.contains("h264_nvenc");
-    let has_qsv = params.config.hardware_accel && codecs.contains("h264_qsv");
-    let has_amf = params.config.hardware_accel && codecs.contains("h264_amf");
+     let use_cuda = params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_nvenc")?;
+     let has_qsv = params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_qsv")?;
+     let has_amf = params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_amf")?;
 
-    let use_cuda_hevc = params.config.hardware_accel && codecs.contains("hevc_nvenc");
-    let has_qsv_hevc = params.config.hardware_accel && codecs.contains("hevc_qsv");
-    let has_amf_hevc = params.config.hardware_accel && codecs.contains("hevc_amf");
+     let use_cuda_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_nvenc")?;
+     let has_qsv_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_qsv")?;
+     let has_amf_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_amf")?;
 
     let ffmpeg_preset =  if !has_qsv && !use_cuda && has_amf {"-quality"} else {"-preset"};
     let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
