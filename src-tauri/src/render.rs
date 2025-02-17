@@ -429,13 +429,12 @@ pub async fn main() -> Result<()> {
         Ok(output.status.success())
     }
 
-    let use_cuda = params.config.hardware_accel && test_encoder(&ffmpeg, "h264_nvenc")?;
-    let has_qsv = params.config.hardware_accel && test_encoder(&ffmpeg, "h264_qsv")?;
-    let has_amf = params.config.hardware_accel && test_encoder(&ffmpeg, "h264_amf")?;
-    
-    let use_cuda_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(&ffmpeg, "hevc_nvenc")?;
-    let has_qsv_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(&ffmpeg, "hevc_qsv")?;
-    let has_amf_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(&ffmpeg, "hevc_amf")?;
+    let use_cuda = params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_nvenc")?;
+let has_qsv = params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_qsv")?;
+let has_amf = params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_amf")?;
+let use_cuda_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_nvenc")?;
+let has_qsv_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_qsv")?;
+let has_amf_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_amf")?;
 
     let ffmpeg_preset = if has_amf && !has_qsv && !use_cuda {
         "-quality"
