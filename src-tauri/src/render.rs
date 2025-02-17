@@ -24,7 +24,6 @@ use std::{
     rc::Rc,
     sync::atomic::{AtomicBool, Ordering},
     time::Instant,
-    creat::Path,
 };
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
