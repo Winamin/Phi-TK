@@ -151,19 +151,29 @@ pub fn find_ffmpeg() -> Result<Option<String>> {
     fn test(path: impl AsRef<OsStr>) -> bool {
         matches!(cmd_hidden(path).arg("-version").output(), Ok(_))
     }
-    if test("ffmpeg") {
-        return Ok(Some("ffmpeg".to_owned()));
-    }
-    eprintln!("Failed to find global ffmpeg. Using bundled ffmpeg");
-    let exe_dir = std::env::current_exe()?.parent().unwrap().to_owned();
-    let ffmpeg = if cfg!(target_os = "windows") {
+
+    let ffmpeg_exe = if cfg!(target_os = "windows") {
         "ffmpeg.exe"
     } else {
         "ffmpeg"
     };
-    let ffmpeg = exe_dir.join(ffmpeg);
-    Ok(if test(&ffmpeg) {
-        Some(ffmpeg.display().to_string())
+    if let Some(path_var) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            let candidate = dir.join(ffmpeg_exe);
+            if test(&candidate) {
+                return Ok(Some(candidate.to_string_lossy().into_owned()));
+            }
+        }
+    }
+    eprintln!("Failed to find global ffmpeg. Using bundled ffmpeg");
+    let exe_dir = std::env::current_exe()?
+        .parent()
+        .expect("Executable should have parent directory")
+        .to_owned();
+    
+    let bundled_ffmpeg = exe_dir.join(ffmpeg_exe);
+    Ok(if test(&bundled_ffmpeg) {
+        Some(bundled_ffmpeg.to_string_lossy().into_owned())
     } else {
         None
     })
