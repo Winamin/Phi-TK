@@ -28,7 +28,9 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 use crate::Path;
+
 use libc::{self, MAP_SHARED, MAP_ANONYMOUS, PROT_READ, PROT_WRITE};
+use std::ptr;
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
