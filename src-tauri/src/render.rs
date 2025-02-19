@@ -493,7 +493,7 @@ pub async fn main() -> Result<()> {
     let bitrate_control = if params.config.bitrate_control == "CRF" {
         match ffmpeg_encoder {
             "h264_nvenc" | "hevc_nvenc" => "-cq",
-             "h264_qsv" | "hevc_qsv" => "-q",
+            "h264_qsv" | "hevc_qsv" => "-q",
             "h264_amf" | "hevc_amf" => "-qp_p",
         _ => "-crf",
         }
@@ -513,7 +513,7 @@ pub async fn main() -> Result<()> {
     }
 
     let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
-    if use_cuda {
+    if ffmpeg_encoder.contains("nvenc") {
         args += " -hwaccel_output_format cuda";
     }
     write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
