@@ -28,6 +28,7 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 use crate::Path;
+use libc::{self, MAP_SHARED, MAP_ANONYMOUS, PROT_READ, PROT_WRITE};
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -121,6 +122,26 @@ struct EncoderAvailability {
     hevc_qsv: bool,
     h264_amf: bool,
     hevc_amf: bool,
+}
+
+struct RingBuffer {
+    ptr: *mut u8,
+    capacity: usize,
+}
+
+impl RingBuffer {
+    fn new(size: usize) -> Self {
+        let ptr = unsafe {
+            libc::mmap(
+                ptr::null_mut(),
+                size,
+                PROT_READ | PROT_WRITE,
+                MAP_SHARED | MAP_ANONYMOUS,
+                -1, 0
+            )
+        } as *mut u8;
+        Self { ptr, capacity: size }
+    }
 }
 
 pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
@@ -544,7 +565,7 @@ pub async fn main() -> Result<()> {
         .spawn()
         .with_context(|| tl!("run-ffmpeg-failed"))?;
     let mut input = proc.stdin.take().unwrap();
-
+/*
     let byte_size = vw as usize * vh as usize * 4;
 
 
@@ -610,4 +631,138 @@ pub async fn main() -> Result<()> {
 
     send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
     Ok(())
+}
+*/
+
+    const N: usize = 3; // Triple buffering
+    const ALIGNMENT: usize = 4096; // Page alignment
+    static MSAA: AtomicBool = AtomicBool::new(false);
+
+    fn optimized_render(
+        vw: i32,
+        vh: i32,
+        frames: i32,
+        frame_delta: f32,
+        proc: &mut std::process::Child,
+        my_time: &std::cell::RefCell<f64>,
+        mst: &mut miniquad::Stage,
+        main: &mut MainState,
+        painter: &mut Painter,
+        gl: &mut Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut input = proc.stdin.take().unwrap();
+        let byte_size = (vw as usize * vh as usize * 4).next_multiple_of(ALIGNMENT);
+
+        // Initialize PBOs with triple buffering
+        let mut pbos: [GLuint; N] = [0; N];
+        unsafe {
+            use miniquad::gl::*;
+            glGenBuffers(N as _, pbos.as_mut_ptr());
+            for pbo in pbos {
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo);
+                glBufferStorage(
+                    GL_PIXEL_PACK_BUFFER,
+                    byte_size as _,
+                    ptr::null(),
+                    GL_CLIENT_STORAGE_BIT,
+                );
+            }
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        }
+
+        // Set real-time priority
+        unsafe {
+            libc::pthread_setschedparam(
+                libc::pthread_self(),
+                libc::SCHED_FIFO,
+                &libc::sched_param { sched_priority: 99 },
+            );
+        }
+
+        let render_start_time = Instant::now();
+        let ring_buffer = RingBuffer::new(byte_size * N);
+
+        for frame in 0..frames {
+            *my_time.borrow_mut() = (frame as f32 * frame_delta).max(0.) as f64;
+
+            // Render pass
+            gl.quad_gl.render_pass(Some(mst.output().render_pass));
+            main.viewport = Some((0, 0, vw as _, vh as _));
+            main.update()?;
+            main.render(painter)?;
+            gl.flush();
+
+            if MSAA.load(Ordering::SeqCst) {
+                mst.blit();
+            }
+
+            unsafe {
+                use miniquad::gl::*;
+                let tex = mst.output().texture.raw_miniquad_texture_handle();
+
+                // Asynchronous PBO operations
+                let next_pbo = pbos[(frame + 1) as usize % N];
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, next_pbo);
+                let src = glMapBufferRange(
+                    GL_PIXEL_PACK_BUFFER,
+                    0,
+                    byte_size as _,
+                    GL_MAP_READ_BIT | GL_MAP_UNSYNCHRONIZED_BIT,
+                );
+
+                if !src.is_null() {
+                    let prev_pbo = pbos[frame as usize % N];
+                    glBindBuffer(GL_PIXEL_PACK_BUFFER, prev_pbo);
+                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+
+                    // Use separate thread for data writing
+                    let send_thread = std::thread::spawn(move || {
+                        input.write_all(std::slice::from_raw_parts(src, byte_size)).unwrap();
+                    });
+                }
+
+                // Read pixels directly to PBO
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[frame as usize % N]);
+                glReadPixels(
+                    0,
+                    0,
+                    tex.width as _,
+                    tex.height as _,
+                    GL_RGBA,
+                    GL_UNSIGNED_BYTE,
+                    ptr::null_mut(),
+                );
+
+                // Fence synchronization
+                let sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+                while glClientWaitSync(sync, 0, 1_000_000) == GL_TIMEOUT_EXPIRED {}
+            }
+
+            send(IPCEvent::Frame);
+        }
+
+        drop(input);
+        proc.wait()?;
+
+        send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
+        Ok(())
+}
+// OpenSL ES low-latency audio setup
+fn setup_low_latency_audio() {
+    unsafe {
+        let engine_obj: *mut SLObjectItf = ptr::null_mut();
+        slCreateEngine(engine_obj, 0, ptr::null(), 0, ptr::null(), ptr::null());
+
+        let config_itf: *mut SLAndroidConfigurationItf = ptr::null_mut();
+        (*engine_obj).GetInterface(engine_obj, SL_IID_ANDROIDCONFIGURATION, config_itf);
+
+        let preset_value = SL_ANDROID_PERFORMANCE_LATENCY;
+        (*config_itf).SetConfiguration(
+            config_itf,
+            SL_ANDROID_KEY_PERFORMANCE_MODE,
+            &preset_value as *const _ as *const _,
+            std::mem::size_of::<SLint32>(),
+        );
+    }
 }
