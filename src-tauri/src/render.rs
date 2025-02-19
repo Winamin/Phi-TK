@@ -114,6 +114,15 @@ pub enum IPCEvent {
     Done(f64),
 }
 
+struct EncoderAvailability {
+    h264_nvenc: bool,
+    hevc_nvenc: bool,
+    h264_qsv: bool,
+    hevc_qsv: bool,
+    h264_amf: bool,
+    hevc_amf: bool,
+}
+
 pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
     Ok(BasicPlayer {
         avatar: if let Some(path) = &config.player_avatar {
@@ -439,68 +448,69 @@ pub async fn main() -> Result<()> {
         Ok(output.status.success())
     }
 
-    let use_cuda = params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_nvenc")?;
-let has_qsv = params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_qsv")?;
-let has_amf = params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_amf")?;
-let use_cuda_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_nvenc")?;
-let has_qsv_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_qsv")?;
-let has_amf_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_amf")?;
-
-    let ffmpeg_preset = if has_amf && !has_qsv && !use_cuda {
-        "-quality"
-    } else {
-        "-preset"
+    let encoder_availability = EncoderAvailability {
+        h264_nvenc: params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_nvenc")?,
+        hevc_nvenc: params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_nvenc")?,
+        h264_qsv: params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_qsv")?,
+        hevc_qsv: params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_qsv")?,
+        h264_amf: params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_amf")?,
+        hevc_amf: params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_amf")?,
     };
 
-    let ffmpeg_encoder = if use_cuda_hevc {
-        "hevc_nvenc"
-    } else if use_cuda {
-        "h264_nvenc"
-    } else if has_qsv_hevc {
-        "hevc_qsv"
-    } else if has_qsv {
-        "h264_qsv"
-    } else if has_amf_hevc {
-        "hevc_amf"
-    } else if has_amf {
-        "h264_amf"
+    let candidates = if params.config.hevc {
+        vec![
+            ("hevc_nvenc", encoder_availability.hevc_nvenc),
+            ("hevc_qsv", encoder_availability.hevc_qsv),
+            ("hevc_amf", encoder_availability.hevc_amf),
+            ("libx265", true),
+         ]
     } else {
-        if params.config.hevc {
-            "libx265"
-        } else {
-            "libx264"
-        }
+        vec![
+            ("h264_nvenc", encoder_availability.h264_nvenc),
+            ("h264_qsv", encoder_availability.h264_qsv),
+            ("h264_amf", encoder_availability.h264_amf),
+            ("libx264", true),
+        ]
     };
 
-    if params.config.hardware_accel {
-        if params.config.hevc && !(use_cuda_hevc || has_qsv_hevc || has_amf_hevc) {
-            bail!(tl!("no-hwacc"));
-        } else if !params.config.hevc && !(use_cuda || has_qsv || has_amf) {
-            bail!(tl!("no-hwacc"));
-        }
-    }
+    let ffmpeg_encoder = candidates.iter()
+        .find(|&&(name, available)| available)
+        .map(|&(name, _)| name)
+        .expect("At least one software encoder is available.");
+        
+    let ffmpeg_preset = match ffmpeg_encoder {
+        "h264_amf" | "hevc_amf" => "-quality",
+        _ => "-preset",
+    };
 
-    let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
-    let ffmpeg_preset_name = if use_cuda {
-        ffmpeg_preset_name_list.nth(1).unwrap_or_else(|| ffmpeg_preset_name_list.next().unwrap_or("p4"))
-    } else if has_qsv {
-        ffmpeg_preset_name_list.nth(0).unwrap_or("medium")
-    } else if has_amf {
-        ffmpeg_preset_name_list.nth(2).unwrap_or_else(|| ffmpeg_preset_name_list.next().unwrap_or("balanced"))
-    } else {
-        ffmpeg_preset_name_list.nth(0).unwrap_or("medium")
+    let ffmpeg_preset_name = match ffmpeg_encoder {
+        "h264_nvenc" | "hevc_nvenc" => params.config.ffmpeg_preset.split_whitespace().nth(1).unwrap_or("p4"),
+        "h264_qsv" | "hevc_qsv" => params.config.ffmpeg_preset.split_whitespace().next().unwrap_or("medium"),
+        "h264_amf" | "hevc_amf" => params.config.ffmpeg_preset.split_whitespace().nth(2).unwrap_or("balanced"),
+        _ => params.config.ffmpeg_preset.split_whitespace().next().unwrap_or("medium"),
     };
 
     let bitrate_control = if params.config.bitrate_control == "CRF" {
         match ffmpeg_encoder {
             "h264_nvenc" | "hevc_nvenc" => "-cq",
-            "h264_qsv" | "hevc_qsv" => "-q",
+             "h264_qsv" | "hevc_qsv" => "-q",
             "h264_amf" | "hevc_amf" => "-qp_p",
-             _ => "-crf",
+        _ => "-crf",
         }
     } else {
         "-b:v"
     };
+    
+    if params.config.hardware_accel {
+        let h264_supported = encoder_availability.h264_nvenc || encoder_availability.h264_qsv || encoder_availability.h264_amf;
+        let hevc_supported = encoder_availability.hevc_nvenc || encoder_availability.hevc_qsv || encoder_availability.hevc_amf;
+    
+        if params.config.hevc && !hevc_supported {
+            bail!(tl!("no-hwacc"));
+        } else if !params.config.hevc && !h264_supported {
+            bail!(tl!("no-hwacc"));
+        }
+    }
 
     let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
     if use_cuda {
