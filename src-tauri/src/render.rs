@@ -747,6 +747,7 @@ pub async fn main() -> Result<()> {
 
         send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
         Ok(())
+    }
 }
 // OpenSL ES low-latency audio setup
 fn setup_low_latency_audio() {
