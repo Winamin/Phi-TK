@@ -563,7 +563,7 @@ pub async fn main() -> Result<()> {
         glGenBuffers(N as _, pbos.as_mut_ptr());
         for pbo in &pbos {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
-            glBufferDate(
+            glBufferData(
                 GL_PIXEL_PACK_BUFFER,
                 byte_size as _,
                 std::ptr::null(),
