@@ -129,6 +129,7 @@ pub const GL_MAP_READ_BIT: u32 = 0x0001;
      pub const GL_TIMEOUT_IGNORED: u64 = 0xFFFFFFFFFFFFFFFF;
      pub const GL_BGRA: u32 = 0x80E1;
      pub const GL_PACK_ALIGNMENT: u32 = 0x0D05;
+     pub const GL_READ_ONLY: u32 = 0x88B8;
 
      extern "C" {
          pub fn glBufferStorage(target: u32, size: isize, data: *const std::ffi::c_void, flags: u32);
@@ -624,8 +625,8 @@ pub async fn main() -> Result<()> {
             
             let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
                 if !src.is_null() {
-                input.write_all(std::slice::from_raw_parts(src as   *const u8, byte_size))?;
-            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                    input.write_all(std::slice::from_raw_parts(src as   *const u8, byte_size))?;
+                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
                 }
             }
            pending_frames += 1;
