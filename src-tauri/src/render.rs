@@ -562,8 +562,9 @@ pub async fn main() -> Result<()> {
     type GlFenceSync = unsafe extern "system" fn(condition: u32, flags: u32) -> *mut std::ffi::c_void;
     type GlWaitSync = unsafe extern "system" fn(sync: *mut std::ffi::c_void, flags: u32, timeout: u64);
     type GlDeleteSync = unsafe extern "system" fn(sync: *mut std::ffi::c_void);
+/*
     type GlMapBufferRange = unsafe extern "system" fn(target: u32, offset: isize, length: isize, access: u32) -> *mut std::ffi::c_void;
-
+*/
     unsafe {
         use miniquad::gl::*;
         glGenBuffers(N as _, pbos.as_mut_ptr());
@@ -596,6 +597,11 @@ pub async fn main() -> Result<()> {
 
         unsafe {
             use miniquad::gl::*;
+            let gl = gl::GL::get()
+            gl GlBufferStorage(...)
+            gl GlFenceSync(...)
+            gl GlWaitSync(...)
+            gl GlDeleteSync(...)
             let tex = mst.output().texture.raw_miniquad_texture_handle();
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
 
