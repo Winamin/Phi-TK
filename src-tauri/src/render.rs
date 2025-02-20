@@ -123,6 +123,21 @@ struct EncoderAvailability {
     hevc_amf: bool,
 }
 
+pub const GL_MAP_READ_BIT: u32 = 0x0001;
+     pub const GL_MAP_UNSYNCHRONIZED_BIT: u32 = 0x0020;
+     pub const GL_SYNC_GPU_COMMANDS_COMPLETE: u32 = 0x9117;
+     pub const GL_TIMEOUT_IGNORED: u64 = 0xFFFFFFFFFFFFFFFF;
+     pub const GL_BGRA: u32 = 0x80E1;
+     pub const GL_PACK_ALIGNMENT: u32 = 0x0D05;
+
+     extern "C" {
+         pub fn glBufferStorage(target: u32, size: isize, data: *const std::ffi::c_void, flags: u32);
+         pub fn glFenceSync(condition: u32, flags: u32) -> *mut std::ffi::c_void;
+         pub fn glWaitSync(sync: *mut std::ffi::c_void, flags: u32, timeout: u64);
+         pub fn glDeleteSync(sync: *mut std::ffi::c_void);
+         pub fn glMapBufferRange(target: u32, offset: isize, length: isize, access: u32) -> *mut std::ffi::c_void;
+     }
+
 pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
     Ok(BasicPlayer {
         avatar: if let Some(path) = &config.player_avatar {
@@ -594,7 +609,7 @@ pub async fn main() -> Result<()> {
                 0,
                 tex.width as _,
                 tex.height as _,
-                GL_BGRA,
+                GL_RGBA,
                 GL_UNSIGNED_BYTE,
                 std::ptr::null_mut(),
             );
@@ -607,16 +622,10 @@ pub async fn main() -> Result<()> {
                 glWaitSync(sync, 0, GL_TIMEOUT_IGNORED);
                 glDeleteSync(sync);
             
-                let src = glMapBufferRange(
-                    GL_PIXEL_PACK_BUFFER,
-                    0,
-                    byte_size as _,
-                    GL_MAP_READ_BIT | GL_MAP_UNSYNCHRONIZED_BIT
-                );
-            
-                if !src.is_null() {
-                    input.write_all(std::slice::from_raw_parts(src as *const u8, byte_size))?;
-                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            let src =         glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+        if !src.is_null() {
+           input.write_all(std::slice::from_raw_parts(src as   *const u8, byte_size))?;
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
                 }
             }
            pending_frames += 1;
