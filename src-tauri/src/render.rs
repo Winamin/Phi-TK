@@ -558,6 +558,12 @@ pub async fn main() -> Result<()> {
     const N: usize = 4;
     let mut pbos: [GLuint; N] = [0; N];
 
+    type GlBufferStorage = unsafe extern "system" fn(target: u32, size: isize, data: *const std::ffi::c_void, flags: u32);
+    type GlFenceSync = unsafe extern "system" fn(condition: u32, flags: u32) -> *mut std::ffi::c_void;
+    type GlWaitSync = unsafe extern "system" fn(sync: *mut std::ffi::c_void, flags: u32, timeout: u64);
+    type GlDeleteSync = unsafe extern "system" fn(sync: *mut std::ffi::c_void);
+    type GlMapBufferRange = unsafe extern "system" fn(target: u32, offset: isize, length: isize, access: u32) -> *mut std::ffi::c_void;
+
     unsafe {
         use miniquad::gl::*;
         glGenBuffers(N as _, pbos.as_mut_ptr());
