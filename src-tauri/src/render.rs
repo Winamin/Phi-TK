@@ -130,7 +130,6 @@ pub const GL_MAP_READ_BIT: u32 = 0x0001;
      pub const GL_BGRA: u32 = 0x80E1;
      pub const GL_PACK_ALIGNMENT: u32 = 0x0D05;
      pub const GL_READ_ONLY: u32 = 0x88B8;
-     }
 
 pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
     Ok(BasicPlayer {
