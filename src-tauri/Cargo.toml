@@ -13,7 +13,6 @@ rust-version = "1.60"
 tauri-build = { version = "1.4.0", features = [] }
 
 [dependencies]
-gl = "0.14"
 futures = "0.3"
 log = "0.4"
 rayon = "1.5"
@@ -44,3 +43,7 @@ opt-level = 2
 
 [profile.dev.package."*"]
 opt-level = 2
+
+[package.metadata]
+gl_version = "4.4"
+gl_profile = "core"
