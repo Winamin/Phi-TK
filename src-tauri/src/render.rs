@@ -535,7 +535,7 @@ pub async fn main() -> Result<()> {
             .ok_or_else(|| anyhow::anyhow!("No available encoder found"))?;
    
         println!("Selected encoder: {}", ffmpeg_encoder);
-    }
+
     let mut input = proc.stdin.take().unwrap();
 
     let byte_size = vw as usize * vh as usize * 4;
