@@ -130,13 +130,6 @@ pub const GL_MAP_READ_BIT: u32 = 0x0001;
      pub const GL_BGRA: u32 = 0x80E1;
      pub const GL_PACK_ALIGNMENT: u32 = 0x0D05;
      pub const GL_READ_ONLY: u32 = 0x88B8;
-
-     extern "C" {
-         pub fn glBufferStorage(target: u32, size: isize, data: *const std::ffi::c_void, flags: u32);
-         pub fn glFenceSync(condition: u32, flags: u32) -> *mut std::ffi::c_void;
-         pub fn glWaitSync(sync: *mut std::ffi::c_void, flags: u32, timeout: u64);
-         pub fn glDeleteSync(sync: *mut std::ffi::c_void);
-         pub fn glMapBufferRange(target: u32, offset: isize, length: isize, access: u32) -> *mut std::ffi::c_void;
      }
 
 pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
