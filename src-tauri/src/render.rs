@@ -567,6 +567,11 @@ pub async fn main() -> Result<()> {
 */
     unsafe {
         use miniquad::gl::*;
+        let gl = miniquad::gl::get();
+        gl.GlBufferStorage(...)
+        gl.GlFenceSync(...)
+        gl.GlWaitSync(...)
+        gl.GlDeleteSync(...)
         glGenBuffers(N as _, pbos.as_mut_ptr());
         for pbo in &pbos {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
@@ -597,11 +602,11 @@ pub async fn main() -> Result<()> {
 
         unsafe {
             use miniquad::gl::*;
-            let gl = gl::GL::get()
-            gl GlBufferStorage(...)
-            gl GlFenceSync(...)
-            gl GlWaitSync(...)
-            gl GlDeleteSync(...)
+            let gl = miniquad::gl::get();
+            gl.GlBufferStorage(...)
+            gl.GlFenceSync(...)
+            gl.GlWaitSync(...)
+            gl.GlDeleteSync(...)
             let tex = mst.output().texture.raw_miniquad_texture_handle();
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
 
