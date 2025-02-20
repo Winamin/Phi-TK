@@ -622,9 +622,9 @@ pub async fn main() -> Result<()> {
                 glWaitSync(sync, 0, GL_TIMEOUT_IGNORED);
                 glDeleteSync(sync);
             
-            let src =         glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-        if !src.is_null() {
-           input.write_all(std::slice::from_raw_parts(src as   *const u8, byte_size))?;
+            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+                if !src.is_null() {
+       input.write_all(std::slice::from_raw_parts(src as   *const u8, byte_size))?;
             glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
                 }
             }
