@@ -28,7 +28,6 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 use crate::Path;
-use sysinfo::{System, SystemExt, ComponentExt};
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -115,74 +114,13 @@ pub enum IPCEvent {
     Done(f64),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum GpuType {
-    Nvidia,
-    Intel,
-    Amd,
-    Unknown,
-}
-
-fn detect_gpu_types() -> Vec<GpuType> {
-    let mut gpus = Vec::new();
-    let sys = System::new_all();
-
-    for component in sys.components() {
-        let name = component.label().to_lowercase();
-        if name.contains("nvidia") {
-            gpus.push(GpuType::Nvidia);
-        } else if name.contains("intel") {
-            gpus.push(GpuType::Intel);
-        } else if name.contains("amd") || name.contains("ati") {
-            gpus.push(GpuType::Amd);
-        }
-    }
-
-    if gpus.is_empty() {
-        gpus.push(GpuType::Unknown);
-    }
-
-    gpus
-}
-
-fn prioritize_encoders(gpus: &[GpuType], hevc: bool) -> Vec<&'static str> {
-    let mut candidates = Vec::new();
-
-    for gpu in gpus {
-        match gpu {
-            GpuType::Nvidia => {
-                if hevc {
-                    candidates.extend(["hevc_nvenc", "h264_nvenc"]);
-                } else {
-                    candidates.extend(["h264_nvenc", "hevc_nvenc"]);
-                }
-            }
-            GpuType::Intel => {
-                if hevc {
-                    candidates.extend(["hevc_qsv", "h264_qsv"]);
-                } else {
-                    candidates.extend(["h264_qsv", "hevc_qsv"]);
-                }
-            }
-            GpuType::Amd => {
-                if hevc {
-                    candidates.extend(["hevc_amf", "h264_amf"]);
-                } else {
-                    candidates.extend(["h264_amf", "hevc_amf"]);
-                }
-            }
-            GpuType::Unknown => {
-                if hevc {
-                    candidates.push("libx265");
-                } else {
-                    candidates.push("libx264");
-                }
-            }
-        }
-    }
-
-    candidates.dedup();
-    candidates
+struct EncoderAvailability {
+    h264_nvenc: bool,
+    hevc_nvenc: bool,
+    h264_qsv: bool,
+    hevc_qsv: bool,
+    h264_amf: bool,
+    hevc_amf: bool,
 }
 
 pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
@@ -510,32 +448,101 @@ pub async fn main() -> Result<()> {
         Ok(output.status.success())
     }
 
-    let Some(ffmpeg) = find_ffmpeg()? else {
-            bail!("FFmpeg not found")
-        };
+    let encoder_availability = EncoderAvailability {
+        h264_nvenc: params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_nvenc")?,
+        hevc_nvenc: params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_nvenc")?,
+        h264_qsv: params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_qsv")?,
+        hevc_qsv: params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_qsv")?,
+        h264_amf: params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_amf")?,
+        hevc_amf: params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_amf")?,
+    };
 
-        let gpus = detect_gpu_types();
-        println!("Detected GPUs: {:?}", gpus);
+    let candidates = if params.config.hevc {
+        vec![
+            ("hevc_nvenc", encoder_availability.hevc_nvenc),
+            ("hevc_qsv", encoder_availability.hevc_qsv),
+            ("hevc_amf", encoder_availability.hevc_amf),
+            ("libx265", true),
+         ]
+    } else {
+        vec![
+            ("h264_nvenc", encoder_availability.h264_nvenc),
+            ("h264_qsv", encoder_availability.h264_qsv),
+            ("h264_amf", encoder_availability.h264_amf),
+            ("libx264", true),
+        ]
+    };
 
-        let hevc = params.config.hevc;
-        let candidates = prioritize_encoders(&gpus, hevc);
-        println!("Prioritized encoders: {:?}", candidates);
+    let ffmpeg_encoder = candidates.iter()
+        .find(|&&(name, available)| available)
+        .map(|&(name, _)| name)
+        .expect("At least one software encoder is available.");
+        
+    let ffmpeg_preset = match ffmpeg_encoder {
+        "h264_amf" | "hevc_amf" => "-quality",
+        _ => "-preset",
+    };
 
-        let available_candidates: Vec<_> = candidates
-            .into_iter()
-            .filter(|&encoder| {
-                test_encoder(ffmpeg.as_ref(), encoder).unwrap_or(false) &&
-                (encoder.starts_with("hevc") == hevc) &&
-                (params.config.hardware_accel || encoder.starts_with("libx"))
-            })
-            .collect();
- 
-        let ffmpeg_encoder = available_candidates
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("No available encoder found"))?;
-   
-        println!("Selected encoder: {}", ffmpeg_encoder);
+    let ffmpeg_preset_name = match ffmpeg_encoder {
+        "h264_nvenc" | "hevc_nvenc" => params.config.ffmpeg_preset.split_whitespace().nth(1).unwrap_or("p4"),
+        "h264_qsv" | "hevc_qsv" => params.config.ffmpeg_preset.split_whitespace().next().unwrap_or("medium"),
+        "h264_amf" | "hevc_amf" => params.config.ffmpeg_preset.split_whitespace().nth(2).unwrap_or("balanced"),
+        _ => params.config.ffmpeg_preset.split_whitespace().next().unwrap_or("medium"),
+    };
 
+    let bitrate_control = if params.config.bitrate_control == "CRF" {
+        match ffmpeg_encoder {
+            "h264_nvenc" | "hevc_nvenc" => "-cq",
+            "h264_qsv" | "hevc_qsv" => "-q",
+            "h264_amf" | "hevc_amf" => "-qp_p",
+        _ => "-crf",
+        }
+    } else {
+        "-b:v"
+    };
+    
+    if params.config.hardware_accel {
+        let h264_supported = encoder_availability.h264_nvenc || encoder_availability.h264_qsv || encoder_availability.h264_amf;
+        let hevc_supported = encoder_availability.hevc_nvenc || encoder_availability.hevc_qsv || encoder_availability.hevc_amf;
+    
+        if params.config.hevc && !hevc_supported {
+            bail!(tl!("no-hwacc"));
+        } else if !params.config.hevc && !h264_supported {
+            bail!(tl!("no-hwacc"));
+        }
+    }
+
+    let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
+    if ffmpeg_encoder.contains("nvenc") {
+        args += " -hwaccel_output_format cuda";
+    }
+    write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
+
+    let args2 = format!(
+        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
+        ffmpeg_encoder,
+        bitrate_control,
+        params.config.bitrate,
+        ffmpeg_preset,
+        ffmpeg_preset_name,
+        if params.config.disable_loading {
+            format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
+        } else {
+            "-ss 0.1".to_string()
+        },
+    );
+
+    let mut proc = cmd_hidden(&ffmpeg)
+        .args(args.split_whitespace())
+        .arg(mixing_output.path())
+        .args(args2.split_whitespace())
+        .arg(output_path)
+        .arg("-loglevel")
+        .arg("warning")
+        .stdin(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .with_context(|| tl!("run-ffmpeg-failed"))?;
     let mut input = proc.stdin.take().unwrap();
 
     let byte_size = vw as usize * vh as usize * 4;
