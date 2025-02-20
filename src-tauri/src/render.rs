@@ -616,7 +616,6 @@ pub async fn main() -> Result<()> {
            pending_frames += 1;
         }
         send(IPCEvent::Frame);
-    }
 
     drop(input);
     proc.wait()?;
