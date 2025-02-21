@@ -545,6 +545,8 @@ async function replacePreset() {
           <v-combobox :label="t('resolution')" :items="RESOLUTIONS" :rules="[resolutionRule]" density="compact" variant="outlined" v-model="resolution"/>
           <v-combobox :label="t('ffmpeg-preset')" :items="ffmpegPresetPresetList" density="compact" variant="outlined" v-model="ffmpegPreset"/>
           <v-text-field :label="t('fps')" type="number" :rules="[RULES.positiveInt]" density="compact" variant="outlined" v-model="fps"/>
+          <v-combobox :label="t('bitrateControl')" :items="['CRF', 'CBR', 'VBR']" density="compact" variant="outlined" v-model="bitrateControl"/>
+          <v-text-field :label="t('bitrate')" type="number" :rules="[RULES.positiveInt]" density="compact" variant="outlined" v-model="bitrate"/>
         </div>
         
         <div class="switch-group">
