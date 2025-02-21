@@ -555,12 +555,12 @@ pub async fn main() -> Result<()> {
     };
 
     let encoder_availability = EncoderAvailability {
-        h264_nvenc: hw_detected.h264_nvenc && test_encoder(ffmpeg, "h264_nvenc")?,
-        hevc_nvenc: hw_detected.hevc_nvenc && test_encoder(ffmpeg, "hevc_nvenc")?,
-        h264_qsv: hw_detected.h264_qsv && test_encoder(ffmpeg, "h264_qsv")?,
-        hevc_qsv: hw_detected.hevc_qsv && test_encoder(ffmpeg, "hevc_qsv")?,
-        h264_amf: hw_detected.h264_amf && test_encoder(ffmpeg, "h264_amf")?,
-        hevc_amf: hw_detected.hevc_amf && test_encoder(ffmpeg, "hevc_amf")?,
+        h264_nvenc: hw_detected.h264_nvenc && test_encoder(ffmpeg.as_ref(), "h264_nvenc")?,
+        hevc_nvenc: hw_detected.hevc_nvenc && test_encoder(ffmpeg.as_ref(), "hevc_nvenc")?,
+        h264_qsv: hw_detected.h264_qsv && test_encoder(ffmpeg.as_ref(), "h264_qsv")?,
+        hevc_qsv: hw_detected.hevc_qsv && test_encoder(ffmpeg.as_ref(), "hevc_qsv")?,
+        h264_amf: hw_detected.h264_amf && test_encoder(ffmpeg.as_ref(), "h264_amf")?,
+        hevc_amf: hw_detected.hevc_amf && test_encoder(ffmpeg.as_ref(), "hevc_amf")?,
     };
 
     let candidates = if params.config.hevc {
