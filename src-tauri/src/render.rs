@@ -28,7 +28,6 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 use crate::Path;
-use std::fmt::Write;
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -546,7 +545,7 @@ pub async fn main() -> Result<()> {
         Ok(output.status.success())
     }
 
-    let encoder_availability = EncoderAvailability {
+    let hw_detected = EncoderAvailability {
         h264_nvenc: params.config.hardware_accel && hw_detect::detect_nvidia(),
         hevc_nvenc: params.config.hardware_accel && params.config.hevc && hw_detect::detect_nvidia(),
         h264_qsv: params.config.hardware_accel && hw_detect::detect_intel_qsv(),
@@ -556,12 +555,12 @@ pub async fn main() -> Result<()> {
     };
 
     let encoder_availability = EncoderAvailability {
-        h264_nvenc: encoder_availability.h264_nvenc && test_encoder(ffmpeg, "h264_nvenc")?,
-        hevc_nvenc: encoder_availability.hevc_nvenc && test_encoder(ffmpeg, "hevc_nvenc")?,
-        h264_qsv: encoder_availability.h264_qsv && test_encoder(ffmpeg, "h264_qsv")?,
-        hevc_qsv: encoder_availability.hevc_qsv && test_encoder(ffmpeg, "hevc_qsv")?,
-        h264_amf: encoder_availability.h264_amf && test_encoder(ffmpeg, "h264_amf")?,
-        hevc_amf: encoder_availability.hevc_amf && test_encoder(ffmpeg, "hevc_amf")?,
+        h264_nvenc: hw_detected.h264_nvenc && test_encoder(ffmpeg, "h264_nvenc")?,
+        hevc_nvenc: hw_detected.hevc_nvenc && test_encoder(ffmpeg, "hevc_nvenc")?,
+        h264_qsv: hw_detected.h264_qsv && test_encoder(ffmpeg, "h264_qsv")?,
+        hevc_qsv: hw_detected.hevc_qsv && test_encoder(ffmpeg, "hevc_qsv")?,
+        h264_amf: hw_detected.h264_amf && test_encoder(ffmpeg, "h264_amf")?,
+        hevc_amf: hw_detected.hevc_amf && test_encoder(ffmpeg, "hevc_amf")?,
     };
 
     let candidates = if params.config.hevc {
