@@ -28,6 +28,7 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 use crate::Path;
+use std::fmt::Write;
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -122,7 +123,104 @@ struct EncoderAvailability {
     h264_amf: bool,
     hevc_amf: bool,
 }
+#[cfg(target_os = "windows")]
+mod hw_detect {
+    use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};
+    use std::path::Path;
 
+    pub fn detect_nvidia() -> bool {
+        RegKey::predef(HKEY_LOCAL_MACHINE)
+            .open_subkey(r"SOFTWARE\NVIDIA Corporation\Global\NvControlPanel")
+            .is_ok()
+    }
+
+    pub fn detect_intel_qsv() -> bool {
+        let mut found = false;
+        let classes = [
+            "{4d36e968-e325-11ce-bfc1-08002be10318}", // Display adapters
+            "{4d36e97d-e325-11ce-bfc1-08002be10318}"  // System devices
+        ];
+
+        for class in classes {
+            if let Ok(key) = RegKey::predef(HKEY_LOCAL_MACHINE)
+                .open_subkey(format!(r"SYSTEM\CurrentControlSet\Control\Class\{}", class)) 
+            {
+                for subkey in key.enum_keys().filter_map(|x| x.ok()) {
+                    if let Ok(subkey) = key.open_subkey(subkey) {
+                        if let Ok(provider) = subkey.get_value::<String, _>("ProviderName") {
+                            if provider.contains("Intel") {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        found
+    }
+
+    pub fn detect_amd() -> bool {
+        Path::new(r"C:\Windows\System32\amdvlk64.dll").exists() ||
+        Path::new(r"C:\Windows\System32\amfrt64.dll").exists()
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod hw_detect {
+    use std::path::Path;
+    use std::process::Command;
+
+    pub fn detect_nvidia() -> bool {
+        Path::new("/dev/nvidia0").exists() ||
+        Command::new("nvidia-smi").status().is_ok()
+    }
+
+    pub fn detect_intel_qsv() -> bool {
+        Path::new("/dev/dri/renderD128").exists() &&
+        Command::new("vainfo")
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).contains("VAProfileH264"))
+            .unwrap_or(false)
+    }
+
+    pub fn detect_amd() -> bool {
+        Path::new("/dev/kfd").exists() &&
+        Command::new("vainfo")
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).contains("AMD"))
+            .unwrap_or(false)
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod hw_detect {
+    use std::process::Command;
+
+    pub fn detect_nvidia() -> bool {
+        Command::new("system_profiler")
+            .args(&["SPDisplaysDataType"])
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).contains("NVIDIA"))
+            .unwrap_or(false)
+    }
+
+    pub fn detect_intel_qsv() -> bool {
+        Command::new("system_profiler")
+            .args(&["SPDisplaysDataType"])
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).contains("Intel"))
+            .unwrap_or(false)
+    }
+
+    pub fn detect_amd() -> bool {
+        Command::new("system_profiler")
+            .args(&["SPDisplaysDataType"])
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).contains("AMD"))
+            .unwrap_or(false)
+    }
+}
 pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
     Ok(BasicPlayer {
         avatar: if let Some(path) = &config.player_avatar {
@@ -449,12 +547,21 @@ pub async fn main() -> Result<()> {
     }
 
     let encoder_availability = EncoderAvailability {
-        h264_nvenc: params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_nvenc")?,
-        hevc_nvenc: params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_nvenc")?,
-        h264_qsv: params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_qsv")?,
-        hevc_qsv: params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_qsv")?,
-        h264_amf: params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_amf")?,
-        hevc_amf: params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_amf")?,
+        h264_nvenc: params.config.hardware_accel && hw_detect::detect_nvidia(),
+        hevc_nvenc: params.config.hardware_accel && params.config.hevc && hw_detect::detect_nvidia(),
+        h264_qsv: params.config.hardware_accel && hw_detect::detect_intel_qsv(),
+        hevc_qsv: params.config.hardware_accel && params.config.hevc && hw_detect::detect_intel_qsv(),
+        h264_amf: params.config.hardware_accel && hw_detect::detect_amd(),
+        hevc_amf: params.config.hardware_accel && params.config.hevc && hw_detect::detect_amd(),
+    };
+
+    let encoder_availability = EncoderAvailability {
+        h264_nvenc: encoder_availability.h264_nvenc && test_encoder(ffmpeg, "h264_nvenc")?,
+        hevc_nvenc: encoder_availability.hevc_nvenc && test_encoder(ffmpeg, "hevc_nvenc")?,
+        h264_qsv: encoder_availability.h264_qsv && test_encoder(ffmpeg, "h264_qsv")?,
+        hevc_qsv: encoder_availability.hevc_qsv && test_encoder(ffmpeg, "hevc_qsv")?,
+        h264_amf: encoder_availability.h264_amf && test_encoder(ffmpeg, "h264_amf")?,
+        hevc_amf: encoder_availability.hevc_amf && test_encoder(ffmpeg, "hevc_amf")?,
     };
 
     let candidates = if params.config.hevc {
@@ -463,7 +570,7 @@ pub async fn main() -> Result<()> {
             ("hevc_qsv", encoder_availability.hevc_qsv),
             ("hevc_amf", encoder_availability.hevc_amf),
             ("libx265", true),
-         ]
+        ]
     } else {
         vec![
             ("h264_nvenc", encoder_availability.h264_nvenc),
@@ -477,6 +584,8 @@ pub async fn main() -> Result<()> {
         .find(|&&(name, available)| available)
         .map(|&(name, _)| name)
         .expect("At least one software encoder is available.");
+
+    println!("Selected encoder: {}", ffmpeg_encoder);
         
     let ffmpeg_preset = match ffmpeg_encoder {
         "h264_amf" | "hevc_amf" => "-quality",
