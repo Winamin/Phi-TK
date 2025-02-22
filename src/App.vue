@@ -64,53 +64,37 @@ window.goto = (name: string) => {
       :elevation="4"
       class="app-bar-shadow blur-background"
     ></v-app-bar>
-    <v-navigation-drawer 
-      expand-on-hover 
-      rail 
-      permanent
-      :elevation="8"
-      class="nav-drawer-border blur-background"
-    >
-      <v-list density="compact" nav class="py-4">
-        <v-list-item
-          v-for="key in ['render', 'rpe', 'tasks', 'about']"
-          :active="route.name === key"
-          :key="key"
-          :prepend-icon="icons[key as keyof typeof icons]"
-          :title="t(key)"
-          @click="router.push({ name: key })"
-          class="list-item-hover"
-          active-class="active-item"
-        ></v-list-item>
-      </v-list>
-    </v-navigation-drawer>
 
-    <v-main class="d-flex justify-center animated-background">
-      <router-view v-slot="{ Component }">
-        <transition
-          name="slide"
-          mode="out-in"
+    <v-main class="d-flex align-center justify-center animated-background">
+      <div class="option-grid">
+        <v-card
+          v-for="key in ['render', 'rpe', 'tasks', 'about']"
+          :key="key"
+          class="option-card blur-background"
+          :class="{ 'active-route': route.name === key }"
+          @click="router.push({ name: key })"
         >
+          <div class="card-content">
+            <v-icon
+              size="48"
+              :icon="icons[key as keyof typeof icons]"
+              class="option-icon"
+            />
+            <div class="text-caption mt-2">{{ t(key) }}</div>
+          </div>
+        </v-card>
+      </div>
+
+      <router-view v-slot="{ Component }">
+        <transition name="slide" mode="out-in">
           <Suspense timeout="0">
-            <template #default>
-              <component :is="Component" ref="component" />
-            </template>
-            <template #fallback>
-              <div class="loading-overlay">
-                <v-progress-circular 
-                  indeterminate 
-                  size="64"
-                  color="accent"
-                  class="glow-spinner"
-                />
-              </div>
-            </template>
           </Suspense>
         </transition>
       </router-view>
     </v-main>
   </v-app>
 </template>
+
 
 <style>
 .dark-theme {
@@ -268,5 +252,53 @@ html::-webkit-scrollbar {
 
 .nav-drawer-border {
   border-right: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2rem;
+  max-width: 800px;
+  padding: 2rem;
+  z-index: 2;
+}
+
+.option-card {
+  aspect-ratio: 1;
+  border-radius: 20px !important;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.option-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.option-card.active-route {
+  border: 2px solid #2196F3;
+  box-shadow: 0 0 24px rgba(33, 150, 243, 0.3);
+}
+
+.card-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.option-icon {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+@media (max-width: 600px) {
+  .option-grid {
+    grid-template-columns: 1fr;
+    width: 80%;
+  }
 }
 </style>
