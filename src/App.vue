@@ -1,6 +1,7 @@
 <i18n>
 en:
   render: Render
+  render1: Fast Render
   rpe: RPE
   tasks: Tasks
   about: About
@@ -10,12 +11,15 @@ zh-CN:
   rpe: RPE
   tasks: 任务列表
   about: 关于
+
 </i18n>
 
 <script lang="ts">
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { useI18n } from 'vue-i18n';
+
 import { VSonner } from 'vuetify-sonner';
 
 const onLoaded = ref<() => void>();
@@ -35,7 +39,19 @@ declare global {
   }
 }
 
-export default {};
+export default {
+  data() {
+    return {
+      drawer: true,
+    };
+  },
+  methods: {
+    toggleNav() {
+      this.drawer = !this.drawer;
+    },
+  },
+
+};
 </script>
 
 <script setup lang="ts">
@@ -51,110 +67,87 @@ const icons = {
   about: 'mdi-information-outline',
 };
 
-const handleNavigation = (key: string) => {
-  router.push({ name: key }).catch(err => {
-    console.log("error:", err)
-  })
-}
-  
 window.goto = (name: string) => {
   router.push({ name });
 };
 </script>
 
 <template>
-  <v-app id="Phi TK" class="dark-theme">
+  <v-app id="phi-tk" class="dark-theme">
     <v-sonner position="top-center" />
-    <v-app-bar 
-      title="Phi TK" 
-      :elevation="4"
-      class="app-bar-shadow blur-background"
-    ></v-app-bar>
-
-    <v-main class="d-flex align-center justify-center animated-background">
-      <div class="option-grid">
-        <v-card
+    <v-app-bar :elevation="0" class="app-bar-shadow blur-background">
+      <!--<v-app-bar-nav-icon @click="toggleNav" class="mx-1"></v-app-bar-nav-icon>-->
+      <v-app-bar-title class="mx-5">Phi TK</v-app-bar-title>
+    </v-app-bar>
+    <v-navigation-drawer v-model="drawer" expand-on-hover rail permanent class="nav-drawer-border blur-background list-item">
+      <v-list density="compact" nav>
+        <v-list-item
           v-for="key in ['render', 'rpe', 'tasks', 'about']"
+          :active="route.name === key"
           :key="key"
-          class="option-card blur-background"
-          :class="{ 'active-route': route.name === key }"
-          @click="handleNavigation(key)"
-        >
-          <div class="card-content">
-            <v-icon
-              size="64"
-              :icon="icons[key as keyof typeof icons]"
-              class="option-icon mb-2"
-            />
-            <div class="text-h6">{{ t(key) }}</div>
-          </div>
-        </v-card>
-      </div>
+          :prepend-icon="icons[key as keyof typeof icons]"
+          :title="t(key)"
+          @click="router.push({ name: key })"
+          class="list-item-hover"
+          ></v-list-item>
+      </v-list>
+    </v-navigation-drawer>
 
+    <v-main class="d-flex justify-center">
       <router-view v-slot="{ Component }">
-        <transition name="slide" mode="out-in">
-          <Suspense timeout="0">
-          </Suspense>
-        </transition>
+        <Suspense timeout="0">
+          <template #default>
+            <component :is="Component" ref="component" />
+          </template>
+          <template #fallback>
+            <div class="flex justify-center pa-8">
+              <v-progress-circular indeterminate size="large" />
+            </div>
+          </template>
+        </Suspense>
       </router-view>
     </v-main>
   </v-app>
 </template>
 
-
 <style>
 .dark-theme {
-  background: linear-gradient(45deg, #0f0c29, #302b63, #24243e);
+  background: linear-gradient(45deg, #292364, #302b63, #24243e);
 }
 
 .app-bar-shadow {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+  box-shadow: 0px 10px 10px rgba(0, 0, 0, 0.2) !important;
 }
 
 .nav-drawer-border {
   border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
+.list-item {
+  transition: all 0.3s cubic-bezier(0.2, 0, 0.1, 1);
+  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2) !important;
+}
+
 .list-item-hover {
-  transition: 
-    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    background 0.3s ease,
-    box-shadow 0.3s ease;
-  margin: 8px 12px;
+  transition: all 0.3s ease;
+  margin: 8px 0px;
   border-radius: 12px;
 }
 
 .list-item-hover:hover {
   background: rgba(255, 255, 255, 0.05) !important;
-  transform: translateX(8px);
+  margin: 8px 4px;
+  transform: translateX(4px);
 }
 
 .active-item {
   background: linear-gradient(45deg, rgba(33, 150, 243, 0.2), transparent) !important;
-  box-shadow: 2px 0 12px rgba(33, 150, 243, 0.2);
-  border-left: 4px solid #2196F3;
-  box-sizing: border-box;
-  margin-left: 4px;
-  transform: translateX(8px);
-  transition: all 0.3s ease;
 }
 
-.active-item::before {
-  content: '';
-  position: absolute;
-  left: -4px;
-  top: 0;
-  height: 100%;
-  width: 4px;
-  background: #6567bd;
-  transform: scaleY(0);
-  transition: transform 0.3s ease;
+.active-item:hover {
+  background: linear-gradient(45deg, rgba(33, 150, 243, 0.2), transparent) !important;
 }
 
-.active-item.active-item::before {
-  transform: scaleY(1);
-}
-  
 .glow-spinner {
   filter: drop-shadow(0 0 8px #2196F3);
 }
@@ -179,7 +172,7 @@ window.goto = (name: string) => {
     transparent 75%,
     transparent
   );
-  animation: animateFlow 0.8s linear infinite;
+  animation: animateFlow 2s linear infinite;
   opacity: 0.1;
 }
 
@@ -189,28 +182,30 @@ window.goto = (name: string) => {
 }
 
 .blur-background {
-  backdrop-filter: blur(50px) saturate(180%);
-  background: linear-gradient(45deg, rgba(168, 98, 153, 0.403), rgba(115, 84, 189, 0.6)) !important;
+  backdrop-filter: blur(40px) saturate(180%);
+  background: linear-gradient(45deg, rgba(168, 98, 153, 0.3), rgba(101, 66, 182, 0.4)) !important;
   transform: translateZ(0);
   position: relative;
   z-index: 1;
 }
-
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  
+.fade-blur-enter-active,
+.fade-blur-leave-active {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: absolute;
   width: 100%;
 }
 
-.slide-enter-from {
+.fade-blur-enter-from {
   opacity: 0;
-  transform: translateX(100%);
+  filter: blur(10px);
+  transform: translateY(-20px);
 }
 
-.slide-leave-to {
+.fade-blur-leave-to {
   opacity: 0;
-  transform: translateX(-100%);
+  filter: blur(10px);
+  transform: translateY(20px);
 }
 
 .loading-overlay {
@@ -234,86 +229,5 @@ html {
 
 html::-webkit-scrollbar {
   display: none;
-}
-
-.v-navigation-drawer {
-  overflow: visible !important;
-}
-
-.v-navigation-drawer::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  backdrop-filter: blur(50px) saturate(180%);
-  background: linear-gradient(45deg, rgba(168, 98, 153, 0.403), rgba(146, 112, 224, 0.788)) !important;
-  z-index: -1;
-  width: calc(100% + 12px) !important;
-  margin-right: -12px !important;
-  right: -6px !important;
-  border-radius: 0 16px 16px 0;
-}
-
-.nav-drawer-border {
-  border-right: 1px solid rgba(255, 255, 255, 0.15) !important;
-}
-
-.option-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 240px);
-  gap: 2rem;
-  padding: 2rem;
-  z-index: 2;
-}
-
-.option-card {
-  width: 240px !important;
-  height: 240px !important;
-  border-radius: 24px !important;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.05) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-
-.option-card:hover {
-  transform: scale(1.05) translateY(-8px);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4) !important;
-  background: rgba(255, 255, 255, 0.1) !important;
-}
-
-.option-card:active {
-  transform: scale(0.98) translateY(-5px);  <!-- 添加点击动画 -->
-}
-
-.active-route {
-  border: 2px solid #2196F3 !important;
-  box-shadow: 0 0 32px rgba(33, 150, 243, 0.4) !important;
-  background: rgba(33, 150, 243, 0.1) !important;
-}
-
-.card-content {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  padding: 24px;
-}
-
-@media (max-width: 600px) {
-  .option-grid {
-    grid-template-columns: 1fr;
-    width: 100%;
-    padding: 1rem;
-  }
-  
-  .option-card {
-    width: 280px !important;
-    height: 280px !important;
-  }
 }
 </style>
