@@ -152,7 +152,7 @@ impl Task {
                     if frame_count as f64 / total as f64 >= 1.0 {
                         *self.status.lock().await = TaskStatus::Done {
                             duration: cur,
-                            output: "Rendering completed immediately at 100%".to_string(),
+                            output: format!("[STDOUT]\n{stdout}\n\n[STDERR]\n{stderr}"),
                         };
                         return Ok(());
                     } else {
