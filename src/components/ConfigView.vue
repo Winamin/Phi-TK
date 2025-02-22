@@ -573,6 +573,14 @@ async function replacePreset() {
           <v-text-field :label="t('player-name')" variant="outlined" density="compact" v-model="playerName"/>
           <v-text-field :label="t('player-rks')" :rules="[RULES.positive]" type="number" variant="outlined" density="compact" v-model="playerRks"/>
         </div>
+        
+        <v-combobox
+            :label="t('challenge-color')"
+            :items="t('challenge-colors').split(',')"
+            variant="outlined"
+            density="compact"
+            v-model="challengeColor"
+          />
       </div>
     </v-expand-transition>
 
@@ -631,6 +639,11 @@ async function replacePreset() {
               </template>
             </v-tooltip>
           </div>
+          <v-text-field :label="t('combo')" variant="outlined" density="compact" v-model="combo"/>
+          <v-text-field :label="t('buffer_size')" variant="outlined" density="compact" type="number" v-model="bufferSize"/>
+          <v-switch :label="t('chart_debug')" v-model="chartDebug" color="primary" density="compact"/>
+          <v-switch :label="t('flid_x')" v-model="flidX" color="primary" density="compact"/>
+          <v-slider :label="t('chart_ratio')" thumb-label="always" :min="0.5" :max="2" :step="0.1" color="primary" track-color="secondary" v-model="chartRatio"/>
         </div>
       </div>
     </v-expand-transition>
