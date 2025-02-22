@@ -640,10 +640,10 @@ async function replacePreset() {
             </v-tooltip>
           </div>
           <v-text-field :label="t('combo')" variant="outlined" density="compact" v-model="combo"/>
-          <v-text-field :label="t('buffer_size')" variant="outlined" density="compact" type="number" v-model="bufferSize"/>
+          <v-slider :label="t('buffer_size')" :tooltip="t('buffer_size-tips')" thumb-label="always" :min="128" :max="2048" :step="1" v-model="bufferSize"> </v-slider>
           <v-switch :label="t('chart_debug')" v-model="chartDebug" color="primary" density="compact"/>
           <v-switch :label="t('flid_x')" v-model="flidX" color="primary" density="compact"/>
-          <v-slider :label="t('chart_ratio')" thumb-label="always" :min="0.5" :max="2" :step="0.1" color="primary" track-color="secondary" v-model="chartRatio"/>
+          <v-slider :label="t('chart_ratio')" thumb-label="always" :min="0.05" :max="1" :step="0.01" color="primary" track-color="secondary" v-model="chartRatio"/>
         </div>
       </div>
     </v-expand-transition>
