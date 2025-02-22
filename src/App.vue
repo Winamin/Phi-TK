@@ -51,6 +51,12 @@ const icons = {
   about: 'mdi-information-outline',
 };
 
+const handleNavigation = (key: string) => {
+  router.push({ name: key }).catch(err => {
+    console.log("error:", err)
+  })
+}
+  
 window.goto = (name: string) => {
   router.push({ name });
 };
@@ -72,15 +78,15 @@ window.goto = (name: string) => {
           :key="key"
           class="option-card blur-background"
           :class="{ 'active-route': route.name === key }"
-          @click="router.push({ name: key })"
+          @click="handleNavigation(key)"
         >
           <div class="card-content">
             <v-icon
-              size="48"
+              size="64"
               :icon="icons[key as keyof typeof icons]"
-              class="option-icon"
+              class="option-icon mb-2"
             />
-            <div class="text-caption mt-2">{{ t(key) }}</div>
+            <div class="text-h6">{{ t(key) }}</div>
           </div>
         </v-card>
       </div>
@@ -256,49 +262,58 @@ html::-webkit-scrollbar {
 
 .option-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, 240px);
   gap: 2rem;
-  max-width: 800px;
   padding: 2rem;
   z-index: 2;
 }
 
 .option-card {
-  aspect-ratio: 1;
-  border-radius: 20px !important;
+  width: 240px !important;
+  height: 240px !important;
+  border-radius: 24px !important;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(255, 255, 255, 0.05) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .option-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+  transform: scale(1.05) translateY(-8px);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4) !important;
   background: rgba(255, 255, 255, 0.1) !important;
 }
 
-.option-card.active-route {
-  border: 2px solid #2196F3;
-  box-shadow: 0 0 24px rgba(33, 150, 243, 0.3);
+.option-card:active {
+  transform: scale(0.98) translateY(-5px);  <!-- 添加点击动画 -->
+}
+
+.active-route {
+  border: 2px solid #2196F3 !important;
+  box-shadow: 0 0 32px rgba(33, 150, 243, 0.4) !important;
+  background: rgba(33, 150, 243, 0.1) !important;
 }
 
 .card-content {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.option-icon {
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  padding: 24px;
 }
 
 @media (max-width: 600px) {
   .option-grid {
     grid-template-columns: 1fr;
-    width: 80%;
+    width: 100%;
+    padding: 1rem;
+  }
+  
+  .option-card {
+    width: 280px !important;
+    height: 280px !important;
   }
 }
 </style>
