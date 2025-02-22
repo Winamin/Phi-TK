@@ -345,7 +345,7 @@ function onEnter() {
 defineExpose({ buildConfig, onEnter });
 
 function StickyLabel(props: { title: string }) {
-  return h('div', { class: 'mb-4 bg-surface sticky-label', style: 'position: sticky; top: 0; z-index: 2' }, [h('h3', { class: 'pa-1' }, props.title), h(VDivider)]);
+  return h('div', { class: 'mb-4 bg-surface sticky-label', style: 'position: sticky; top: 0; z-index: 2' }, [h('h3', { class: 'pa-1' }, props.title)]);
 }
 
 function applyConfig(config: RenderConfig) {
