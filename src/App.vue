@@ -14,6 +14,8 @@ zh-CN:
 </i18n>
 
 <script lang="ts">
+import { onMounted, onUnmounted } from 'vue'
+  
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -23,7 +25,7 @@ import { VSonner } from 'vuetify-sonner';
 
 const onLoaded = ref<() => void>();
 const component = ref();
-
+  
 watch(component, (comp) => {
   if (comp && onLoaded.value) onLoaded.value();
 });
