@@ -1,7 +1,6 @@
 <i18n>
 en:
   render: Render
-  render1: Fast Render
   rpe: RPE
   tasks: Tasks
   about: About
@@ -70,16 +69,39 @@ const icons = {
 window.goto = (name: string) => {
   router.push({ name });
 };
+
+const drawer = ref(true);
+const handleResize = () => {
+  if (window.innerWidth < 768) {
+    drawer.value = false;
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize);
+  handleResize();
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize);
+});
+  
 </script>
 
 <template>
   <v-app id="phi-tk" class="dark-theme">
     <v-sonner position="top-center" />
     <v-app-bar :elevation="0" class="app-bar-shadow blur-background">
-      <!--<v-app-bar-nav-icon @click="toggleNav" class="mx-1"></v-app-bar-nav-icon>-->
-      <v-app-bar-title class="mx-5">Phi TK</v-app-bar-title>
+      <v-app-bar-title class="mx-5 text-gradient">Phi TK</v-app-bar-title>
     </v-app-bar>
-    <v-navigation-drawer v-model="drawer" expand-on-hover rail permanent class="nav-drawer-border blur-background list-item">
+
+    <v-navigation-drawer 
+      v-model="drawer" 
+      expand-on-hover 
+      rail 
+      permanent 
+      class="nav-drawer-glass blur-background"
+    >
       <v-list density="compact" nav>
         <v-list-item
           v-for="key in ['render', 'rpe', 'tasks', 'about']"
@@ -88,20 +110,28 @@ window.goto = (name: string) => {
           :prepend-icon="icons[key as keyof typeof icons]"
           :title="t(key)"
           @click="router.push({ name: key })"
-          class="list-item-hover"
-          ></v-list-item>
+          class="list-item-hover glow-item"
+        ></v-list-item>
       </v-list>
     </v-navigation-drawer>
 
-    <v-main class="d-flex justify-center">
+    <v-main class="d-flex justify-center animated-background">
       <router-view v-slot="{ Component }">
         <Suspense timeout="0">
           <template #default>
-            <component :is="Component" ref="component" />
+            <component 
+              :is="Component" 
+              ref="component"
+              class="route-transition"
+            />
           </template>
           <template #fallback>
             <div class="flex justify-center pa-8">
-              <v-progress-circular indeterminate size="large" />
+              <v-progress-circular 
+                indeterminate 
+                size="large"
+                class="glow-spinner"
+              />
             </div>
           </template>
         </Suspense>
@@ -109,125 +139,110 @@ window.goto = (name: string) => {
     </v-main>
   </v-app>
 </template>
-
 <style>
 .dark-theme {
   background: linear-gradient(45deg, #292364, #302b63, #24243e);
 }
 
-.app-bar-shadow {
-  box-shadow: 0px 10px 10px rgba(0, 0, 0, 0.2) !important;
+.blur-background {
+  backdrop-filter: blur(40px) saturate(200%);
+  background: linear-gradient(
+    135deg, 
+    rgba(98, 0, 234, 0.15) 0%, 
+    rgba(186, 104, 200, 0.1) 100%
+  ) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
 }
 
-.nav-drawer-border {
-  border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
-}
-
-.list-item {
-  transition: all 0.3s cubic-bezier(0.2, 0, 0.1, 1);
-  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2) !important;
+.nav-drawer-glass {
+  border-right: 1px solid rgba(255,255,255,0.15) !important;
+  box-shadow: 4px 0 20px rgba(0,0,0,0.3);
 }
 
 .list-item-hover {
-  transition: all 0.3s ease;
-  margin: 8px 0px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin: 8px 0;
   border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: -100%;
+    top: 0;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255,255,255,0.1),
+      transparent
+    );
+    transition: 0.5s;
+  }
+
+  &:hover {
+    transform: translateX(12px) scale(1.02);
+    background: linear-gradient(
+      to right, 
+      rgba(98, 0, 234, 0.2) 30%, 
+      transparent
+    ) !important;
+    box-shadow: 2px 0 12px rgba(98, 0, 234, 0.3);
+
+    &::before {
+      left: 140%;
+    }
+  }
 }
 
-.list-item-hover:hover {
-  background: rgba(255, 255, 255, 0.05) !important;
-  margin: 8px 4px;
-  transform: translateX(4px);
+.route-transition {
+  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
 }
 
-.active-item {
-  background: linear-gradient(45deg, rgba(33, 150, 243, 0.2), transparent) !important;
+.fade-blur-enter-from,
+.fade-blur-leave-to {
+  opacity: 0;
+  transform: rotateY(10deg) translateZ(50px);
+  filter: blur(5px);
 }
 
-.active-item:hover {
-  background: linear-gradient(45deg, rgba(33, 150, 243, 0.2), transparent) !important;
+.text-gradient {
+  background: linear-gradient(45deg, #7c4dff, #ff6ec4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .glow-spinner {
-  filter: drop-shadow(0 0 8px #2196F3);
+  filter: drop-shadow(0 0 8px #6200ea);
 }
 
-.animated-background {
-  position: relative;
-  overflow: hidden;
-}
-
-.animated-background::before {
+.animated-background::after {
   content: '';
-  position: absolute;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    45deg,
-    rgba(255, 255, 255, 0.01) 25%,
-    transparent 25%,
-    transparent 50%,
-    rgba(255, 255, 255, 0.01) 50%,
-    rgba(255, 255, 255, 0.01) 75%,
-    transparent 75%,
-    transparent
-  );
-  animation: animateFlow 2s linear infinite;
-  opacity: 0.1;
-}
-
-@keyframes animateFlow {
-  0% { transform: translate(-25%, -25%) rotate(0deg); }
-  100% { transform: translate(-25%, -25%) rotate(360deg); }
-}
-
-.blur-background {
-  backdrop-filter: blur(40px) saturate(180%);
-  background: linear-gradient(45deg, rgba(168, 98, 153, 0.3), rgba(101, 66, 182, 0.4)) !important;
-  transform: translateZ(0);
-  position: relative;
-  z-index: 1;
-}
-  
-.fade-blur-enter-active,
-.fade-blur-leave-active {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: absolute;
-  width: 100%;
-}
-
-.fade-blur-enter-from {
-  opacity: 0;
-  filter: blur(10px);
-  transform: translateY(-20px);
-}
-
-.fade-blur-leave-to {
-  opacity: 0;
-  filter: blur(10px);
-  transform: translateY(20px);
-}
-
-.loading-overlay {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  backdrop-filter: blur(20px);
-  background: rgba(16, 16, 36, 0.8);
-  z-index: 999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 1000 1000' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  animation: particleFlow 20s linear infinite;
 }
 
-html {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+@keyframes particleFlow {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(-50%, -50%); }
 }
 
-html::-webkit-scrollbar {
-  display: none;
+@media (max-width: 768px) {
+  .blur-background {
+    backdrop-filter: blur(20px);
+  }
+  
+  .nav-drawer-glass {
+    border-right-width: 0.5px;
+  }
 }
 </style>
