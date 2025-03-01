@@ -547,7 +547,7 @@ async function replacePreset() {
           <v-text-field :label="t('fps')" type="number" :rules="[RULES.positiveInt]" density="compact" variant="outlined" v-model="fps"/>
           <v-combobox :label="t('bitrateControl')" :items="['CRF', 'CBR']" density="compact" variant="outlined" v-model="bitrateControl"/>
           <v-text-field :label="t('bitrate')" type="number" :rules="[RULES.positiveInt]" density="compact" variant="outlined" v-model="bitrate"/>
-          <v-text-field :label="t('fxaa')" type="number" :rules="[RULES.positiveInt]" density="compact" variant="outlined" v-model="fxaa"/>
+          <TipSwitch :label="t('fxaa')" :tooltip="t('fxaa-tips')" v-model="fxaa"></TipSwitch>
         </div>
         
         <div class="switch-group">
