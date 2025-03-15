@@ -653,8 +653,6 @@ pub async fn main() -> Result<()> {
         .with_context(|| tl!("run-ffmpeg-failed"))?;
     let mut input = proc.stdin.take().unwrap();
 
-    let mut input = proc.stdin.take().unwrap();
-
     let byte_size = vw as usize * vh as usize * 4;
 
     const N: usize = 3;
@@ -672,9 +670,8 @@ pub async fn main() -> Result<()> {
             );
         }
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-        glPixelStorei(GL_PACK_ALIGNMENT, 1);
     }
-
+    
     unsafe {
         use miniquad::gl::*;
         let tex = mst.output().texture.raw_miniquad_texture_handle();
@@ -724,7 +721,7 @@ pub async fn main() -> Result<()> {
 
             let map_index = (frame as usize + N - 1) % N;
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[map_index]);
-            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8); // 0x88B8 = GL_READ_ONLY
             if !src.is_null() {
                 input.write_all(std::slice::from_raw_parts(src as *const u8, byte_size))?;
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
@@ -736,8 +733,9 @@ pub async fn main() -> Result<()> {
     for i in 1..N {
         let map_index = (frames as usize + N - i) % N;
         unsafe {
+            use miniquad::gl::*;
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[map_index]);
-            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
             if !src.is_null() {
                 input.write_all(std::slice::from_raw_parts(src as *const u8, byte_size))?;
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
