@@ -1,3 +1,5 @@
+name: Build Phi TK
+
 on:
   push:
     tags:
