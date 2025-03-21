@@ -77,7 +77,7 @@ jobs:
         uses: suisei-cn/actions-download-file@v1.3.0
         id: download-static-lib
         with:
-          url: "https://github.com/Winamin/Phigros-TK/raw/main/prpr-avc-static-${ { matrix.target } }.tar.gz"
+          url: "https://github.com/Winamin/Phigros-TK/raw/main/prpr-avc-static-${{ matrix.target }}.tar.gz"
           target: ./static-lib
           filename: prpr-avc-static-lib.tar.gz
 
@@ -86,8 +86,8 @@ jobs:
          id: extract-static-lib
          with:
            command: x
-           cwd: prpr-avc-static-lib.tar.gz
-           files: ./static-lib
+           cwd: ./static-lib
+           files: prpr-avc-static-lib.tar.gz
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
@@ -96,7 +96,7 @@ jobs:
           PRPR_AVC_LIBS: ${{ github.workspace }}/static-lib
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "Phi TK ${ { github.ref_name#v } }"
+          releaseName: "Phi TK ${{ github.ref_name#v }}"
           releaseBody: 'From GitHub Action'
           releaseDraft: true
           prerelease: false
