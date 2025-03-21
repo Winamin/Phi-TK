@@ -1,4 +1,5 @@
-name: Build Phi TK
+name: Release
+
 on:
   push:
     tags:
@@ -12,43 +13,61 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [ubuntu-20.04, windows-latest]
+        platform: [ubuntu-20.04, windows-latest, macos-latest]
+        include:
+          - platform: ubuntu-20.04
+            target: x86_64-unknown-linux-gnu
+          - platform: ubuntu-20.04
+            target: aarch64-unknown-linux-gnu
+          - platform: macos-latest
+            target: aarch64-apple-darwin       
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.platform }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install dependencies (ubuntu only)
+      - name: Install Ubuntu dependencies
         if: matrix.platform == 'ubuntu-20.04'
-        # You can remove libayatana-appindicator3-dev if you don't use the system tray feature.
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev libssl-dev pkg-config libswresample-dev vainfo
+
+      - name: Install macOS dependencies
+        if: matrix.platform == 'macos-latest'
+        run: |
+          brew install librsvg
+
+      - name: Install cross-compile deps (Ubuntu ARM)
+        if: matrix.platform == 'ubuntu-20.04' && matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: beta-x86_64-gnu
+          toolchain: beta
+          targets: ${{ matrix.target }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
 
-      - name: Sync node version and setup cache
+      - name: Sync node version
         uses: pnpm/action-setup@v2
         with:
           version: 8
 
       - name: Install frontend dependencies
-        # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
-        run: pnpm install # Change this to npm, yarn or pnpm.
+        run: pnpm install
 
-      - name: Download static-lib
+      - name:static-lib
         uses: suisei-cn/actions-download-file@v1.3.0
         id: downlod-static-lib
         with:
-          # url: "https://files-cf.phira.cn/prpr-avc-static-lib.tar.gz"
           url: "https://raw.githubusercontent.com/Winamin/Phigros-TK/main/prpr-avc-static-"
           target: ./
 
@@ -65,13 +84,13 @@ jobs:
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
-
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PRPR_AVC_LIBS: ${{ github.workspace }}/static-lib
         with:
-          tagName: ${{ github.ref_name }} # This only works if your workflow triggers on new tags.
-          releaseName: 'Phi TK v__VERSION__' # tauri-action replaces \_\_VERSION\_\_ with the app version.
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Phi TK v__VERSION__'
           releaseBody: 'From GitHub Action'
           releaseDraft: true
           prerelease: false
+          args: --target ${{ matrix.target }}
