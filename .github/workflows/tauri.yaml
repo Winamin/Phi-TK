@@ -29,6 +29,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Create directories
+        run: mkdir -p static-lib
+
       - name: Install Ubuntu dependencies
         if: matrix.platform == 'ubuntu-20.04'
         run: |
@@ -40,10 +43,16 @@ jobs:
         run: |
           brew install librsvg
 
-      - name: Install cross-compile deps (Ubuntu ARM)
+      - name: Install cross-compile deps
         if: matrix.platform == 'ubuntu-20.04' && matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Setup cross-compile
+        if: matrix.platform == 'ubuntu-20.04' && matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
@@ -64,23 +73,20 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
-      - name:static-lib
+      - name: Download static-lib
         uses: suisei-cn/actions-download-file@v1.3.0
-        id: downlod-static-lib
+        id: download-static-lib
         with:
-          url: "https://raw.githubusercontent.com/Winamin/Phigros-TK/main/prpr-avc-static-"
-          target: ./
-
-      - name: Mkdir static-lib
-        run: mkdir static-lib
+          url: "https://github.com/Winamin/Phigros-TK/raw/main/prpr-avc-static-${ { matrix.target } }.tar.gz"
+          target: ./static-lib
+          filename: prpr-avc-static-lib.tar.gz
 
       - name: Extract static-lib
         uses: a7ul/tar-action@v1.1.0
-        id: extract-static-lib
         with:
-          command: x
-          cwd: ./static-lib
-          files: prpr-avc-static-lib.tar.gz
+          command: xzf
+          file: ./static-lib/prpr-avc-static-lib.tar.gz
+          directory: ./static-lib
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
@@ -89,8 +95,8 @@ jobs:
           PRPR_AVC_LIBS: ${{ github.workspace }}/static-lib
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'Phi TK v__VERSION__'
+          releaseName: "Phi TK ${ { github.ref_name#v } }"
           releaseBody: 'From GitHub Action'
           releaseDraft: true
           prerelease: false
-          args: --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }} --verbose
