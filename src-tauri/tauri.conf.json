@@ -11,9 +11,15 @@
   },
   "tauri": {
     "allowlist": {
+      "http": {
+        "all": true
+      },
       "dialog": {
         "message": true,
         "open": true
+      },
+      "os": {
+        "all": true
       },
       "fs": {
         "readFile": true,
