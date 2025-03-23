@@ -247,4 +247,71 @@ onUnmounted(() => {
     border-right-width: 0.5px;
   }
 }
+
+.nav-drawer-glass {
+  perspective: 1000px;
+}
+
+.list-item-hover {
+  transform-style: preserve-3d;
+  transition: 
+    transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+    background 0.3s ease;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      600px circle at var(--x) var(--y),
+      rgba(125, 212, 252, 0.15),
+      transparent 40%
+    );
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  
+  &:hover {
+    transform: 
+      translateX(12px) 
+      scale(1.02)
+      rotateY(3deg)
+      translateZ(10px);
+    
+    &::after {
+      opacity: 1;
+    }
+    
+    .v-list-item__prepend {
+      transform: scale(1.2) rotate(15deg);
+    }
+  }
+}
+
+.v-list-item__prepend {
+  transition: 
+    transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55),
+    filter 0.3s ease;
+}
+
+.route-transition {
+  view-transition-name: main-content;
+}
+
+@keyframes floating {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.app-bar-shadow {
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.4s ease;
+  
+  &:hover {
+    box-shadow: 
+      0 8px 40px rgba(99, 102, 241, 0.2),
+      0 0 30px rgba(99, 102, 241, 0.15);
+  }
+}
 </style>
