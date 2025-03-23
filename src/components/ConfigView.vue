@@ -612,54 +612,56 @@ async function replacePreset() {
             <v-slider :model-value="volumeMusic" @update:model-value="v => volumeMusic = v" :min="0" :max="2" :step="0.1" color="primary" hide-details/>
             <span class="volume-value">{{ (volumeMusic * 100).toFixed(0) }}%</span>
           </div>
-          
+
           <div class="volume-item">
             <v-icon icon="mdi-volume-high" size="20"/>
             <v-slider :model-value="volumeSfx" @update:model-value="v => volumeSfx = v" :min="0" :max="2" :step="0.1" color="primary" hide-details/>
             <span class="volume-value">{{ (volumeSfx * 100).toFixed(0) }}%</span>
           </div>
         </div>
-
+        
         <div class="advanced-controls">
-        <v-card class="pa-4" variant="outlined" border>
-          <v-text-field :label="t('ending-length')" variant="outlined" density="compact" type="number" v-model="endingLength"/>
+          <v-card class="pa-4" variant="outlined" border>
+            <v-text-field :label="t('ending-length')" variant="outlined" density="compact" type="number" v-model="endingLength"/>
 
-          <div class="mini-switches">
-            <v-tooltip :text="t('disable-loading-tips')">
-              <template v-slot:activator="{ props }">
-                <v-switch :label="t('disable-loading')" v-model="disableLoading" v-bind="props" color="primary" density="compact"/>
-              </template>
-            </v-tooltip>
-            <v-tooltip :text="t('show_progress_text-tips')">
-              <template v-slot:activator="{ props }">
-                <v-switch :label="t('show_progress_text')" v-model="showProgressText" v-bind="props" color="primary" density="compact"/>
-              </template>
-            </v-tooltip>
-            <v-tooltip :text="t('show_time_text-tips')">
-              <template v-slot:activator="{ props }">
-                <v-switch :label="t('show_time_text')" v-model="showTimeText" v-bind="props" color="primary" density="compact"/>
-              </template>
-            </v-tooltip>
-          </div>
+            <div class="mini-switches">
+              <v-tooltip :text="t('disable-loading-tips')">
+                <template v-slot:activator="{ props }">
+                  <v-switch :label="t('disable-loading')" v-model="disableLoading" v-bind="props" color="primary" density="compact"/>
+                </template>
+              </v-tooltip>
+              <v-tooltip :text="t('show_progress_text-tips')">
+                <template v-slot:activator="{ props }">
+                  <v-switch :label="t('show_progress_text')" v-model="showProgressText" v-bind="props" color="primary" density="compact"/>
+                </template>
+              </v-tooltip>
+              <v-tooltip :text="t('show_time_text-tips')">
+                <template v-slot:activator="{ props }">
+                  <v-switch :label="t('show_time_text')" v-model="showTimeText" v-bind="props" color="primary" density="compact"/>
+                </template>
+              </v-tooltip>
+            </div>
 
-          <v-text-field :label="t('combo')" variant="outlined" density="compact" v-model="combo"/>
-          <v-slider :label="t('buffer_size')" :tooltip="t('buffer_size-tips')" thumb-label="always" :min="128" :max="2048" :step="1" v-model="bufferSize"/>
-          <v-switch :label="t('chart_debug')" v-model="chartDebug" color="primary" density="compact"/>
-          <v-switch :label="t('flid_x')" v-model="flidX" color="primary" density="compact"/>
-        </v-card>
-        <v-slider
-          :label="t('chart_ratio')"
-          thumb-label="always"
-          :min="0.05"
-          :max="1"
-          :step="0.01"
-          color="primary"
-          track-color="secondary"
-          v-model="chartRatio"
-          class="mt-4"
-        />
+            <v-text-field :label="t('combo')" variant="outlined" density="compact" v-model="combo"/>
+            <v-slider :label="t('buffer_size')" :tooltip="t('buffer_size-tips')" thumb-label="always" :min="128" :max="2048" :step="1" v-model="bufferSize"/>
+            <v-switch :label="t('chart_debug')" v-model="chartDebug" color="primary" density="compact"/>
+            <v-switch :label="t('flid_x')" v-model="flidX" color="primary" density="compact"/>
+          </v-card>
+
+          <v-slider
+            :label="t('chart_ratio')"
+            thumb-label="always"
+            :min="0.05"
+            :max="1"
+            :step="0.01"
+            color="primary"
+            track-color="secondary"
+            v-model="chartRatio"
+            class="mt-4"
+          />
+        </div>
       </div>
-    </div>
+    </v-expand-transition>
   </v-form>
 </template>
 
