@@ -620,9 +620,13 @@ async function replacePreset() {
           </div>
         </div>
         
-        <div class="advanced-controls">
-          <v-card class="pa-4" variant="outlined" border>
-            <v-text-field :label="t('ending-length')" variant="outlined" density="compact" type="number" v-model="endingLength"/>
+        <v-expansion-panel class="advanced-controls">
+          <v-expansion-panel-title>
+            {{ t('advanced_settings') }} <v-icon icon="mdi-chevron-down"/>
+          </v-expansion-panel-title>
+          <v-expansion-panel-text>
+            <v-card class="pa-4" variant="outlined" border>
+              <v-text-field :label="t('ending-length')" variant="outlined" density="compact" type="number" v-model="endingLength"/>
 
             <div class="mini-switches">
               <v-tooltip :text="t('disable-loading-tips')">
@@ -642,24 +646,24 @@ async function replacePreset() {
               </v-tooltip>
             </div>
 
-            <v-text-field :label="t('combo')" variant="outlined" density="compact" v-model="combo"/>
-            <v-slider :label="t('buffer_size')" :tooltip="t('buffer_size-tips')" thumb-label="always" :min="128" :max="2048" :step="1" v-model="bufferSize"/>
-            <v-switch :label="t('chart_debug')" v-model="chartDebug" color="primary" density="compact"/>
-            <v-switch :label="t('flid_x')" v-model="flidX" color="primary" density="compact"/>
-          </v-card>
-
-          <v-slider
-            :label="t('chart_ratio')"
-            thumb-label="always"
-            :min="0.05"
-            :max="1"
-            :step="0.01"
-            color="primary"
-            track-color="secondary"
-            v-model="chartRatio"
-            class="mt-4"
-          />
-        </div>
+              <v-text-field :label="t('combo')" variant="outlined" density="compact" v-model="combo"/>
+              <v-slider :label="t('buffer_size')" :tooltip="t('buffer_size-tips')" thumb-label="always" :min="128" :max="2048" :step="1" v-model="bufferSize"/>
+              <v-switch :label="t('chart_debug')" v-model="chartDebug" color="primary" density="compact"/>
+              <v-switch :label="t('flid_x')" v-model="flidX" color="primary" density="compact"/>
+              <v-slider
+                :label="t('chart_ratio')"
+                thumb-label="always"
+                :min="0.05"
+                :max="1"
+                :step="0.01"
+                color="primary"
+                track-color="secondary"
+                v-model="chartRatio"
+                class="mt-2"
+              />
+            </v-card>
+          </v-expansion-panel-text>
+        </v-expansion-panel>
       </div>
     </v-expand-transition>
   </v-form>
