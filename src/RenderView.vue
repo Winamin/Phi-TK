@@ -379,8 +379,10 @@ const handleParallax = (e: MouseEvent) => {
             prepend-icon="mdi-folder-zip"
           >{{ t('choose.archive') }}</v-btn>
         </div>
+          
         <v-divider vertical></v-divider>
-         <div class="flex-grow-1 d-flex align-center justify-center w-0">
+          
+        <div class="flex-grow-1 d-flex align-center justify-center w-0">
           <v-btn 
             :style="folderStyle"
             class="w-75 gradient-primary hover-movable" 
@@ -388,8 +390,9 @@ const handleParallax = (e: MouseEvent) => {
             @click="chooseChart(true)" 
             prepend-icon="mdi-folder"
           >{{ t('choose.folder') }}</v-btn>
+          </div>
         </div>
-      </div>
+        
         <p class="mb-8 w-100 text-center mt-2 text-disabled" v-t="'choose.can-also-drop'"></p>
       </template>
       
