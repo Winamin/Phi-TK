@@ -390,7 +390,6 @@ const handleParallax = (e: MouseEvent) => {
           >{{ t('choose.folder') }}</v-btn>
         </div>
       </div>
-        </div>
         <p class="mb-8 w-100 text-center mt-2 text-disabled" v-t="'choose.can-also-drop'"></p>
       </template>
       
