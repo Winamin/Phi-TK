@@ -110,6 +110,33 @@ if (!(await invoke('is_the_only_instance'))) {
   await dialog.message(t('already-running'));
   await invoke('exit_program');
 }
+import { useMotion } from '@vueuse/motion'
+
+const stepMotion = useMotion({
+  initial: { 
+    opacity: 0, 
+    scale: 0.98, 
+    rotateY: -5 
+  },
+  enter: {
+    opacity: 1,
+    scale: 1,
+    rotateY: 0,
+    transition: {
+      type: 'spring',
+      stiffness: 150,
+      damping: 15
+    }
+  },
+  leave: {
+    opacity: 0,
+    scale: 0.95,
+    rotateY: 5,
+    transition: { 
+      duration: 0.3 
+    }
+  }
+})
 
 const router = useRouter();
 
