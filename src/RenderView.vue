@@ -329,6 +329,20 @@ const folderStyle = computed(() => ({
   )`,
   filter: `drop-shadow(${moveOffset.value.x/4}px ${moveOffset.value.y/4}px 6px rgba(99, 102, 241, 0.2))`
 }));
+
+const hologramStyle = ref({})
+
+const handleParallax = (e: MouseEvent) => {
+  const x = (e.clientX / window.innerWidth - 0.5) * 20
+  const y = (e.clientY / window.innerHeight - 0.5) * 10
+  
+  hologramStyle.value = {
+    '--rotate-x': `${y}deg`,
+    '--rotate-y': `${x}deg`,
+    transform: `translate(${-x*2}px, ${-y*2}px)`
+  }
+}
+  
 </script>
 
 <template>
@@ -593,4 +607,76 @@ const folderStyle = computed(() => ({
     0 0 0 6px rgb(99 102 241 / 0.15) !important;
 }
 
+.render-container {
+  perspective: 2000px;
+  transform-style: preserve-3d;
+}
+
+.dimensional-stepper {
+  transform: 
+    rotateX(var(--rotate-x)) 
+    rotateY(var(--rotate-y))
+    translateZ(50px);
+  transition: transform 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+  background: rgba(16, 16, 33, 0.6);
+  backdrop-filter: blur(40px);
+}
+
+.holographic-effect {
+  position: fixed;
+  width: 200%;
+  height: 200%;
+  background: 
+    linear-gradient(45deg, 
+      rgba(99, 102, 241, 0.05) 0%,
+      rgba(236, 72, 153, 0.05) 100%
+    ),
+    repeating-conic-gradient(
+      from 15deg,
+      rgba(255,255,255,0.03) 0deg 15deg,
+      transparent 15deg 30deg
+    );
+  animation: hologram 12s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes hologram {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.step-content {
+  view-transition-name: step-content;
+  transform-origin: center center;
+}
+
+.gradient-primary {
+  background: linear-gradient(
+    325deg,
+    rgba(99, 102, 241, 0.9),
+    rgba(236, 72, 153, 0.9)
+  );
+  backdrop-filter: blur(8px);
+  transition: 
+    transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.4s ease;
+  
+  &:hover {
+    transform: 
+      translateY(-4px)
+      scale(1.05)
+      rotateZ(1deg);
+    box-shadow: 
+      0 16px 32px rgba(99, 102, 241, 0.3),
+      0 0 40px rgba(236, 72, 153, 0.2);
+  }
+}
+
+.elevated-stepper {
+  transform: translateZ(50px);
+  box-shadow: 
+    0 40px 80px -20px rgba(0, 0, 0, 0.25),
+    0 0 60px rgba(99, 102, 241, 0.2);
+}
+  
 </style>
