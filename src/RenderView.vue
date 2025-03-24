@@ -346,23 +346,29 @@ const handleParallax = (e: MouseEvent) => {
 </script>
 
 <template>
-  <div class="pa-8 w-100 h-100" style="max-width: 1280px">
-    <v-stepper alt-labels v-model="stepIndex" hide-actions :items="steps.map((x) => t('steps.' + x))" class="elevated-stepper">
-      <div v-if="step === 'config' || step === 'options'" class="d-flex flex-row pa-6 pb-4 pt-0">
-        <v-btn variant="text" @click="stepIndex && stepIndex--" v-t="'prev-step'"></v-btn>
-        <div class="flex-grow-1"></div>
-        <v-btn v-if="step === 'options'" variant="tonal" @click="previewChart" class="mr-2" v-t="'preview'"></v-btn>
-        <v-btn variant="tonal" @click="moveNext" class="gradient-primary">{{ step === 'options' ? t('render') : t('next-step') }}</v-btn>
-      </div>
-
+  <div 
+    class="render-container pa-8 w-100 h-100" 
+    style="max-width: 1280px"
+    @mousemove="handleParallax"
+  >
+    <div class="holographic-effect" :style="hologramStyle"></div>
+    
+    <v-stepper 
+      class="dimensional-stepper elevated-stepper" 
+      alt-labels 
+      v-model="stepIndex" 
+      hide-actions 
+      :items="steps.map((x) => t('steps.' + x))"
+    >
       <template v-slot:item.1>
         <div 
-        class="mt-8 d-flex" 
-        style="gap: 1rem"
-        @mousemove="onHoverMove"
-        @mouseleave="resetHover"
-        ref="hoverContainer"
-      >
+          class="mt-8 d-flex" 
+          style="gap: 1rem"
+          @mousemove="onHoverMove"
+          @mouseleave="resetHover"
+          ref="hoverContainer"
+          v-motion="stepMotion"
+        >
         <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
           <v-btn 
             :style="archiveStyle"
@@ -384,12 +390,10 @@ const handleParallax = (e: MouseEvent) => {
           >{{ t('choose.folder') }}</v-btn>
         </div>
       </div>
+        </div>
         <p class="mb-8 w-100 text-center mt-2 text-disabled" v-t="'choose.can-also-drop'"></p>
-        <v-overlay v-model="parsingChart" contained class="align-center justify-center" persistent :close-on-content-click="false">
-          <v-progress-circular indeterminate> </v-progress-circular>
-        </v-overlay>
       </template>
-
+      
       <template v-slot:item.2>
         <v-form ref="form" v-if="chartInfo">
           <v-row no-gutters class="mx-n2">
@@ -449,7 +453,7 @@ const handleParallax = (e: MouseEvent) => {
         </div>
       </template>
     </v-stepper>
-    <v-overlay v-model="fileHovering" contained class="align-center justify-center drop-zone-overlay" persistent :close-on-content-click="false">
+    <v-overlay v-model="fileHovering" class="drop-zone-overlay">
       <div class="drop-pulse">
         <h1 v-t="'choose.drop'"></h1>
       </div>
