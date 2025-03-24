@@ -162,39 +162,18 @@ onUnmounted(() => {
 }
 
 .list-item-hover {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s ease;
   margin: 8px 0;
-  border-radius: 12px;
-  position: relative;
-  overflow: hidden;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: -100%;
-    top: 0;
-    width: 60%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255,255,255,0.1),
-      transparent
-    );
-    transition: 0.5s;
-  }
-
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0;
+  
   &:hover {
-    transform: translateX(12px) scale(1.02);
-    background: linear-gradient(
-      to right, 
-      rgba(98, 0, 234, 0.2) 30%, 
-      transparent
-    ) !important;
-    box-shadow: 2px 0 12px rgba(98, 0, 234, 0.3);
-
-    &::before {
-      left: 140%;
+    transform: translateX(8px);
+    background: rgba(255,255,255,0.05) !important;
+    
+    .v-list-item__prepend {
+      color: #6366f1;
     }
   }
 }
