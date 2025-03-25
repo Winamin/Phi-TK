@@ -140,7 +140,7 @@ onUnmounted(() => {
   </v-app>
 </template>
 
-<style>
+<style scoped>
 .dark-theme {
   background: linear-gradient(135deg, #539ed3 0%, #2494d5 50%, #0b90d3 100%);
   min-height: 100vh;
