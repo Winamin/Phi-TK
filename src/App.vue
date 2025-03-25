@@ -74,9 +74,7 @@ window.goto = (name: string) => {
 
 const drawer = ref(true);
 const handleResize = () => {
-  if (window.innerWidth < 768) {
-    drawer.value = false;
-  }
+  drawer.value = window.innerWidth >= 768;
 };
 
 onMounted(() => {
@@ -292,5 +290,15 @@ onUnmounted(() => {
       0 8px 40px rgba(99, 102, 241, 0.2),
       0 0 30px rgba(99, 102, 241, 0.15);
   }
+}
+
+.v-list-item:focus::before,
+.v-list-item:focus-visible::before {
+  opacity: 0 !important;
+}
+
+.v-list-item:focus {
+  outline: none;
+  box-shadow: none;
 }
 </style>
