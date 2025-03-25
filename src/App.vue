@@ -14,7 +14,25 @@ zh-CN:
 </i18n>
 
 <script lang="ts">
-import { defineComponent } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
+
+import { ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+
+import { useI18n } from 'vue-i18n';
+
+import { VSonner } from 'vuetify-sonner';
+
+const onLoaded = ref<() => void>();
+const component = ref();
+
+watch(component, (comp) => {
+  if (comp && onLoaded.value) onLoaded.value();
+});
+
+export function useOnLoaded() {
+  return onLoaded;
+}
 
 declare global {
   interface Window {
@@ -22,63 +40,52 @@ declare global {
   }
 }
 
-export default defineComponent({
+export default {
   data() {
     return {
+      drawer: true,
     };
   },
   methods: {
     toggleNav() {
-      this.drawer = !(this.drawer as boolean);
+      this.drawer = !this.drawer;
     },
   },
-});
+
+};
 </script>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
+const { t } = useI18n();
 
-const { t } = useI18n()
-const route = useRoute()
-const router = useRouter()
+const route = useRoute(),
+  router = useRouter();
 
 const icons = {
   render: 'mdi-auto-fix',
   rpe: 'mdi-bookshelf',
   tasks: 'mdi-server',
   about: 'mdi-information-outline',
-}
-
-const drawer = ref(true)
-const component = ref()
-const onLoaded = ref<() => void>()
+};
 
 window.goto = (name: string) => {
-  router.push({ name })
-}
+  router.push({ name });
+};
 
-watch(component, (comp) => {
-  if (comp && onLoaded.value) onLoaded.value()
-})
-
+const drawer = ref(true);
 const handleResize = () => {
-  drawer.value = window.innerWidth >= 768
-}
+  drawer.value = window.innerWidth >= 768;
+};
 
 onMounted(() => {
-  window.addEventListener('resize', handleResize)
-  handleResize()
-})
+  window.addEventListener('resize', handleResize);
+  handleResize();
+});
 
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-})
+  window.removeEventListener('resize', handleResize);
+});
 
-defineExpose({
-  useOnLoaded: () => onLoaded
-})
 </script>
 
 <template>
