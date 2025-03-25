@@ -89,7 +89,7 @@ zh-CN:
 </i18n>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { useI18n } from 'vue-i18n';
@@ -329,65 +329,51 @@ const folderStyle = computed(() => ({
   )`,
   filter: `drop-shadow(${moveOffset.value.x/4}px ${moveOffset.value.y/4}px 6px rgba(99, 102, 241, 0.2))`
 }));
-
-const parallax = ref({ x: 0, y: 0 });
-const handleParallax = (e: MouseEvent) => {
-  const sensitivity = 0.15;
-  const x = (e.clientX / window.innerWidth - 0.5) * sensitivity * 100;
-  const y = (e.clientY / window.innerHeight - 0.5) * sensitivity * 100;
-  parallax.value = { x, y };
-};
-
-const stepTransition = ref('slide-next');
-watch(stepIndex, (newVal, oldVal) => {
-  stepTransition.value = newVal > oldVal ? 'slide-next' : 'slide-prev';
-});
 </script>
 
 <template>
-  <div 
-    class="render-container"
-    @mousemove="handleParallax"
-  >
-    <div class="holographic-bg" :style="{
-      transform: `translate(${parallax.x * 2}px, ${parallax.y * 2}px)`
-    }"></div>
+  <div class="pa-8 w-100 h-100" style="max-width: 1280px">
+    <v-stepper alt-labels v-model="stepIndex" hide-actions :items="steps.map((x) => t('steps.' + x))" class="elevated-stepper">
+      <div v-if="step === 'config' || step === 'options'" class="d-flex flex-row pa-6 pb-4 pt-0">
+        <v-btn variant="text" @click="stepIndex && stepIndex--" v-t="'prev-step'"></v-btn>
+        <div class="flex-grow-1"></div>
+        <v-btn v-if="step === 'options'" variant="tonal" @click="previewChart" class="mr-2" v-t="'preview'"></v-btn>
+        <v-btn variant="tonal" @click="moveNext" class="gradient-primary">{{ step === 'options' ? t('render') : t('next-step') }}</v-btn>
+      </div>
 
-    <v-stepper
-      class="dimensional-stepper"
-      alt-labels
-      v-model="stepIndex"
-      hide-actions
-      :items="steps.map((x) => t('steps.' + x))"
-    >
-      <!-- 步骤1：选择谱面 -->
       <template v-slot:item.1>
-        <transition :name="stepTransition" mode="out-in">
-          <div class="step-content">
-            <div class="selection-grid">
-              <div 
-                class="selection-card archive-card"
-                @click="chooseChart(false)"
-              >
-                <v-icon size="64">mdi-folder-zip</v-icon>
-                <h3>{{ t('choose.archive') }}</h3>
-                <div class="hover-effect"></div>
-              </div>
-              
-              <v-divider vertical class="divider-glow"></v-divider>
-              
-              <div 
-                class="selection-card folder-card"
-                @click="chooseChart(true)"
-              >
-                <v-icon size="64">mdi-folder</v-icon>
-                <h3>{{ t('choose.folder') }}</h3>
-                <div class="hover-effect"></div>
-              </div>
-            </div>
-            <p class="drop-hint">{{ t('choose.can-also-drop') }}</p>
-          </div>
-        </transition>
+        <div 
+        class="mt-8 d-flex" 
+        style="gap: 1rem"
+        @mousemove="onHoverMove"
+        @mouseleave="resetHover"
+        ref="hoverContainer"
+      >
+        <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
+          <v-btn 
+            :style="archiveStyle"
+            class="w-75 gradient-primary hover-movable" 
+            style="overflow: hidden" 
+            size="large" 
+            @click="chooseChart(false)" 
+            prepend-icon="mdi-folder-zip"
+          >{{ t('choose.archive') }}</v-btn>
+        </div>
+        <v-divider vertical></v-divider>
+         <div class="flex-grow-1 d-flex align-center justify-center w-0">
+          <v-btn 
+            :style="folderStyle"
+            class="w-75 gradient-primary hover-movable" 
+            size="large" 
+            @click="chooseChart(true)" 
+            prepend-icon="mdi-folder"
+          >{{ t('choose.folder') }}</v-btn>
+        </div>
+      </div>
+        <p class="mb-8 w-100 text-center mt-2 text-disabled" v-t="'choose.can-also-drop'"></p>
+        <v-overlay v-model="parsingChart" contained class="align-center justify-center" persistent :close-on-content-click="false">
+          <v-progress-circular indeterminate> </v-progress-circular>
+        </v-overlay>
       </template>
 
       <template v-slot:item.2>
@@ -449,11 +435,11 @@ watch(stepIndex, (newVal, oldVal) => {
         </div>
       </template>
     </v-stepper>
-    <div class="drop-overlay" :class="{ active: fileHovering }">
+    <v-overlay v-model="fileHovering" contained class="align-center justify-center drop-zone-overlay" persistent :close-on-content-click="false">
       <div class="drop-pulse">
-        <h1>{{ t('choose.drop') }}</h1>
+        <h1 v-t="'choose.drop'"></h1>
       </div>
-    </div>
+    </v-overlay>
   </div>
 </template>
 
@@ -607,105 +593,4 @@ watch(stepIndex, (newVal, oldVal) => {
     0 0 0 6px rgb(99 102 241 / 0.15) !important;
 }
 
-.render-container {
-  position: relative;
-  overflow: hidden;
-  background: radial-gradient(circle at 50% 50%, #1a1a2e 0%, #16213e 100%);
-}
-
-.holographic-bg {
-  position: fixed;
-  width: 200%;
-  height: 200%;
-  background: 
-    linear-gradient(45deg, 
-      rgba(99, 102, 241, 0.05) 0%,
-      rgba(236, 72, 153, 0.05) 100%),
-    repeating-conic-gradient(
-      from 15deg,
-      rgba(255,255,255,0.03) 0deg 15deg,
-      transparent 15deg 30deg
-    );
-  filter: blur(40px);
-  opacity: 0.3;
-  animation: hologram 20s linear infinite;
-}
-
-@keyframes hologram {
-  0% { transform: translate(-50%, -50%) rotate(0deg); }
-  100% { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-.selection-card {
-  position: relative;
-  padding: 2rem;
-  border-radius: 16px;
-  backdrop-filter: blur(12px);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.selection-card:hover {
-  transform: translateY(-8px) scale(1.05);
-  box-shadow: 0 16px 32px rgba(0,0,0,0.3);
-  
-  .hover-effect {
-    opacity: 1;
-  }
-}
-
-.hover-effect {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    400px circle at var(--x) var(--y),
-    rgba(99, 102, 241, 0.15),
-    transparent 50%
-  );
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.slide-next-enter-active {
-  animation: slideIn 0.6s cubic-bezier(0.23, 1, 0.32, 1);
-}
-.slide-next-leave-active {
-  animation: slideOut 0.4s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(50px) rotateY(15deg);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) rotateY(0);
-  }
-}
-
-.drop-overlay {
-  position: fixed;
-  inset: 0;
-  backdrop-filter: blur(8px);
-  background: rgba(99, 102, 241, 0.2);
-  opacity: 0;
-  transition: opacity 0.3s;
-  
-  &.active {
-    opacity: 1;
-    
-    .drop-pulse {
-      animation: pulse 2s ease infinite;
-    }
-  }
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-}
 </style>
