@@ -305,28 +305,34 @@ function onHoverMove(e: MouseEvent) {
   };
 }
 const archiveStyle = computed(() => ({
-  transform: `translate(
-    ${moveOffset.value.x * 1.2}px, 
-    ${moveOffset.value.y * 1.2}px
-  ) rotate3d(
-    ${-moveOffset.value.y / 20}, 
-    ${moveOffset.value.x / 20}, 
-    0, 
-    ${Math.sqrt(moveOffset.value.x**2 + moveOffset.value.y**2) / 4}deg
-  )`,
+  transform: `
+    scale(${1 + Math.sqrt(moveOffset.value.x**2 + moveOffset.value.y**2) / 100})
+    translate(
+      ${moveOffset.value.x * 1.2}px, 
+      ${moveOffset.value.y * 1.2}px
+    )
+    rotate3d(
+      ${-moveOffset.value.y / 20}, 
+      ${moveOffset.value.x / 20}, 
+      0, 
+      ${Math.sqrt(moveOffset.value.x**2 + moveOffset.value.y**2) / 4}deg
+    )`,
   filter: `drop-shadow(${-moveOffset.value.x/4}px ${-moveOffset.value.y/4}px 6px rgba(99, 102, 241, 0.2))`
 }));
 
 const folderStyle = computed(() => ({
-  transform: `translate(
-    ${-moveOffset.value.x * 0.8}px, 
-    ${-moveOffset.value.y * 0.8}px
-  ) rotate3d(
-    ${moveOffset.value.y / 20}, 
-    ${-moveOffset.value.x / 20}, 
-    0, 
-    ${Math.sqrt(moveOffset.value.x**2 + moveOffset.value.y**2) / 6}deg
-  )`,
+  transform: `
+    scale(${1 + Math.sqrt(moveOffset.value.x**2 + moveOffset.value.y**2) / 100})
+    translate(
+      ${-moveOffset.value.x * 0.8}px, 
+      ${-moveOffset.value.y * 0.8}px
+    )
+    rotate3d(
+      ${moveOffset.value.y / 20}, 
+      ${-moveOffset.value.x / 20}, 
+      0, 
+      ${Math.sqrt(moveOffset.value.x**2 + moveOffset.value.y**2) / 6}deg
+    )`,
   filter: `drop-shadow(${moveOffset.value.x/4}px ${moveOffset.value.y/4}px 6px rgba(99, 102, 241, 0.2))`
 }));
 </script>
@@ -491,12 +497,13 @@ const folderStyle = computed(() => ({
     filter 0.4s ease,
     box-shadow 0.4s ease;
   will-change: transform, filter;
+  transform-origin: center center;
 }
 
 .v-btn:hover {
   transform:
+    scale(1)
     translateY(-2px)
-    scale(1.05)
     rotateZ(1deg) !important;
   box-shadow:
     0 12px 24px -6px rgb(99 102 241 / 0.4),
