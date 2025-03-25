@@ -15,7 +15,7 @@ zh-CN:
 
 <script lang="ts">
 import { onMounted, onUnmounted } from 'vue'
-  
+
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -25,7 +25,7 @@ import { VSonner } from 'vuetify-sonner';
 
 const onLoaded = ref<() => void>();
 const component = ref();
-  
+
 watch(component, (comp) => {
   if (comp && onLoaded.value) onLoaded.value();
 });
@@ -85,7 +85,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
 });
-  
+
 </script>
 
 <template>
@@ -95,11 +95,11 @@ onUnmounted(() => {
       <v-app-bar-title class="mx-5 text-gradient">Phi TK</v-app-bar-title>
     </v-app-bar>
 
-    <v-navigation-drawer 
-      v-model="drawer" 
-      expand-on-hover 
-      rail 
-      permanent 
+    <v-navigation-drawer
+      v-model="drawer"
+      expand-on-hover
+      rail
+      permanent
       class="nav-drawer-glass blur-background"
     >
       <v-list density="compact" nav>
@@ -119,16 +119,16 @@ onUnmounted(() => {
       <router-view v-slot="{ Component }">
         <Suspense timeout="0">
           <template #default>
-            <component 
-              :is="Component" 
+            <component
+              :is="Component"
               ref="component"
               class="route-transition"
             />
           </template>
           <template #fallback>
             <div class="flex justify-center pa-8">
-              <v-progress-circular 
-                indeterminate 
+              <v-progress-circular
+                indeterminate
                 size="large"
                 class="glow-spinner"
               />
@@ -141,14 +141,14 @@ onUnmounted(() => {
 </template>
 <style>
 .dark-theme {
-  background: linear-gradient(45deg, #292364, #302b63, #24243e);
+  background: linear-gradient(45deg, #9187dd, #8781bd, #a2a3d1);
 }
 
 .blur-background {
   backdrop-filter: blur(40px) saturate(200%);
   background: linear-gradient(
-    135deg, 
-    rgba(98, 0, 234, 0.15) 0%, 
+    135deg,
+    rgba(98, 0, 234, 0.15) 0%,
     rgba(186, 104, 200, 0.1) 100%
   ) !important;
   border: 1px solid rgba(255,255,255,0.1) !important;
@@ -165,13 +165,13 @@ onUnmounted(() => {
   background: transparent !important;
   box-shadow: none !important;
   border-radius: 0;
-  
+
   &:hover {
     transform: translateX(8px);
     background: rgba(255,255,255,0.05) !important;
-    
+
     .v-list-item__prepend {
-      color: #6366f1;
+      color: #797abc;
     }
   }
 }
@@ -188,13 +188,13 @@ onUnmounted(() => {
 }
 
 .text-gradient {
-  background: linear-gradient(45deg, #7c4dff, #ff6ec4);
+  background: linear-gradient(45deg, #7772b1, #ff6ec4);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .glow-spinner {
-  filter: drop-shadow(0 0 8px #6200ea);
+  filter: drop-shadow(0 0 8px #b995ed);
 }
 
 .animated-background::after {
@@ -219,7 +219,7 @@ onUnmounted(() => {
   .blur-background {
     backdrop-filter: blur(20px);
   }
-  
+
   .nav-drawer-glass {
     border-right-width: 0.5px;
   }
@@ -231,10 +231,10 @@ onUnmounted(() => {
 
 .list-item-hover {
   transform-style: preserve-3d;
-  transition: 
+  transition:
     transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
     background 0.3s ease;
-  
+
   &::after {
     content: '';
     position: absolute;
@@ -248,18 +248,18 @@ onUnmounted(() => {
     transition: opacity 0.3s;
     pointer-events: none;
   }
-  
+
   &:hover {
-    transform: 
-      translateX(12px) 
+    transform:
+      translateX(12px)
       scale(1.02)
       rotateY(3deg)
       translateZ(10px);
-    
+
     &::after {
       opacity: 1;
     }
-    
+
     .v-list-item__prepend {
       transform: scale(1.2) rotate(15deg);
     }
@@ -267,7 +267,7 @@ onUnmounted(() => {
 }
 
 .v-list-item__prepend {
-  transition: 
+  transition:
     transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55),
     filter 0.3s ease;
 }
@@ -284,9 +284,9 @@ onUnmounted(() => {
 .app-bar-shadow {
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
   transition: box-shadow 0.4s ease;
-  
+
   &:hover {
-    box-shadow: 
+    box-shadow:
       0 8px 40px rgba(99, 102, 241, 0.2),
       0 0 30px rgba(99, 102, 241, 0.15);
   }
