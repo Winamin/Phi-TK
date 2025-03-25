@@ -140,23 +140,26 @@ onUnmounted(() => {
   </v-app>
 </template>
 <style>
+  
 .dark-theme {
-  background: linear-gradient(45deg, #9187dd, #8781bd, #a2a3d1);
+  background: linear-gradient(135deg, #539ed3 0%, #2494d5 50%, #0b90d3 100%);
+  min-height: 100vh;
 }
 
 .blur-background {
-  backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(180%);
   background: linear-gradient(
-    135deg,
-    rgba(98, 0, 234, 0.15) 0%,
-    rgba(186, 104, 200, 0.1) 100%
+    135deg, 
+    rgba(191, 219, 254, 0.3) 0%,
+    rgba(125, 211, 252, 0.2) 100%
   ) !important;
-  border: 1px solid rgba(255,255,255,0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
 }
 
 .nav-drawer-glass {
-  border-right: 1px solid rgba(255,255,255,0.15) !important;
-  box-shadow: 4px 0 20px rgba(0,0,0,0.3);
+  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 4px 0 20px rgba(147, 197, 253, 0.2);
+  perspective: 1000px;
 }
 
 .list-item-hover {
@@ -165,36 +168,71 @@ onUnmounted(() => {
   background: transparent !important;
   box-shadow: none !important;
   border-radius: 0;
+  transform-style: preserve-3d;
 
   &:hover {
-    transform: translateX(8px);
-    background: rgba(255,255,255,0.05) !important;
+    transform: translateX(12px) scale(1.02) rotateY(3deg) translateZ(10px);
+    background: rgba(255, 255, 255, 0.05) !important;
 
     .v-list-item__prepend {
-      color: #797abc;
+      color: #38bdf8;
+      transform: scale(1.2) rotate(15deg);
     }
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      600px circle at var(--x) var(--y),
+      rgba(56, 189, 248, 0.2),
+      transparent 40%
+    );
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  &:hover::after {
+    opacity: 1;
   }
 }
 
 .route-transition {
   transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  animation: gentlePulse 8s ease-in-out infinite alternate;
 }
 
-.fade-blur-enter-from,
-.fade-blur-leave-to {
-  opacity: 0;
-  transform: rotateY(10deg) translateZ(50px);
-  filter: blur(5px);
+.glow-spinner {
+  filter: drop-shadow(0 0 8px #7dd3fc);
 }
 
 .text-gradient {
-  background: linear-gradient(45deg, #7772b1, #ff6ec4);
+  background: linear-gradient(45deg, #ec0505, #d80bcd);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-.glow-spinner {
-  filter: drop-shadow(0 0 8px #b995ed);
+.app-bar-shadow {
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.4s ease;
+
+  &:hover {
+    box-shadow: 
+      0 8px 40px rgba(125, 211, 252, 0.3),
+      0 0 30px rgba(125, 211, 252, 0.2);
+  }
+}
+
+@keyframes gentlePulse {
+  0%, 100% { background-color: rgba(224, 242, 254, 0.7); }
+  50% { background-color: rgba(186, 230, 253, 0.9); }
+}
+
+@keyframes particleFlow {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(-50%, -50%); }
 }
 
 .animated-background::after {
@@ -210,11 +248,7 @@ onUnmounted(() => {
   animation: particleFlow 20s linear infinite;
 }
 
-@keyframes particleFlow {
-  0% { transform: translate(0, 0); }
-  100% { transform: translate(-50%, -50%); }
-}
-
+/* 响应式设计 */
 @media (max-width: 768px) {
   .blur-background {
     backdrop-filter: blur(20px);
@@ -225,71 +259,17 @@ onUnmounted(() => {
   }
 }
 
-.nav-drawer-glass {
-  perspective: 1000px;
-}
-
-.list-item-hover {
-  transform-style: preserve-3d;
-  transition:
-    transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
-    background 0.3s ease;
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(
-      600px circle at var(--x) var(--y),
-      rgba(125, 212, 252, 0.15),
-      transparent 40%
-    );
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
-  }
-
-  &:hover {
-    transform:
-      translateX(12px)
-      scale(1.02)
-      rotateY(3deg)
-      translateZ(10px);
-
-    &::after {
-      opacity: 1;
-    }
-
-    .v-list-item__prepend {
-      transform: scale(1.2) rotate(15deg);
-    }
-  }
+.fade-blur-enter-from,
+.fade-blur-leave-to {
+  opacity: 0;
+  transform: rotateY(10deg) translateZ(50px);
+  filter: blur(5px);
 }
 
 .v-list-item__prepend {
-  transition:
+  transition: 
     transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55),
     filter 0.3s ease;
-}
-
-.route-transition {
-  view-transition-name: main-content;
-}
-
-@keyframes floating {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-.app-bar-shadow {
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.4s ease;
-
-  &:hover {
-    box-shadow:
-      0 8px 40px rgba(99, 102, 241, 0.2),
-      0 0 30px rgba(99, 102, 241, 0.15);
-  }
 }
 
 .v-list-item:focus::before,
@@ -301,4 +281,3 @@ onUnmounted(() => {
   outline: none;
   box-shadow: none;
 }
-</style>
