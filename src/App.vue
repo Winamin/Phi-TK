@@ -139,8 +139,8 @@ onUnmounted(() => {
     </v-main>
   </v-app>
 </template>
+
 <style>
-  
 .dark-theme {
   background: linear-gradient(135deg, #539ed3 0%, #2494d5 50%, #0b90d3 100%);
   min-height: 100vh;
@@ -248,7 +248,6 @@ onUnmounted(() => {
   animation: particleFlow 20s linear infinite;
 }
 
-/* 响应式设计 */
 @media (max-width: 768px) {
   .blur-background {
     backdrop-filter: blur(20px);
@@ -281,3 +280,4 @@ onUnmounted(() => {
   outline: none;
   box-shadow: none;
 }
+<style>
