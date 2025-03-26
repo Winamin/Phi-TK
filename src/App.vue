@@ -142,8 +142,22 @@ onUnmounted(() => {
 
 <style>
 .dark-theme {
-  background: linear-gradient(135deg, #539ed3 0%, #2494d5 50%, #0b90d3 100%);
+  background: linear-gradient(
+    135deg, 
+    #1a3650 0%,
+    #0d2b44 50%,
+    #0d1a26 100%
+  );
   min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  display: none;
+  width: 0 !important;
+}
+
+html {
+  -ms-overflow-style: none;
 }
 
 .blur-background {
