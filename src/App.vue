@@ -314,19 +314,20 @@ onUnmounted(() => {
 }
 
 .glow-spinner .v-progress-circular__overlay {
-  stroke: url(#gradient) !important;
-  filter: drop-shadow(0 0 12px #7c4dff);
+  stroke: currentColor !important; 
+  filter: drop-shadow(0 0 12px rgba(124, 77, 255, 0.6));
 }
 
-svg {
-  position: absolute;
+.glow-spinner {
+  position: relative;
+  background: linear-gradient(45deg, #7c4dff, #ff6ec4);
+  border-radius: 50%;
+  padding: 4px;
 }
 
-svg > defs {
-  <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-    <stop offset="0%" style="stop-color:#7C4DFF;stop-opacity:1" />
-    <stop offset="100%" style="stop-color:#FF6EC4;stop-opacity:1" />
-  </linearGradient>
+.glow-spinner .v-progress-circular {
+  background: rgba(18, 18, 18, 0.8);
+  border-radius: 50%;
 }
 
 .list-item-hover:hover .v-icon {
@@ -335,7 +336,6 @@ svg > defs {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 文字发光效果 */
 .list-item-hover:hover .v-list-item-title {
   text-shadow: 
     0 0 10px rgba(156, 39, 176, 0.4),
@@ -347,13 +347,11 @@ svg > defs {
   transition: all 0.3s ease;
 }
 
-/* 增强悬停效果容器 */
 .list-item-hover {
   position: relative;
   overflow: visible;
 }
 
-/* 添加光晕扩散效果 */
 .list-item-hover:hover::after {
   content: '';
   position: absolute;
