@@ -15,7 +15,7 @@ zh-CN:
 
 <script lang="ts">
 import { onMounted, onUnmounted } from 'vue'
-
+  
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -25,7 +25,7 @@ import { VSonner } from 'vuetify-sonner';
 
 const onLoaded = ref<() => void>();
 const component = ref();
-
+  
 watch(component, (comp) => {
   if (comp && onLoaded.value) onLoaded.value();
 });
@@ -74,7 +74,9 @@ window.goto = (name: string) => {
 
 const drawer = ref(true);
 const handleResize = () => {
-  drawer.value = window.innerWidth >= 768;
+  if (window.innerWidth < 768) {
+    drawer.value = false;
+  }
 };
 
 onMounted(() => {
@@ -85,7 +87,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
 });
-
+  
 </script>
 
 <template>
@@ -95,11 +97,11 @@ onUnmounted(() => {
       <v-app-bar-title class="mx-5 text-gradient">Phi TK</v-app-bar-title>
     </v-app-bar>
 
-    <v-navigation-drawer
-      v-model="drawer"
-      expand-on-hover
-      rail
-      permanent
+    <v-navigation-drawer 
+      v-model="drawer" 
+      expand-on-hover 
+      rail 
+      permanent 
       class="nav-drawer-glass blur-background"
     >
       <v-list density="compact" nav>
@@ -119,16 +121,16 @@ onUnmounted(() => {
       <router-view v-slot="{ Component }">
         <Suspense timeout="0">
           <template #default>
-            <component
-              :is="Component"
+            <component 
+              :is="Component" 
               ref="component"
               class="route-transition"
             />
           </template>
           <template #fallback>
             <div class="flex justify-center pa-8">
-              <v-progress-circular
-                indeterminate
+              <v-progress-circular 
+                indeterminate 
                 size="large"
                 class="glow-spinner"
               />
@@ -139,114 +141,83 @@ onUnmounted(() => {
     </v-main>
   </v-app>
 </template>
-
 <style>
 .dark-theme {
-  background: linear-gradient(
-    135deg, 
-    #1a3650 0%,
-    #0d2b44 50%,
-    #0d1a26 100%
-  );
-  min-height: 100vh;
-}
-
-::-webkit-scrollbar {
-  display: none;
-  width: 0 !important;
-}
-
-html {
-  -ms-overflow-style: none;
+  background: linear-gradient(45deg, #292364, #302b63, #24243e);
 }
 
 .blur-background {
-  backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(200%);
   background: linear-gradient(
     135deg, 
-    rgba(191, 219, 254, 0.3) 0%,
-    rgba(125, 211, 252, 0.2) 100%
+    rgba(98, 0, 234, 0.15) 0%, 
+    rgba(186, 104, 200, 0.1) 100%
   ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
 }
 
 .nav-drawer-glass {
-  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
-  box-shadow: 4px 0 20px rgba(147, 197, 253, 0.2);
-  perspective: 1000px;
+  border-right: 1px solid rgba(255,255,255,0.15) !important;
+  box-shadow: 4px 0 20px rgba(0,0,0,0.3);
 }
 
 .list-item-hover {
-  transition: transform 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   margin: 8px 0;
-  background: transparent !important;
-  box-shadow: none !important;
-  border-radius: 0;
-  transform-style: preserve-3d;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
 
-  &:hover {
-    transform: translateX(12px) scale(1.02) rotateY(3deg) translateZ(10px);
-    background: rgba(255, 255, 255, 0.05) !important;
-
-    .v-list-item__prepend {
-      color: #38bdf8;
-      transform: scale(1.2) rotate(15deg);
-    }
-  }
-
-  &::after {
+  &::before {
     content: '';
     position: absolute;
-    inset: 0;
-    background: radial-gradient(
-      600px circle at var(--x) var(--y),
-      rgba(56, 189, 248, 0.2),
-      transparent 40%
+    left: -100%;
+    top: 0;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255,255,255,0.1),
+      transparent
     );
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
+    transition: 0.5s;
   }
 
-  &:hover::after {
-    opacity: 1;
+  &:hover {
+    transform: translateX(12px) scale(1.02);
+    background: linear-gradient(
+      to right, 
+      rgba(98, 0, 234, 0.2) 30%, 
+      transparent
+    ) !important;
+    box-shadow: 2px 0 12px rgba(98, 0, 234, 0.3);
+
+    &::before {
+      left: 140%;
+    }
   }
 }
 
 .route-transition {
   transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-  animation: gentlePulse 8s ease-in-out infinite alternate;
 }
 
-.glow-spinner {
-  filter: drop-shadow(0 0 8px #7dd3fc);
+.fade-blur-enter-from,
+.fade-blur-leave-to {
+  opacity: 0;
+  transform: rotateY(10deg) translateZ(50px);
+  filter: blur(5px);
 }
 
 .text-gradient {
-  background: linear-gradient(45deg, #ec0505, #d80bcd);
+  background: linear-gradient(45deg, #7c4dff, #ff6ec4);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-.app-bar-shadow {
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.4s ease;
-
-  &:hover {
-    box-shadow: 
-      0 8px 40px rgba(125, 211, 252, 0.3),
-      0 0 30px rgba(125, 211, 252, 0.2);
-  }
-}
-
-@keyframes gentlePulse {
-  0%, 100% { background-color: rgba(224, 242, 254, 0.7); }
-  50% { background-color: rgba(186, 230, 253, 0.9); }
-}
-
-@keyframes particleFlow {
-  0% { transform: translate(0, 0); }
-  100% { transform: translate(-50%, -50%); }
+.glow-spinner {
+  filter: drop-shadow(0 0 8px #6200ea);
 }
 
 .animated-background::after {
@@ -262,36 +233,18 @@ html {
   animation: particleFlow 20s linear infinite;
 }
 
+@keyframes particleFlow {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(-50%, -50%); }
+}
+
 @media (max-width: 768px) {
   .blur-background {
     backdrop-filter: blur(20px);
   }
-
+  
   .nav-drawer-glass {
     border-right-width: 0.5px;
   }
-}
-
-.fade-blur-enter-from,
-.fade-blur-leave-to {
-  opacity: 0;
-  transform: rotateY(10deg) translateZ(50px);
-  filter: blur(5px);
-}
-
-.v-list-item__prepend {
-  transition: 
-    transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55),
-    filter 0.3s ease;
-}
-
-.v-list-item:focus::before,
-.v-list-item:focus-visible::before {
-  opacity: 0 !important;
-}
-
-.v-list-item:focus {
-  outline: none;
-  box-shadow: none;
 }
 </style>
