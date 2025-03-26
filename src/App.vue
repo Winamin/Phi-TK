@@ -74,9 +74,7 @@ window.goto = (name: string) => {
 
 const drawer = ref(true);
 const handleResize = () => {
-  if (window.innerWidth < 768) {
-    drawer.value = false;
-  }
+   drawer.value = window.innerWidth >= 768;
 };
 
 onMounted(() => {
