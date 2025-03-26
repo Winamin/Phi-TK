@@ -306,28 +306,28 @@ function onHoverMove(e: MouseEvent) {
 }
 const archiveStyle = computed(() => ({
   transform: `translate(
-    ${moveOffset.value.x * 1.2}px, 
-    ${moveOffset.value.y * 1.2}px
+    ${-moveOffset.value.x * 1.2}px,
+    ${-moveOffset.value.y * 1.2}px
   ) rotate3d(
-    ${-moveOffset.value.y / 20}, 
-    ${moveOffset.value.x / 20}, 
-    0, 
+    ${moveOffset.value.y / 20},
+    ${-moveOffset.value.x / 20},
+    0,
     ${Math.sqrt(moveOffset.value.x**2 + moveOffset.value.y**2) / 4}deg
   )`,
-  filter: `drop-shadow(${-moveOffset.value.x/4}px ${-moveOffset.value.y/4}px 6px rgba(99, 102, 241, 0.2))`
+  filter: `drop-shadow(${moveOffset.value.x/4}px ${moveOffset.value.y/4}px 6px rgba(99, 102, 241, 0.2))`
 }));
 
 const folderStyle = computed(() => ({
   transform: `translate(
-    ${-moveOffset.value.x * 0.8}px, 
-    ${-moveOffset.value.y * 0.8}px
+    ${moveOffset.value.x * 0.8}px,
+    ${moveOffset.value.y * 0.8}px
   ) rotate3d(
-    ${moveOffset.value.y / 20}, 
-    ${-moveOffset.value.x / 20}, 
-    0, 
+    ${-moveOffset.value.y / 20},
+    ${moveOffset.value.x / 20},
+    0,
     ${Math.sqrt(moveOffset.value.x**2 + moveOffset.value.y**2) / 6}deg
   )`,
-  filter: `drop-shadow(${moveOffset.value.x/4}px ${moveOffset.value.y/4}px 6px rgba(99, 102, 241, 0.2))`
+  filter: `drop-shadow(${-moveOffset.value.x/4}px ${-moveOffset.value.y/4}px 6px rgba(99, 102, 241, 0.2))`
 }));
 </script>
 
