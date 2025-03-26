@@ -74,7 +74,9 @@ window.goto = (name: string) => {
 
 const drawer = ref(true);
 const handleResize = () => {
-   drawer.value = window.innerWidth >= 768;
+  if (window.innerWidth < 768) {
+    drawer.value = false;
+  }
 };
 
 onMounted(() => {
@@ -97,11 +99,12 @@ onUnmounted(() => {
 
     <v-navigation-drawer 
       v-model="drawer" 
-      :width="240"
-      floating
+      expand-on-hover 
+      rail 
+      permanent 
       class="nav-drawer-glass blur-background"
     >
-      <v-list density="comfortable" nav class="py-4">
+      <v-list density="compact" nav>
         <v-list-item
           v-for="key in ['render', 'rpe', 'tasks', 'about']"
           :active="route.name === key"
@@ -109,8 +112,7 @@ onUnmounted(() => {
           :prepend-icon="icons[key as keyof typeof icons]"
           :title="t(key)"
           @click="router.push({ name: key })"
-          class="list-item-hover mx-3 glow-item"
-          variant="flat"
+          class="list-item-hover glow-item"
         ></v-list-item>
       </v-list>
     </v-navigation-drawer>
@@ -245,136 +247,4 @@ onUnmounted(() => {
     border-right-width: 0.5px;
   }
 }
-
-.list-item-hover:hover .v-icon {
-  transform: rotate(15deg) scale(1.2);
-  filter: drop-shadow(0 0 8px rgba(156, 39, 176, 0.6));
-  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-}
-
-.nav-drawer-glass {
-  border-right: 1px solid rgba(255,255,255,0.2) !important;
-  box-shadow: 
-    8px 0 24px rgba(0,0,0,0.3),
-    inset 2px 0 12px rgba(255,255,255,0.05);
-  border-radius: 0 24px 24px 0;
-}
-
-.app-bar-shadow {
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2) !important;
-}
-
-.v-main {
-  padding-left: 260px !important;
-  transition: padding 0.3s ease;
-}
-
-.route-transition {
-  max-width: 1200px;
-  width: 100%;
-}
-
-.route-transition > div {
-  background: linear-gradient(
-    135deg,
-    rgba(45, 35, 66, 0.6) 0%,
-    rgba(34, 34, 62, 0.8) 100%
-  );
-  backdrop-filter: blur(20px);
-  border-radius: 24px;
-  padding: 32px;
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.3),
-    inset 0 2px 4px rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-}
-
-@media (max-width: 960px) {
-  .v-main {
-    padding-left: 0 !important;
-  }
-  
-  .nav-drawer-glass {
-    border-radius: 0;
-  }
-  
-  .route-transition > div {
-    border-radius: 16px;
-    padding: 24px;
-  }
-}
-
-.v-list-item-title {
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  background: linear-gradient(45deg, #fff, #e0e0e0);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.glow-spinner .v-progress-circular__overlay {
-  stroke: currentColor !important; 
-  filter: drop-shadow(0 0 12px rgba(124, 77, 255, 0.6));
-}
-
-.glow-spinner {
-  position: relative;
-  background: linear-gradient(45deg, #7c4dff, #ff6ec4);
-  border-radius: 50%;
-  padding: 4px;
-}
-
-.glow-spinner .v-progress-circular {
-  background: rgba(18, 18, 18, 0.8);
-  border-radius: 50%;
-}
-
-.list-item-hover:hover .v-icon {
-  filter: drop-shadow(0 0 12px rgba(156, 39, 176, 0.8));
-  transform: scale(1.15);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.list-item-hover:hover .v-list-item-title {
-  text-shadow: 
-    0 0 10px rgba(156, 39, 176, 0.4),
-    0 0 20px rgba(156, 39, 176, 0.3),
-    0 0 30px rgba(156, 39, 176, 0.2);
-  background: linear-gradient(45deg, #fff 20%, #e0b0ff 80%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  transition: all 0.3s ease;
-}
-
-.list-item-hover {
-  position: relative;
-  overflow: visible;
-}
-
-.list-item-hover:hover::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 120%;
-  height: 160%;
-  background: radial-gradient(
-    circle at 50% 50%,
-    rgba(156, 39, 176, 0.3) 0%,
-    rgba(156, 39, 176, 0.15) 50%,
-    transparent 100%
-  );
-  filter: blur(16px);
-  z-index: -1;
-  animation: pulseGlow 1.5s infinite;
-}
-
-@keyframes pulseGlow {
-  0% { opacity: 0.8; }
-  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
-  100% { opacity: 0.8; }
-}
-
 </style>
