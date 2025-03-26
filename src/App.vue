@@ -247,4 +247,14 @@ onUnmounted(() => {
     border-right-width: 0.5px;
   }
 }
+
+::-webkit-scrollbar {
+  display: none;
+  width: 0 !important;
+}
+
+html {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 </style>
