@@ -18,7 +18,7 @@ import {
   VStepperActions,
   VStepperHeader,
   VStepperItem
-} from 'vuetify/labs/components'
+} from 'vuetify/components'
 import 'vuetify/styles';
 
 import theme from './theme';
