@@ -485,22 +485,18 @@ const folderStyle = computed(() => ({
   100% { background-position: -50% -50%; }
 }
 
-.hover-movable {
-  transition: 
-    transform 0.6s cubic-bezier(0.23, 1, 0.32, 1),
-    filter 0.4s ease,
-    box-shadow 0.4s ease;
-  will-change: transform, filter;
+.hover-scale-card {
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center;
 }
 
-.v-btn:hover {
+.hover-scale-card:hover {
   transform: 
-    translateY(-2px) 
-    scale(1.05) 
-    rotateZ(1deg) !important;
-  box-shadow: 
-    0 12px 24px -6px rgb(99 102 241 / 0.4),
-    0 4px 12px -4px rgb(99 102 241 / 0.3) !important;
+    scale(1.05)
+    translateY(-8px)
+    rotateZ(2deg);
+  z-index: 10;
+  box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.3);
 }
 
 .elevated-stepper {
