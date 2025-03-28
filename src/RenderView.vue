@@ -306,8 +306,8 @@ function onHoverMove(e: MouseEvent) {
 }
 const archiveStyle = computed(() => ({
   transform: `translate(
-    ${moveOffset.value.x * 1.2}px,
-    ${moveOffset.value.y * 1.2}px
+    ${-moveOffset.value.x * 1.2}px,
+    ${-moveOffset.value.y * 1.2}px
   ) rotate3d(
     ${moveOffset.value.y / 20},
     ${-moveOffset.value.x / 20},
@@ -319,8 +319,8 @@ const archiveStyle = computed(() => ({
 
 const folderStyle = computed(() => ({
   transform: `translate(
-    ${-moveOffset.value.x * 0.8}px,
-    ${-moveOffset.value.y * 0.8}px
+    ${moveOffset.value.x * 0.8}px,
+    ${moveOffset.value.y * 0.8}px
   ) rotate3d(
     ${-moveOffset.value.y / 20},
     ${moveOffset.value.x / 20},
