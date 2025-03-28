@@ -71,30 +71,48 @@
   const updateTask = setInterval(updateList, 700);
   onUnmounted(() => clearInterval(updateTask));
   
-  function describeStatus(status: TaskStatus): string {
-    switch (status.type) {
-      case 'pending':
-        return t('status.pending');
-      case 'loading':
-        return t('status.loading');
-      case 'mixing':
-        return t('status.mixing');
-      case 'rendering':
-        return t('status.rendering', {
-          progress: (status.progress * 100).toFixed(2),
-          fps: status.fps,
-          estimate: status.estimate ? moment.duration(Math.ceil(status.estimate), 'seconds').humanize(true, { ss: 0, s: 60, m: 60 }) : '',
-        });
-      case 'done':
-        return t('status.done', {
-         duration: moment.duration(Math.ceil(status.duration), 'seconds').humanize(false, { m: 60 }),
-        });
-      case 'canceled':
-        return t('status.canceled');
-      case 'failed':
-        return t('status.failed');
-    }
+  function formatDuration(seconds: number) {
+  const duration = moment.duration(Math.ceil(seconds), 'seconds');
+  const hours = Math.floor(duration.asHours());
+  const minutes = duration.minutes();
+  const secs = duration.seconds();
+
+  if (hours > 0) {
+    return `${hours} ${t('duration.hours')} ${minutes} ${t('duration.minutes')} ${secs} ${t('duration.seconds')}`;
+  } else if (minutes > 0) {
+    return `${minutes} ${t('duration.minutes')} ${secs} ${t('duration.seconds')}`;
+  } else if (secs > 0) {
+    return `${secs} ${t('duration.seconds')}`;
+  } else {
+    return '';
   }
+}
+
+
+function describeStatus(status: TaskStatus): string {
+  switch (status.type) {
+    case 'pending':
+      return t('status.pending');
+    case 'loading':
+      return t('status.loading');
+    case 'mixing':
+      return t('status.mixing');
+    case 'rendering':
+      return t('status.rendering', {
+        progress: (status.progress * 100).toFixed(2),
+        fps: status.fps,
+        estimate: status.estimate ? formatDuration(status.estimate) : '',
+      });
+    case 'done':
+      return t('status.done', {
+        duration: status.duration ? formatDuration(status.duration) : '',
+      });
+    case 'canceled':
+      return t('status.canceled');
+    case 'failed':
+      return t('status.failed');
+  }
+}
   
   const errorDialog = ref(false),
     errorDialogMessage = ref('');
