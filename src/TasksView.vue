@@ -78,11 +78,11 @@
   const secs = duration.seconds();
 
   if (hours > 0) {
-    return `${hours} ${t('duration.hours')} ${minutes} ${t('duration.minutes')} ${secs} ${t('duration.seconds')}`;
+    return `${hours} ${t('H')} ${minutes} ${t('m')} ${secs} ${t('s')}`;
   } else if (minutes > 0) {
-    return `${minutes} ${t('duration.minutes')} ${secs} ${t('duration.seconds')}`;
+    return `${minutes} ${t('m')} ${secs} ${t('s')}`;
   } else if (secs > 0) {
-    return `${secs} ${t('duration.seconds')}`;
+    return `${secs} ${t('s')}`;
   } else {
     return '';
   }
