@@ -360,7 +360,6 @@ pub async fn main() -> Result<()> {
     let music_frames: Vec<(f32, f32)> =     music.frames().collect(); 
     let ending_frames = ending.frames().collect::<Vec<_>>();
     if volume_music != 0.0 {
-        if volume_music != 0.0 {
         let start_time = Instant::now();
         let pos = O - chart.offset.min(0.) as f64;
         let start_sample = (pos * sample_rate_f64).round() as usize;
