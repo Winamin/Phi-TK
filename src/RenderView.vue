@@ -9,7 +9,7 @@ en:
     config: 'Configure chart'
     options: 'Render options'
     render: 'Render'
-  
+
   choose:
     archive: Archive
     folder: Folder
@@ -129,14 +129,14 @@ async function chooseChart(folder?: boolean) {
   let file = folder
     ? await dialog.open({ directory: true })
     : await dialog.open({
-        filters: [
-          {
-            name: t('choose.filter-name'),
-            extensions: ['zip', 'pez'],
-          },
-          anyFilter(),
-        ],
-      });
+      filters: [
+        {
+          name: t('choose.filter-name'),
+          extensions: ['zip', 'pez'],
+        },
+        anyFilter(),
+      ],
+    });
   if (!file) return;
 
   // noexcept
@@ -291,17 +291,17 @@ function resetHover() {
 
 function onHoverMove(e: MouseEvent) {
   if (!hoverContainer.value) return;
-  
+
   const rect = hoverContainer.value.getBoundingClientRect();
   const centerX = rect.width / 2;
   const centerY = rect.height / 2;
-  
+
   const offsetX = (e.clientX - rect.left - centerX) * 0.15;
   const offsetY = (e.clientY - rect.top - centerY) * 0.15;
-  
-  moveOffset.value = { 
+
+  moveOffset.value = {
     x: offsetX * (window.innerWidth / 1280),
-    y: offsetY * (window.innerHeight / 720) 
+    y: offsetY * (window.innerHeight / 720)
   };
 }
 const archiveStyle = computed(() => ({
@@ -342,34 +342,34 @@ const folderStyle = computed(() => ({
       </div>
 
       <template v-slot:item.1>
-        <div 
-        class="mt-8 d-flex" 
-        style="gap: 1rem"
-        @mousemove="onHoverMove"
-        @mouseleave="resetHover"
-        ref="hoverContainer"
-      >
-        <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
-          <v-btn 
-            :style="archiveStyle"
-            class="w-75 gradient-primary hover-movable" 
-            style="overflow: hidden" 
-            size="large" 
-            @click="chooseChart(false)" 
-            prepend-icon="mdi-folder-zip"
-          >{{ t('choose.archive') }}</v-btn>
+        <div
+          class="mt-8 d-flex"
+          style="gap: 1rem"
+          @mousemove="onHoverMove"
+          @mouseleave="resetHover"
+          ref="hoverContainer"
+        >
+          <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
+            <v-btn
+              :style="archiveStyle"
+              class="w-75 gradient-primary hover-movable"
+              style="overflow: hidden"
+              size="large"
+              @click="chooseChart(false)"
+              prepend-icon="mdi-folder-zip"
+            >{{ t('choose.archive') }}</v-btn>
+          </div>
+          <v-divider vertical></v-divider>
+          <div class="flex-grow-1 d-flex align-center justify-center w-0">
+            <v-btn
+              :style="folderStyle"
+              class="w-75 gradient-primary hover-movable"
+              size="large"
+              @click="chooseChart(true)"
+              prepend-icon="mdi-folder"
+            >{{ t('choose.folder') }}</v-btn>
+          </div>
         </div>
-        <v-divider vertical></v-divider>
-         <div class="flex-grow-1 d-flex align-center justify-center w-0">
-          <v-btn 
-            :style="folderStyle"
-            class="w-75 gradient-primary hover-movable" 
-            size="large" 
-            @click="chooseChart(true)" 
-            prepend-icon="mdi-folder"
-          >{{ t('choose.folder') }}</v-btn>
-        </div>
-      </div>
         <p class="mb-8 w-100 text-center mt-2 text-disabled" v-t="'choose.can-also-drop'"></p>
         <v-overlay v-model="parsingChart" contained class="align-center justify-center" persistent :close-on-content-click="false">
           <v-progress-circular indeterminate> </v-progress-circular>
@@ -446,9 +446,9 @@ const folderStyle = computed(() => ({
 <style scoped>
 .gradient-primary {
   background: linear-gradient(
-    45deg, 
-    #6366f1, 
-    #8b5cf6, 
+    45deg,
+    #6366f1,
+    #8b5cf6,
     #ec4899
   ) !important;
   box-shadow: 0 4px 6px -1px rgb(99 102 241 / 0.3);
@@ -491,7 +491,7 @@ const folderStyle = computed(() => ({
 }
 
 .hover-scale-card:hover {
-  transform: 
+  transform:
     scale(1.05)
     translateY(-8px)
     rotateZ(2deg);
@@ -501,7 +501,7 @@ const folderStyle = computed(() => ({
 
 .elevated-stepper {
   border-radius: 24px !important;
-  box-shadow: 
+  box-shadow:
     0 25px 50px -12px rgb(0 0 0 / 0.3),
     0 0 40px -10px rgb(99 102 241 / 0.3) !important;
   background: rgba(23, 9, 99, 0.9) !important;
@@ -515,7 +515,7 @@ const folderStyle = computed(() => ({
 }
 
 .drop-pulse {
-  animation: 
+  animation:
     pulse 2s infinite,
     float 3s ease-in-out infinite;
   text-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
@@ -535,57 +535,57 @@ const folderStyle = computed(() => ({
 }
 
 .v-stepper__content {
-  transition: 
+  transition:
     opacity 0.6s cubic-bezier(0.23, 1, 0.32, 1),
     transform 0.8s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .v-stepper__content-leave-active {
-  transition: 
+  transition:
     opacity 0.3s ease,
     transform 0.4s ease;
 }
 
 .v-stepper__content-leave-to {
   opacity: 0;
-  transform: 
-    translateX(-20px) 
-    perspective(500px) 
-    rotateY(10deg) 
+  transform:
+    translateX(-20px)
+    perspective(500px)
+    rotateY(10deg)
     scale(0.98);
 }
 
 .v-stepper__content-enter-from {
   opacity: 0;
-  transform: 
-    translateX(20px) 
-    perspective(500px) 
-    rotateY(-10deg) 
+  transform:
+    translateX(20px)
+    perspective(500px)
+    rotateY(-10deg)
     scale(0.98);
 }
 
 .v-text-field :deep(.v-field) {
-  transition: 
+  transition:
     box-shadow 0.4s ease,
     transform 0.3s ease;
 }
 
 .v-text-field :deep(.v-field--focused) {
-  box-shadow: 
+  box-shadow:
     0 0 0 2px rgb(99 102 241 / 0.3),
     0 8px 24px -6px rgb(99 102 241 / 0.2) !important;
   transform: scale(1.02);
 }
 
 .v-slider__thumb {
-  transition: 
+  transition:
     transform 0.2s ease,
     box-shadow 0.3s ease !important;
 }
 
 .v-slider__thumb:hover {
   transform: scale(1.2);
-  box-shadow: 
+  box-shadow:
     0 0 0 6px rgb(99 102 241 / 0.15) !important;
 }
 
