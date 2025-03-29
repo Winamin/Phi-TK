@@ -357,20 +357,17 @@ pub async fn main() -> Result<()> {
     assert_eq!(sample_rate, sfx_flick.sample_rate());
     
     let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
-        let music_frames: Vec<(f32, f32)> = music.frames().iter().map(|f| (f.left, f.right)).collect();
-    let ending_frames: Vec<(f32, f32)> = ending.frames().iter().map(|f| (f.left, f.right)).collect();
     if volume_music != 0.0 {
         let start_time = Instant::now();
         let pos = O - chart.offset.min(0.) as f64;
-        let start_sample = (pos * sample_rate_f64).round() as usize;
-        let end_sample = start_sample + music_frames.len().min(output.len()/2 - start_sample);
-        let output_left = &mut output[start_sample*2..];
-        let output_right = &mut output[start_sample*2 + 1..];
-    
-        for (i, &(left, right)) in   music_frames.iter().enumerate() {
-            if i >= end_sample - start_sample { break; }
-            output_left[i*2] += left * volume_music;
-            output_right[i*2] += right * volume_music;
+        let count = (music.length() as f64 * sample_rate_f64) as usize;
+        let start_index = (pos * sample_rate_f64).round() as usize * 2;
+        let ratio = 1.0 / sample_rate_f64;
+        for i in 0..count {
+            let position = i as f64 * ratio;
+            let frame = music.sample(position as f32).unwrap_or_default();
+            output[start_index + i * 2] += frame.0 * volume_music;
+            output[start_index + i * 2 + 1] += frame.1 * volume_music;
         }
         info!("music Time:{:?}", start_time.elapsed())
 
