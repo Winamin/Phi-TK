@@ -66,6 +66,7 @@ export interface RenderConfig {
   hevc: boolean;
   bitrateControl: string;
   bitrate: string;
+  targetAudio: number;
 
   aggressive: boolean;
   challengeColor: string;
