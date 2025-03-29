@@ -46,6 +46,7 @@ pub struct RenderConfig {
     hevc: bool,
     show_progress_text: bool,
     show_time_text : bool,
+    target_audio: u32,
     bitrate_control: String,
     bitrate: String,
 
@@ -413,9 +414,10 @@ pub async fn main() -> Result<()> {
     while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
     }
-
+    let target_sample_rate = params.config.target_audio as usize;
+    let resample_filter = format!("aresample=resampler=soxr:osr={}", target_sample_rate);
     let mut proc = cmd_hidden(&ffmpeg)
-        .args(format!("-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav", sample_rate).split_whitespace())
+        .args(format!("-y -f f32le -ar {} -ac 2 -i - -af {} -c:a pcm_f32le -f wav", sample_rate, resample_filter).split_whitespace())
         .arg(mixing_output.path())
         .arg("-loglevel")
         .arg("warning")

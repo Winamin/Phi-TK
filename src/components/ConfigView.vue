@@ -59,6 +59,7 @@ en:
   chart_ratio: Chart Zoom
   buffer_size: Adjust Buffer Size
   buffer_size-tips: Not very useful
+  target_audio: Target sample rate
   combo: Customize COMBO Text
   flid_x: Mirror Mode
   show_progress_text: Progress bar 1
@@ -141,6 +142,7 @@ zh-CN:
   chart_ratio: 谱面缩放
   buffer_size: 音频Buffer Size
   buffer_size-tips: 用处不大
+  target_audio: 目标采样率
   combo: 自定义COMBO名称
   flid_x: 镜像模式
   show_progress_text: 进度条1
@@ -184,6 +186,8 @@ const props = defineProps<{ initAspectRatio?: number }>();
 const RESOLUTIONS = [ '1280x720','1920x1080', '2560x1440', '3840x2160', '2844x1600', '2388x1668', '1600x1080', '7680x4320'];
 const ffmpegPresetPresetList = ['veryfast p1 speed', 'faster p2 speed','fast p3 balanced', 'medium p4 balanced', 'slow p5 balanced', 'slower p6 quality', 'veryslow p7 quality'];
 const bitrateControlList = ['CRF','CBR'];
+const targetAudioOptions = [44100, 48000, 96000, 192000, 384000, 768000];
+const targetAudio = ref(targetAudioOptions[0]);
 
 function parseResolution(resolution: string): [number, number] | null {
   let parts = resolution.split(/[xX]/g);
@@ -311,6 +315,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
     hevc: hevc.value,
     bitrateControl: bitrateControl.value,
     bitrate: bitrate.value,
+    targetAudio: targetAudio.value,
 
     aggressive: aggressive.value,
     challengeColor: STD_CHALLENGE_COLORS[t('challenge-colors').split(',').indexOf(challengeColor.value)],
@@ -368,6 +373,7 @@ function applyConfig(config: RenderConfig) {
   hevc.value = config.hevc;
   bitrateControl.value = config.bitrateControl;
   bitrate.value = config.bitrate;
+  targetAudio.value = config.targetAudio;
 
   aggressive.value = config.aggressive;
   challengeColor.value = t('challenge-colors').split(',')[STD_CHALLENGE_COLORS.indexOf(config.challengeColor)];
@@ -403,6 +409,7 @@ const DEFAULT_CONFIG: RenderConfig = {
   hevc: false,
   bitrateControl: 'CRF',
   bitrate: '28',
+  targetAudio: 96000,
 
   aggressive: false,
   challengeColor: 'golden',
@@ -788,7 +795,7 @@ async function replacePreset() {
                   v-model="volumeMusic"
                   :min="0" 
                   :max="2" 
-                  :step="0.1"
+                  :step="0.01"
                   hide-details
                   color="primary"
                 />
@@ -803,7 +810,7 @@ async function replacePreset() {
                   v-model="volumeSfx"
                   :min="0" 
                   :max="2" 
-                  :step="0.1"
+                  :step="0.01"
                   hide-details
                   color="primary"
                 />
@@ -832,7 +839,15 @@ async function replacePreset() {
             />
           </v-col>
         </v-row>
-
+        
+        <v-combobox
+          :label="t('target_audio')"
+          :items="targetAudioOptions"
+          density="compact"
+          variant="outlined"
+          v-model="targetAudio"
+          class="mb-4"
+        />
         <v-slider
           :label="t('buffer_size')"
           thumb-label="always"
