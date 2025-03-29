@@ -349,6 +349,7 @@ pub async fn main() -> Result<()> {
 
     send(IPCEvent::StartMixing);
     let mixing_output = NamedTempFile::new()?;
+    let target_sample_rate = params.config.target_audio as u32;
     let sample_rate = 96000;
     let sample_rate_f64 = sample_rate as f64;
     assert_eq!(sample_rate, ending.sample_rate());
@@ -414,10 +415,22 @@ pub async fn main() -> Result<()> {
     while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
     }
-    let target_sample_rate = params.config.target_audio as usize;
-    let resample_filter = format!("aresample=resampler=soxr:osr={}", target_sample_rate);
+
+    let args_str = if target_sample_rate != sample_rate {
+        let resample_filter = format!("aresample=resampler=soxr:osr={}", target_sample_rate);
+        format!(
+            "-y -f f32le -ar {} -ac 2 -i - -af {} -c:a pcm_f32le -f wav",
+            sample_rate, resample_filter
+        )
+    } else {
+        format!(
+            "-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav",
+            sample_rate
+        )
+    };
+
     let mut proc = cmd_hidden(&ffmpeg)
-        .args(format!("-y -f f32le -ar {} -ac 2 -i - -af {} -c:a pcm_f32le -f wav", sample_rate, resample_filter).split_whitespace())
+        .args(args_str.split_whitespace())
         .arg(mixing_output.path())
         .arg("-loglevel")
         .arg("warning")
