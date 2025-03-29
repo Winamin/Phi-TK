@@ -357,8 +357,8 @@ pub async fn main() -> Result<()> {
     assert_eq!(sample_rate, sfx_flick.sample_rate());
     
     let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
-    let music_frames: Vec<(f32, f32)> =     music.frames().collect(); 
-    let ending_frames = ending.frames().collect::<Vec<_>>();
+        let music_frames: Vec<(f32, f32)> = music.frames().iter().map(|f| (f.left, f.right)).collect();
+    let ending_frames: Vec<(f32, f32)> = ending.frames().iter().map(|f| (f.left, f.right)).collect();
     if volume_music != 0.0 {
         let start_time = Instant::now();
         let pos = O - chart.offset.min(0.) as f64;
