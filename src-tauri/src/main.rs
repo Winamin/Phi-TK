@@ -268,7 +268,7 @@ fn show_in_folder(path: &Path) -> Result<(), InvokeError> {
 
         Ok(())
     })()
-    .map_err(InvokeError::from_anyhow)
+        .map_err(InvokeError::from_anyhow)
 }
 
 #[tauri::command]
@@ -281,7 +281,7 @@ async fn parse_chart(path: &Path) -> Result<ChartInfo, InvokeError> {
             .with_context(|| mtl!("load-info-failed"))?;
         Ok(info)
     })
-    .await
+        .await
 }
 
 #[tauri::command]
@@ -302,7 +302,7 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
 
         Ok(())
     })
-    .await
+        .await
 }
 
 #[tauri::command]
@@ -311,7 +311,7 @@ async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Resul
         queue.post(params).await?;
         Ok(())
     })
-    .await
+        .await
 }
 
 #[tauri::command]
@@ -348,7 +348,7 @@ fn get_respacks() -> Result<Vec<RespackInfo>, InvokeError> {
         names.sort_by(|x, y| x.name.cmp(&y.name));
         Ok(names)
     })()
-    .map_err(InvokeError::from_anyhow)
+        .map_err(InvokeError::from_anyhow)
 }
 
 #[tauri::command]
@@ -357,7 +357,7 @@ fn open_respack_folder() -> Result<(), InvokeError> {
         open::that_detached(respack_dir()?)?;
         Ok(())
     })()
-    .map_err(InvokeError::from_anyhow)
+        .map_err(InvokeError::from_anyhow)
 }
 
 fn get_presets_file() -> Result<PathBuf> {
@@ -378,7 +378,7 @@ async fn get_presets() -> Result<HashMap<String, RenderConfig>, InvokeError> {
             serde_json::from_reader(BufReader::new(File::open(file)?))?
         })
     })()
-    .map_err(InvokeError::from_anyhow)
+        .map_err(InvokeError::from_anyhow)
 }
 
 async fn save_presets(presets: &HashMap<String, RenderConfig>) -> Result<()> {
@@ -396,7 +396,7 @@ async fn add_preset(name: String, config: RenderConfig) -> Result<(), InvokeErro
         save_presets(&presets).await?;
         Ok(())
     })
-    .await
+        .await
 }
 
 #[tauri::command]
@@ -409,7 +409,7 @@ async fn remove_preset(name: String) -> Result<(), InvokeError> {
         save_presets(&presets).await?;
         Ok(())
     })
-    .await
+        .await
 }
 
 fn rpe_dir() -> Result<Option<PathBuf>> {
@@ -441,8 +441,8 @@ fn set_rpe_dir(path: PathBuf) -> Result<(), InvokeError> {
     (|| {
         if !path.is_dir()
             || ["PhiEdit.exe", "Resources"]
-                .iter()
-                .any(|it| !path.join(*it).exists())
+            .iter()
+            .any(|it| !path.join(*it).exists())
         {
             bail!(mtl!("not-valid-rpe"));
         }
@@ -452,7 +452,7 @@ fn set_rpe_dir(path: PathBuf) -> Result<(), InvokeError> {
         )?;
         Ok(())
     })()
-    .map_err(InvokeError::from_anyhow)
+        .map_err(InvokeError::from_anyhow)
 }
 
 #[tauri::command]
@@ -461,7 +461,7 @@ fn unset_rpe_dir() -> Result<(), InvokeError> {
         std::fs::remove_file(CONFIG_DIR.get().unwrap().join("rpe_path.txt"))?;
         Ok(())
     })()
-    .map_err(InvokeError::from_anyhow)
+        .map_err(InvokeError::from_anyhow)
 }
 
 #[tauri::command]
@@ -518,43 +518,43 @@ fn get_rpe_charts() -> Result<Option<Vec<RPEChartInfo>>, InvokeError> {
             commit!();
         } else {
             use tauri::regex::Regex;
-        let onely_num = Regex::new(r"^\d+$").unwrap();
-        let mut folders = Vec::new();
-        let path = dir.join("Resources");
-        for entry in std::fs::read_dir(path)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                if let Some(folder_name) = path.file_name() {
-                    if onely_num.is_match(folder_name.to_str().unwrap_or("")) {
-                        folders.push(path);
+            let onely_num = Regex::new(r"^\d+$").unwrap();
+            let mut folders = Vec::new();
+            let path = dir.join("Resources");
+            for entry in std::fs::read_dir(path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Some(folder_name) = path.file_name() {
+                        if onely_num.is_match(folder_name.to_str().unwrap_or("")) {
+                            folders.push(path);
+                        }
                     }
                 }
             }
-        }
-        for folder in folders {
-            println!("Found numeric folder: {:?}", folder);
-            for line in BufReader::new(File::open(folder.join("info.txt"))?).lines() {
-                let line = line?;
-                let line = line.trim();
-                if line.is_empty() {
-                    continue;
+            for folder in folders {
+                println!("Found numeric folder: {:?}", folder);
+                for line in BufReader::new(File::open(folder.join("info.txt"))?).lines() {
+                    let line = line?;
+                    let line = line.trim();
+                    if line.is_empty() {
+                        continue;
+                    }
+                    if line == "#" {
+                        commit!();
+                        continue;
+                    }
+                    let Some((key, value)) = line.split_once(':') else { continue };
+                    *(match key {
+                        "Name" => &mut name,
+                        "Path" => &mut id,
+                        "Chart" => &mut chart,
+                        "Picture" => &mut illustration,
+                        "Charter" => &mut charter,
+                        _ => continue,
+                    }) = Some(value.trim().to_owned());
                 }
-                if line == "#" {
-                    commit!();
-                    continue;
-                }
-                let Some((key, value)) = line.split_once(':') else { continue };
-                *(match key {
-                    "Name" => &mut name,
-                    "Path" => &mut id,
-                    "Chart" => &mut chart,
-                    "Picture" => &mut illustration,
-                    "Charter" => &mut charter,
-                    _ => continue,
-                }) = Some(value.trim().to_owned());
-            }
-            commit!();
+                commit!();
             }
         }
 
@@ -563,7 +563,7 @@ fn get_rpe_charts() -> Result<Option<Vec<RPEChartInfo>>, InvokeError> {
 
         Ok(Some(results))
     })()
-    .map_err(InvokeError::from_anyhow)
+        .map_err(InvokeError::from_anyhow)
 }
 
 #[tauri::command]
@@ -577,5 +577,5 @@ fn open_app_folder() -> Result<(), InvokeError> {
         open::that_detached(std::env::current_exe()?.parent().unwrap())?;
         Ok(())
     })()
-    .map_err(InvokeError::from_anyhow)
+        .map_err(InvokeError::from_anyhow)
 }
