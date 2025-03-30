@@ -3,7 +3,7 @@ en:
   empty: Nothing here
 
   status:
-    pending: Pending (Queue position: { position })
+    pending: Pending…
     loading: Loading…
     mixing: Mixing…
     rendering: Rendering ({ progress }%), { fps } FPS, estimated to end { estimate }
@@ -21,15 +21,11 @@ en:
   show-output: Show Output
   show-in-folder: Open Folder
 
-  batch_add_archive: Add Archives
-  batch_add_folder: Add Folders
-  queue_position: Queue Position
-
 zh-CN:
   empty: 空空如也
 
   status:
-    pending: 等待中（队列位置：{ position }）
+    pending: 等待中…
     loading: 加载中…
     mixing: 混音中…
     rendering: 渲染中（{ progress }%），{ fps } FPS，预计 { estimate } 结束
@@ -47,43 +43,55 @@ zh-CN:
   show-output: 查看输出
   show-in-folder: 打开文件夹
 
-  batch_add_archive: 添加压缩包
-  batch_add_folder: 添加文件夹
-  queue_position: 队列位置
-
 </i18n>
 
 <script setup lang="ts">
-import { ref, onUnmounted, reactive, computed } from 'vue';
+import { ref, onUnmounted, reactive } from 'vue';
+
 import { useI18n } from 'vue-i18n';
-import { useRouter } from 'vue-router';
-import { invoke } from '@tauri-apps/api';
-import { convertFileSrc } from '@tauri-apps/api/tauri';
-import moment from 'moment';
-import { toastError } from './common';
+const { t } = useI18n();
+
 import type { Task, TaskStatus } from './model';
 
-const { t } = useI18n();
-const router = useRouter();
+import { invoke } from '@tauri-apps/api';
+import { convertFileSrc } from '@tauri-apps/api/tauri';
+
+import moment from 'moment';
+import { toastError } from './common';
 
 const tasks = ref<Task[]>();
-const batchAdding = ref(false);
-const selectedFiles = ref<string[]>([]);
 
 async function updateList() {
   tasks.value = await invoke<Task[]>('get_tasks');
+  console.log(tasks.value[0]);
 }
 
 await updateList();
+
 const updateTask = setInterval(updateList, 700);
 onUnmounted(() => clearInterval(updateTask));
+
+function formatDuration(seconds: number) {
+  const duration = moment.duration(Math.ceil(seconds), 'seconds');
+  const hours = Math.floor(duration.asHours());
+  const minutes = duration.minutes();
+  const secs = duration.seconds();
+
+  if (hours > 0) {
+    return `${hours} ${t('H')} ${minutes} ${t('m')} ${secs} ${t('s')}`;
+  } else if (minutes > 0) {
+    return `${minutes} ${t('m')} ${secs} ${t('s')}`;
+  } else if (secs > 0) {
+    return `${secs} ${t('s')}`;
+  } else {
+    return '';
+  }
+}
 
 function describeStatus(status: TaskStatus): string {
   switch (status.type) {
     case 'pending':
-      return t('status.pending', { 
-        position: tasks.value?.findIndex(t => t.id === status.taskId)! + 1 
-      });
+      return t('status.pending');
     case 'loading':
       return t('status.loading');
     case 'mixing':
@@ -105,65 +113,33 @@ function describeStatus(status: TaskStatus): string {
   }
 }
 
-function formatDuration(seconds: number) {
-  const duration = moment.duration(Math.ceil(seconds), 'seconds');
-  const hours = Math.floor(duration.asHours());
-  const minutes = duration.minutes();
-  const secs = duration.seconds();
+const errorDialog = ref(false),
+  errorDialogMessage = ref('');
 
-  if (hours > 0) {
-    return `${hours}${t('H')} ${minutes}${t('m')} ${secs}${t('s')}`;
-  } else if (minutes > 0) {
-    return `${minutes}${t('m')} ${secs}${t('s')}`;
-  } else if (secs > 0) {
-    return `${secs}${t('s')}`;
-  } else {
-    return '';
-  }
-}
+const outputDialog = ref(false),
+  outputDialogMessage = ref('');
 
-async function chooseBatchCharts(folder = false) {
+async function showInFolder(path: string) {
   try {
-    batchAdding.value = true;
-    const result = await dialog.open({
-      directory: folder,
-      multiple: true,
-      filters: folder ? undefined : [
-        { name: t('choose.filter-name'), extensions: ['zip', 'pez'] }
-      ]
-    });
-    
-    if (result) {
-      selectedFiles.value = Array.isArray(result) ? result : [result];
-      await processBatchCharts();
-    }
+    await invoke('show_in_folder', { path });
   } catch (e) {
     toastError(e);
-  } finally {
-    batchAdding.value = false;
   }
 }
 
-async function processBatchCharts() {
-  for (const file of selectedFiles.value) {
-    const taskId = await invoke('create_task', {
-      path: file,
-      config: { 
-        autoRedirect: true,
-        hidePreview: true 
-      }
-    });
-    
-    router.push({
-      name: 'render',
-      query: { 
-        taskId,
-        hidePreview: 'true',
-        fromBatch: 'true' 
-      }
-    });
+async function showFolder() {
+  try {
+    await invoke('show_folder');
+  } catch (e) {
+    toastError(e);
   }
-  await updateList();
+}
+
+function showOutput(task: Task) {
+  if (task.status.type === 'done') {
+    outputDialogMessage.value = task.status.output;
+    outputDialog.value = true;
+  }
 }
 
 interface CardTransform {
@@ -214,12 +190,12 @@ function handleMouseMove(event: MouseEvent, taskId: string) {
 
   cardTransforms[taskId] = {
     transform: `
-      rotateY(${rotateY}deg)
-      rotateX(${rotateX}deg)
-      translateZ(${translateZ}px)
-      scale(${scaleFactor})
-      translate(${translateX}px, ${translateY}px)
-    `,
+        rotateY(${rotateY}deg)
+        rotateX(${rotateX}deg)
+        translateZ(${translateZ}px)
+        scale(${scaleFactor})
+        translate(${translateX}px, ${translateY}px)
+      `,
     transition: cardTransforms[taskId].transition,
   };
 }
@@ -246,165 +222,74 @@ function handleMouseLeave(taskId: string) {
     }, effectConfig.leaveDuration * 1000);
   });
 }
-
-const errorDialog = ref(false),
-  errorDialogMessage = ref('');
-
-const outputDialog = ref(false),
-  outputDialogMessage = ref('');
-
-async function showInFolder(path: string) {
-  try {
-    await invoke('show_in_folder', { path });
-  } catch (e) {
-    toastError(e);
-  }
-}
-
-function showOutput(task: Task) {
-  if (task.status.type === 'done') {
-    outputDialogMessage.value = task.status.output;
-    outputDialog.value = true;
-  }
-}
-
-const queuePosition = computed(() => (task: Task) => {
-  return tasks.value?.findIndex(t => t.id === task.id)! + 1;
-});
 </script>
 
 <template>
   <div class="pa-8 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1rem">
-    <div class="d-flex justify-end mb-4" style="gap: 0.5rem">
-      <v-btn 
-        @click="chooseBatchCharts(false)" 
-        :loading="batchAdding"
-        prepend-icon="mdi-zip-box"
-        class="hover-scale"
-        v-t="'batch_add_archive'"
-      ></v-btn>
-      <v-btn
-        @click="chooseBatchCharts(true)"
-        :loading="batchAdding"
-        prepend-icon="mdi-folder-multiple"
-        class="hover-scale"
-        v-t="'batch_add_folder'"
-      ></v-btn>
-    </div>
-
     <h1 v-if="!tasks || !tasks.length" class="text-center font-italic text-disabled" v-t="'empty'"></h1>
-
-    <v-slide-y-transition group>
-      <div
-        v-for="task in tasks"
-        :key="task.id"
-        class="task-card-container"
-        @mouseenter="handleMouseEnter(task.id.toString())"
-        @mousemove="handleMouseMove($event, task.id.toString())"
-        @mouseleave="handleMouseLeave(task.id.toString())"
-      >
-        <v-card
-          class="task-card"
-          :id="'card-' + task.id.toString()"
-          :style="{
-            transform: cardTransforms[task.id.toString()]?.transform,
-            transition: cardTransforms[task.id.toString()]?.transition,
-          }"
-        >
-          <div class="d-flex flex-row align-stretch">
-            <v-chip 
-              v-if="task.status.type === 'pending'"
-              class="ma-2 queue-chip"
-              color="primary"
-            >
-              {{ t('queue_position') }}: {{ queuePosition(task) }}
-            </v-chip>
-
-            <div class="d-flex flex-row align-center" style="width: 35%">
-              <div
-                class="task-cover"
-                :style="{ 
-                  'background-image': 'url(' + convertFileSrc(task.cover) + ')',
-                  width: '100%',
-                  height: '100%',
-                  maxHeight: '240px',
-                  backgroundPosition: 'center',
-                  backgroundRepeat: 'no-repeat',
-                  backgroundSize: 'cover'
-                }"
-              ></div>
-            </div>
-
-            <div class="d-flex flex-column w-100">
-              <v-card-title>{{ task.name }}</v-card-title>
-              <v-card-subtitle class="mt-n2">{{ task.path }}</v-card-subtitle>
-              <div class="w-100 pa-4 pb-2 pr-2 mt-2">
-                <p class="mb-2 text-medium-emphasis">{{ describeStatus(task.status) }}</p>
-
-                <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
-                  <v-progress-circular 
-                    v-if="task.status.type !== 'rendering'" 
-                    :indeterminate="true" 
-                    color="accent" 
-                    class="glow-spinner"
-                  ></v-progress-circular>
-                  <v-progress-linear 
-                    v-else 
-                    :model-value="task.status.progress * 100" 
-                    color="accent" 
-                    height="12" 
-                    rounded
-                  ></v-progress-linear>
-                  <div class="pt-4 d-flex justify-end">
-                    <v-btn 
-                      variant="flat" 
-                      color="error" 
-                      prepend-icon="mdi-cancel" 
-                      @click="invoke('cancel_task', { id: task.id })" 
-                      v-t="'cancel'" 
-                      class="hover-scale"
-                    ></v-btn>
-                  </div>
-                </template>
-
-                <div v-if="task.status.type === 'failed'" class="pt-4 d-flex justify-end">
-                  <v-btn
-                    variant="flat"
-                    color="error"
-                    prepend-icon="mdi-alert-circle-outline"
-                    @click="
-                      errorDialogMessage = task.status.error;
-                      errorDialog = true;
-                    "
-                    v-t="'details'"
-                    class="hover-scale"
-                  ></v-btn>
+    <v-slide-y-transition>
+      <v-form ref="form" style="max-height: 48vh" class="animated-form">
+        <v-row class="text-center">
+          <v-col cols="12" class="mt-n4">
+            <v-btn @click="showFolder()" v-t="'show-in-folder'" class="hover-scale"></v-btn>
+          </v-col>
+        </v-row>
+      </v-form>
+    </v-slide-y-transition>
+    <div
+      class="task-card-container"
+      v-for="task in tasks"
+      :key="task.id"
+      @mouseenter="handleMouseEnter(task.id.toString())"
+      @mousemove="handleMouseMove($event, task.id.toString())"
+      @mouseleave="handleMouseLeave(task.id.toString())">
+      <v-card
+        class="task-card"
+        :id="'card-' + task.id.toString()"
+        :style="{
+          transform: cardTransforms[task.id.toString()]?.transform,
+          transition: cardTransforms[task.id.toString()]?.transition,
+        }">
+        <div class="d-flex flex-row align-stretch">
+          <div class="d-flex flex-row align-center" style="width: 35%">
+            <div
+              style="width: 100%; height: 100%; max-height: 240px; background-position: center; background-repeat: no-repeat; background-size: cover"
+              :style="{ 'background-image': 'url(' + convertFileSrc(task.cover) + ')' }"
+              class="task-cover"></div>
+          </div>
+          <div class="d-flex flex-column w-100">
+            <v-card-title>{{ task.name }}</v-card-title>
+            <v-card-subtitle class="mt-n2">{{ task.path }}</v-card-subtitle>
+            <div class="w-100 pa-4 pb-2 pr-2 mt-2">
+              <p class="mb-2 text-medium-emphasis">{{ describeStatus(task.status) }}</p>
+              <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
+                <v-progress-circular v-if="task.status.type !== 'rendering'" :indeterminate="true" color="accent" class="glow-spinner"></v-progress-circular>
+                <v-progress-linear v-else :model-value="task.status.progress * 100" color="accent" height="12" rounded></v-progress-linear>
+                <div class="pt-4 d-flex justify-end">
+                  <v-btn variant="flat" color="error" prepend-icon="mdi-cancel" @click="invoke('cancel_task', { id: task.id })" v-t="'cancel'" class="hover-scale"></v-btn>
                 </div>
-
-                <div v-if="task.status.type === 'done'" class="pt-4 d-flex justify-end gap-2">
-                  <v-btn 
-                    variant="flat" 
-                    color="secondary" 
-                    prepend-icon="mdi-text-box-outline" 
-                    @click="showOutput(task)" 
-                    v-t="'show-output'" 
-                    class="hover-scale"
-                  ></v-btn>
-                  <v-btn 
-                    variant="flat" 
-                    color="accent" 
-                    prepend-icon="mdi-folder-open-outline" 
-                    @click="showInFolder(task.output)" 
-                    v-t="'show-in-folder'" 
-                    class="hover-scale"
-                  ></v-btn>
-                </div>
+              </template>
+              <div v-if="task.status.type === 'failed'" class="pt-4 d-flex justify-end">
+                <v-btn
+                  variant="flat"
+                  color="error"
+                  prepend-icon="mdi-alert-circle-outline"
+                  @click="
+                    errorDialogMessage = task.status.error;
+                    errorDialog = true;
+                  "
+                  v-t="'details'"
+                  class="hover-scale"></v-btn>
+              </div>
+              <div v-if="task.status.type === 'done'" class="pt-4 d-flex justify-end gap-2">
+                <v-btn variant="flat" color="secondary" prepend-icon="mdi-text-box-outline" @click="showOutput(task)" v-t="'show-output'" class="hover-scale"></v-btn>
+                <v-btn variant="flat" color="accent" prepend-icon="mdi-folder-open-outline" @click="showInFolder(task.output)" v-t="'show-in-folder'" class="hover-scale"></v-btn>
               </div>
             </div>
           </div>
-        </v-card>
-      </div>
-    </v-slide-y-transition>
+        </div>
+      </v-card>
+    </div>
 
     <v-dialog v-model="errorDialog" width="auto" min-width="400px">
       <v-card class="glass-background">
