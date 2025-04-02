@@ -28,7 +28,7 @@ zh-CN:
     pending: 等待中…
     loading: 加载中…
     mixing: 混音中…
-    rendering: 渲染中（{ progress }%），{ fps } FPS，预计 { estimate } 结束
+    rendering: 渲染中  { progress }%  { fps } FPS  预计 { estimate } 结束
     done: 已完成，耗时 { duration }
     canceled: 已取消
     failed: 失败
@@ -96,12 +96,15 @@ function describeStatus(status: TaskStatus): string {
       return t('status.loading');
     case 'mixing':
       return t('status.mixing');
-    case 'rendering':
+    case 'rendering': {
+      const progressDisplay =
+        status.progress >= 0.999 ? '100.00' : (status.progress * 100).toFixed(2);
       return t('status.rendering', {
-        progress: (status.progress * 100).toFixed(2),
+        progress: progressDisplay,
         fps: status.fps,
         estimate: status.estimate ? formatDuration(status.estimate) : '',
       });
+    }
     case 'done':
       return t('status.done', {
         duration: status.duration ? formatDuration(status.duration) : '',

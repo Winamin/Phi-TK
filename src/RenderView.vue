@@ -124,25 +124,25 @@ let chartPath = '';
 const choosingChart = ref(false),
   parsingChart = ref(false);
 async function chooseChart(folder?: boolean) {
-  if (choosingChart.value) return;
-  choosingChart.value = true;
-  let file = folder
-    ? await dialog.open({ directory: true })
-    : await dialog.open({
-      filters: [
-        {
-          name: t('choose.filter-name'),
-          extensions: ['zip', 'pez'],
-        },
-        anyFilter(),
-      ],
-    });
-  if (!file) return;
-
-  // noexcept
-  await loadChart(file as string);
-
-  choosingChart.value = false;
+    if (choosingChart.value) return;
+    choosingChart.value = true;
+    try {
+        let file = folder
+            ? await dialog.open({ directory: true })
+            : await dialog.open({
+                  filters: [
+                      {
+                          name: t('choose.filter-name'),
+                          extensions: ['zip', 'pez'],
+                      },
+                      anyFilter(),
+                  ],
+              });
+        if (!file) return;
+        await loadChart(file as string);
+    } finally {
+        choosingChart.value = false;
+    }
 }
 
 async function loadChart(file: string) {

@@ -221,6 +221,7 @@ mod hw_detect {
             .unwrap_or(false)
     }
 }
+
 pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
     Ok(BasicPlayer {
         avatar: if let Some(path) = &config.player_avatar {
@@ -300,6 +301,7 @@ pub fn find_ffmpeg() -> Result<Option<String>> {
         None
     })
 }
+
 pub async fn main() -> Result<()> {
     use crate::ipc::client::*;
 
@@ -381,11 +383,11 @@ pub async fn main() -> Result<()> {
         for i in 0..count {
             let position = i as f64 * ratio;
             let frame = music.sample(position as f32).unwrap_or_default();
+            // 双声道处理：直接使用左右声道数据
             output[start_index + i * 2] += frame.0 * volume_music;
             output[start_index + i * 2 + 1] += frame.1 * volume_music;
         }
-        info!("music Time:{:?}", start_time.elapsed())
-
+        info!("music Time:{:?}", start_time.elapsed());
     }
 
     let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
@@ -398,13 +400,14 @@ pub async fn main() -> Result<()> {
 
         let frames = clip.frames();
         for i in 0..len {
-            slice[i * 2] += frames[i].0 * volume;
-            slice[i * 2 + 1] += frames[i].1 * volume;
+            // 单声道处理：将单声道数据复制到左右声道
+            let sample = frames[i].0 * volume; // 假设左声道为单声道数据
+            slice[i * 2] += sample;
+            slice[i * 2 + 1] += sample;
         }
 
-        return len;
+        len
     };
-
 
     if volume_sfx != 0.0 {
         let start_time = Instant::now();
@@ -420,8 +423,7 @@ pub async fn main() -> Result<()> {
                 }
             }
         }
-        info!("sfx Time:{:?}", start_time.elapsed())
-
+        info!("sfx Time:{:?}", start_time.elapsed());
     }
 
     //ending
@@ -429,7 +431,6 @@ pub async fn main() -> Result<()> {
     while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
     }
-
     let args_str = if target_sample_rate != sample_rate {
         let resample_filter = format!("aresample=resampler=soxr:osr={}", target_sample_rate);
         format!(
@@ -732,12 +733,25 @@ pub async fn main() -> Result<()> {
         if MSAA.load(Ordering::SeqCst) {
             mst.blit();
         }
+
         unsafe {
             use miniquad::gl::*;
             let tex = mst.output().texture.raw_miniquad_texture_handle();
+            let curr_index = frame as usize % N;
+            let next_index = (frame as usize + 1) % N;
+
+            if frame >= 1 {
+                let prev_index = (frame as usize + N - 1) % N;
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[prev_index]);
+                let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8 /*GL_READ_ONLY*/);
+                if !src.is_null() {
+                    input.write_all(std::slice::from_raw_parts(src as *const u8, byte_size))?;
+                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                }
+            }
+
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
-            let read_index = frame as usize % N;
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[read_index]);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[next_index]);
             glReadPixels(
                 0,
                 0,
@@ -747,24 +761,16 @@ pub async fn main() -> Result<()> {
                 GL_UNSIGNED_BYTE,
                 std::ptr::null_mut(),
             );
-
-            let map_index = (frame as usize + N - 1) % N;
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[map_index]);
-            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8); // 0x88B8 = GL_READ_ONLY
-            if !src.is_null() {
-                input.write_all(std::slice::from_raw_parts(src as *const u8, byte_size))?;
-                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-            }
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
         }
         send(IPCEvent::Frame);
     }
 
-    for i in 1..N {
-        let map_index = (frames as usize + N - i) % N;
+    for i in 0..N {
         unsafe {
             use miniquad::gl::*;
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[map_index]);
-            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[i]);
+            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8 /*GL_READ_ONLY*/);
             if !src.is_null() {
                 input.write_all(std::slice::from_raw_parts(src as *const u8, byte_size))?;
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
