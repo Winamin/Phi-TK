@@ -3356,7 +3356,7 @@ dependencies = [
 [[package]]
 name = "prpr"
 version = "0.4.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#3fc75ab0d59f2f244df2b81b6771900ef6908167"
+source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#af69adbc7d0b9826886ddc78413f871e08104df3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3424,7 +3424,7 @@ dependencies = [
 [[package]]
 name = "prpr-avc"
 version = "0.1.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#3fc75ab0d59f2f244df2b81b6771900ef6908167"
+source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#af69adbc7d0b9826886ddc78413f871e08104df3"
 dependencies = [
  "anyhow",
  "tracing",
@@ -3835,7 +3835,7 @@ dependencies = [
 [[package]]
 name = "sasa"
 version = "0.1.0"
-source = "git+https://github.com/Winamin/sasa#eceeb165515c04bda015836923b0bbd9e3cc2027"
+source = "git+https://github.com/Winamin/sasa#fcbb160b24fa9f5ec5964f281f2d18e877b020a2"
 dependencies = [
  "anyhow",
  "cpal",
