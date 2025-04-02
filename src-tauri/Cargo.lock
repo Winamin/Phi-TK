@@ -15,7 +15,7 @@ dependencies = [
  "open 5.3.2",
  "prpr",
  "rayon",
- "sasa 0.1.0 (git+https://github.com/Winamin/sasa)",
+ "sasa",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -3356,7 +3356,7 @@ dependencies = [
 [[package]]
 name = "prpr"
 version = "0.4.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#cc446269fec97705a8eedc75407abc32403ea27e"
+source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#3fc75ab0d59f2f244df2b81b6771900ef6908167"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3400,7 +3400,7 @@ dependencies = [
  "rayon",
  "regex",
  "rfd",
- "sasa 0.1.0 (git+https://github.com/Mivik/sasa)",
+ "sasa",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -3424,7 +3424,7 @@ dependencies = [
 [[package]]
 name = "prpr-avc"
 version = "0.1.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#cc446269fec97705a8eedc75407abc32403ea27e"
+source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#3fc75ab0d59f2f244df2b81b6771900ef6908167"
 dependencies = [
  "anyhow",
  "tracing",
@@ -3835,23 +3835,11 @@ dependencies = [
 [[package]]
 name = "sasa"
 version = "0.1.0"
-source = "git+https://github.com/Mivik/sasa#a8ed07ba4b0635bea22dc36cfa4d9f0c693a08c1"
+source = "git+https://github.com/Winamin/sasa#eceeb165515c04bda015836923b0bbd9e3cc2027"
 dependencies = [
  "anyhow",
  "cpal",
  "oboe 0.5.0",
- "ringbuf",
- "symphonia",
- "thiserror",
-]
-
-[[package]]
-name = "sasa"
-version = "0.1.0"
-source = "git+https://github.com/Winamin/sasa#716d6ab2ddcfd76c8711e416b9529e41e9181161"
-dependencies = [
- "anyhow",
- "cpal",
  "ringbuf",
  "symphonia",
  "thiserror",
