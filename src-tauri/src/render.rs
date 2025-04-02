@@ -264,6 +264,20 @@ pub fn find_ffmpeg() -> Result<Option<String>> {
     } else {
         "ffmpeg"
     };
+
+    if cfg!(target_os = "linux") {
+        let exe_dir = std::env::current_exe()?
+            .parent()
+            .expect("Executable should have parent directory")
+            .to_owned();
+        let bundled_ffmpeg = exe_dir.join(ffmpeg_exe);
+        return Ok(if test(&bundled_ffmpeg) {
+            Some(bundled_ffmpeg.to_string_lossy().into_owned())
+        } else {
+            None
+        });
+    }
+
     if let Some(path_var) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&path_var) {
             let candidate = dir.join(ffmpeg_exe);
@@ -272,6 +286,7 @@ pub fn find_ffmpeg() -> Result<Option<String>> {
             }
         }
     }
+
     eprintln!("Failed to find global ffmpeg. Using bundled ffmpeg");
     let exe_dir = std::env::current_exe()?
         .parent()
@@ -285,7 +300,6 @@ pub fn find_ffmpeg() -> Result<Option<String>> {
         None
     })
 }
-
 pub async fn main() -> Result<()> {
     use crate::ipc::client::*;
 
