@@ -47,6 +47,7 @@ pub struct RenderConfig {
     show_progress_text: bool,
     show_time_text : bool,
     target_audio: u32,
+    autoplay: Option<bool>,
     bitrate_control: String,
     bitrate: String,
 
@@ -93,6 +94,7 @@ impl RenderConfig {
             flid_x: self.flid_x,
             show_progress_text: self.show_progress_text,
             show_time_text: self.show_time_text,
+            autoplay: self.autoplay,
             ..Default::default()
         }
     }
@@ -123,6 +125,7 @@ struct EncoderAvailability {
     h264_amf: bool,
     hevc_amf: bool,
 }
+
 #[cfg(target_os = "windows")]
 mod hw_detect {
     use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};
@@ -383,7 +386,6 @@ pub async fn main() -> Result<()> {
         for i in 0..count {
             let position = i as f64 * ratio;
             let frame = music.sample(position as f32).unwrap_or_default();
-            // 双声道处理：直接使用左右声道数据
             output[start_index + i * 2] += frame.0 * volume_music;
             output[start_index + i * 2 + 1] += frame.1 * volume_music;
         }
@@ -400,8 +402,7 @@ pub async fn main() -> Result<()> {
 
         let frames = clip.frames();
         for i in 0..len {
-            // 单声道处理：将单声道数据复制到左右声道
-            let sample = frames[i].0 * volume; // 假设左声道为单声道数据
+            let sample = frames[i].0 * volume;
             slice[i * 2] += sample;
             slice[i * 2 + 1] += sample;
         }
