@@ -1,92 +1,94 @@
 <i18n>
-en:
-  already-running: Phi TK is already running
-
-  prev-step: Previous
-  next-step: Next
-  steps:
-    choose: 'Choose the chart'
-    config: 'Configure chart'
-    options: 'Render options'
-    render: 'Render'
-
-  choose:
-    archive: Archive
-    folder: Folder
-    can-also-drop: You can also drag & drop the file to here
-    drop: DROP CHART HERE
-
-  chart-file: Chart file
-
-  chart-name: Chart name
-  charter: Charter
-  illustrator: Illustrator
-  level: Level
-  aspect: Aspect ratio
-  dim: Background dim
-
-  tip: Tip
-  tip-placeholder: Leave empty to choose randomly
-
-  width: Width
-  height: Height
-
-  file:
-    title: File
-    chart: Chart file (empty for default)
-    music: Music (empty for default)
-    illustration: Illustration (empty for default)
-
-  preview: Preview
-  render: Render
-
-  render-started: Rendering has started!
-  see-tasks: See tasks
-
-  ffmpeg-not-found: You haven't installed ffmpeg yet. Please download FFmpeg.exe and put it in the specific folder.
-
-zh-CN:
-  already-running: Phi TK 已经在运行
-
-  prev-step: 上一步
-  next-step: 下一步
-  steps:
-    choose: '选择谱面'
-    config: '配置谱面'
-    options: '渲染参数'
-    render: '渲染视频'
-
-  choose:
-    archive: 压缩包
-    folder: 文件夹
-    can-also-drop: 也可以直接拖谱面到窗口哦
-    drop: 拖放谱面到这
-
-  chart-file: 谱面文件
-
-  chart-name: 谱面名
-  charter: 谱师
-  composer: 曲师
-  illustrator: 画师
-  level: 难度
-  aspect: 宽高比
-  dim: 背景昏暗程度
-
-  tip: Tip
-  tip-placeholder: 留空则随机选择
-
-  width: 宽
-  height: 高
-
-  preview: 演示
-  render: 渲染
-
-  render-started: 视频开始渲染了！
-  see-tasks: 查看任务列表
-
-  ffmpeg-not-found: 笨蛋怎么没安装 FFmpeg。请下载 FFmpeg.exe 并放置在指定文件夹内。
-
-</i18n>
+  en:
+    already-running: Phi TK is already running
+  
+    prev-step: Previous
+    next-step: Next
+    steps:
+      choose: 'Choose the chart'
+      config: 'Configure chart'
+      options: 'Render options'
+      render: 'Render'
+  
+    choose:
+      archive: Archive
+      folder: Folder
+      can-also-drop: You can also drag & drop the file to here
+      drop: DROP CHART HERE
+  
+    chart-file: Chart file
+  
+    chart-name: Chart name
+    charter: Charter
+    illustrator: Illustrator
+    level: Level
+    aspect: Aspect ratio
+    dim: Background dim
+  
+    tip: Tip
+    tip-placeholder: Leave empty to choose randomly
+  
+    width: Width
+    height: Height
+  
+    file:
+      title: File
+      chart: Chart file (empty for default)
+      music: Music (empty for default)
+      illustration: Illustration (empty for default)
+  
+    preview: Preview
+    render: Render
+    play: Play
+  
+    render-started: Rendering has started!
+    see-tasks: See tasks
+  
+    ffmpeg-not-found: You haven't installed ffmpeg yet. Please download FFmpeg.exe and put it in the specific folder.
+  
+  zh-CN:
+    already-running: Phi TK 已经在运行
+  
+    prev-step: 上一步
+    next-step: 下一步
+    steps:
+      choose: '选择谱面'
+      config: '配置谱面'
+      options: '渲染参数'
+      render: '渲染视频'
+  
+    choose:
+      archive: 压缩包
+      folder: 文件夹
+      can-also-drop: 也可以直接拖谱面到窗口哦
+      drop: 拖放谱面到这
+  
+    chart-file: 谱面文件
+  
+    chart-name: 谱面名
+    charter: 谱师
+    composer: 曲师
+    illustrator: 画师
+    level: 难度
+    aspect: 宽高比
+    dim: 背景昏暗程度
+  
+    tip: Tip
+    tip-placeholder: 留空则随机选择
+  
+    width: 宽
+    height: 高
+  
+    preview: 演示
+    render: 渲染
+    play: 游玩
+  
+    render-started: 视频开始渲染了！
+    see-tasks: 查看任务列表
+  
+    ffmpeg-not-found: 笨蛋怎么没安装 FFmpeg。请下载 FFmpeg.exe 并放置在指定文件夹内。
+  
+  </i18n>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
@@ -124,25 +126,25 @@ let chartPath = '';
 const choosingChart = ref(false),
   parsingChart = ref(false);
 async function chooseChart(folder?: boolean) {
-    if (choosingChart.value) return;
-    choosingChart.value = true;
-    try {
-        let file = folder
-            ? await dialog.open({ directory: true })
-            : await dialog.open({
-                  filters: [
-                      {
-                          name: t('choose.filter-name'),
-                          extensions: ['zip', 'pez'],
-                      },
-                      anyFilter(),
-                  ],
-              });
-        if (!file) return;
-        await loadChart(file as string);
-    } finally {
-        choosingChart.value = false;
-    }
+  if (choosingChart.value) return;
+  choosingChart.value = true;
+  try {
+    let file = folder
+      ? await dialog.open({ directory: true })
+      : await dialog.open({
+        filters: [
+          {
+            name: t('choose.filter-name'),
+            extensions: ['zip', 'pez'],
+          },
+          anyFilter(),
+        ],
+      });
+    if (!file) return;
+    await loadChart(file as string);
+  } finally {
+    choosingChart.value = false;
+  }
 }
 
 async function loadChart(file: string) {
@@ -221,6 +223,20 @@ async function previewChart() {
   try {
     let params = await buildParams();
     if (!params) return false;
+    params.config.autoplay = true;
+    await invoke('preview_chart', { params });
+    return true;
+  } catch (e) {
+    toastError(e);
+    return false;
+  }
+}
+
+async function playChart() {
+  try {
+    let params = await buildParams();
+    if (!params) return false;
+    params.config.autoplay = false;
     await invoke('preview_chart', { params });
     return true;
   } catch (e) {
@@ -306,72 +322,61 @@ function onHoverMove(e: MouseEvent) {
 }
 const archiveStyle = computed(() => ({
   transform: `translate(
-    ${moveOffset.value.x * 1.2}px,
-    ${moveOffset.value.y * 1.2}px
-  ) rotate3d(
-    ${moveOffset.value.y / 20},
-    ${-moveOffset.value.x / 20},
-    0,
-    ${Math.sqrt(moveOffset.value.x**2 + moveOffset.value.y**2) / 4}deg
-  )`,
-  filter: `drop-shadow(${moveOffset.value.x/4}px ${moveOffset.value.y/4}px 6px rgba(99, 102, 241, 0.2))`
+      ${moveOffset.value.x * 1.2}px,
+      ${moveOffset.value.y * 1.2}px
+    ) rotate3d(
+      ${moveOffset.value.y / 20},
+      ${-moveOffset.value.x / 20},
+      0,
+      ${Math.sqrt(moveOffset.value.x ** 2 + moveOffset.value.y ** 2) / 4}deg
+    )`,
+  filter: `drop-shadow(${moveOffset.value.x / 4}px ${moveOffset.value.y / 4}px 6px rgba(99, 102, 241, 0.2))`
 }));
 
 const folderStyle = computed(() => ({
   transform: `translate(
-    ${-moveOffset.value.x * 0.8}px,
-    ${-moveOffset.value.y * 0.8}px
-  ) rotate3d(
-    ${-moveOffset.value.y / 20},
-    ${moveOffset.value.x / 20},
-    0,
-    ${Math.sqrt(moveOffset.value.x**2 + moveOffset.value.y**2) / 6}deg
-  )`,
-  filter: `drop-shadow(${-moveOffset.value.x/4}px ${-moveOffset.value.y/4}px 6px rgba(99, 102, 241, 0.2))`
+      ${-moveOffset.value.x * 0.8}px,
+      ${-moveOffset.value.y * 0.8}px
+    ) rotate3d(
+      ${-moveOffset.value.y / 20},
+      ${moveOffset.value.x / 20},
+      0,
+      ${Math.sqrt(moveOffset.value.x ** 2 + moveOffset.value.y ** 2) / 6}deg
+    )`,
+  filter: `drop-shadow(${-moveOffset.value.x / 4}px ${-moveOffset.value.y / 4}px 6px rgba(99, 102, 241, 0.2))`
 }));
 </script>
 
 <template>
   <div class="pa-8 w-100 h-100" style="max-width: 1280px">
-    <v-stepper alt-labels v-model="stepIndex" hide-actions :items="steps.map((x) => t('steps.' + x))" class="elevated-stepper">
+    <v-stepper alt-labels v-model="stepIndex" hide-actions :items="steps.map((x) => t('steps.' + x))"
+      class="elevated-stepper">
       <div v-if="step === 'config' || step === 'options'" class="d-flex flex-row pa-6 pb-4 pt-0">
         <v-btn variant="text" @click="stepIndex && stepIndex--" v-t="'prev-step'"></v-btn>
         <div class="flex-grow-1"></div>
+        <v-btn v-if="step === 'options'" variant="tonal" @click="playChart" class="mr-2" v-t="'play'"></v-btn>
         <v-btn v-if="step === 'options'" variant="tonal" @click="previewChart" class="mr-2" v-t="'preview'"></v-btn>
-        <v-btn variant="tonal" @click="moveNext" class="gradient-primary">{{ step === 'options' ? t('render') : t('next-step') }}</v-btn>
+        <v-btn variant="tonal" @click="moveNext" class="gradient-primary">
+          {{ step === 'options' ? t('render') : t('next-step') }}
+        </v-btn>
       </div>
 
       <template v-slot:item.1>
-        <div
-          class="mt-8 d-flex"
-          style="gap: 1rem"
-          @mousemove="onHoverMove"
-          @mouseleave="resetHover"
-          ref="hoverContainer"
-        >
+        <div class="mt-8 d-flex" style="gap: 1rem" @mousemove="onHoverMove" @mouseleave="resetHover"
+          ref="hoverContainer">
           <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
-            <v-btn
-              :style="archiveStyle"
-              class="w-75 gradient-primary hover-movable"
-              style="overflow: hidden"
-              size="large"
-              @click="chooseChart(false)"
-              prepend-icon="mdi-folder-zip"
-            >{{ t('choose.archive') }}</v-btn>
+            <v-btn :style="archiveStyle" class="w-75 gradient-primary hover-movable" style="overflow: hidden"
+              size="large" @click="chooseChart(false)" prepend-icon="mdi-folder-zip">{{ t('choose.archive') }}</v-btn>
           </div>
           <v-divider vertical></v-divider>
           <div class="flex-grow-1 d-flex align-center justify-center w-0">
-            <v-btn
-              :style="folderStyle"
-              class="w-75 gradient-primary hover-movable"
-              size="large"
-              @click="chooseChart(true)"
-              prepend-icon="mdi-folder"
-            >{{ t('choose.folder') }}</v-btn>
+            <v-btn :style="folderStyle" class="w-75 gradient-primary hover-movable" size="large"
+              @click="chooseChart(true)" prepend-icon="mdi-folder">{{ t('choose.folder') }}</v-btn>
           </div>
         </div>
         <p class="mb-8 w-100 text-center mt-2 text-disabled" v-t="'choose.can-also-drop'"></p>
-        <v-overlay v-model="parsingChart" contained class="align-center justify-center" persistent :close-on-content-click="false">
+        <v-overlay v-model="parsingChart" contained class="align-center justify-center" persistent
+          :close-on-content-click="false">
           <v-progress-circular indeterminate> </v-progress-circular>
         </v-overlay>
       </template>
@@ -380,16 +385,19 @@ const folderStyle = computed(() => ({
         <v-form ref="form" v-if="chartInfo">
           <v-row no-gutters class="mx-n2">
             <v-col cols="8">
-              <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="chartInfo.name"></v-text-field>
+              <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]"
+                v-model="chartInfo.name"></v-text-field>
             </v-col>
             <v-col cols="4">
-              <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]" v-model="chartInfo.level"></v-text-field>
+              <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]"
+                v-model="chartInfo.level"></v-text-field>
             </v-col>
           </v-row>
 
           <v-row no-gutters class="mx-n2 mt-1">
             <v-col cols="12" sm="4">
-              <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]" v-model="chartInfo.charter"></v-text-field>
+              <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]"
+                v-model="chartInfo.charter"></v-text-field>
             </v-col>
             <v-col cols="12" sm="4">
               <v-text-field class="mx-2" :label="t('composer')" v-model="chartInfo.composer"></v-text-field>
@@ -404,20 +412,24 @@ const folderStyle = computed(() => ({
               <div class="mx-2 d-flex flex-column">
                 <p class="text-caption" v-t="'aspect'"></p>
                 <div class="d-flex flex-row align-center justify-center">
-                  <v-text-field type="number" class="mr-2" :rules="[RULES.positive]" :label="t('width')" v-model="aspectWidth"></v-text-field>
+                  <v-text-field type="number" class="mr-2" :rules="[RULES.positive]" :label="t('width')"
+                    v-model="aspectWidth"></v-text-field>
                   <p>:</p>
-                  <v-text-field type="number" class="ml-2" :rules="[RULES.positive]" :label="t('height')" v-model="aspectHeight"></v-text-field>
+                  <v-text-field type="number" class="ml-2" :rules="[RULES.positive]" :label="t('height')"
+                    v-model="aspectHeight"></v-text-field>
                 </div>
               </div>
             </v-col>
             <v-col cols="8" class="px-6">
-              <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01" v-model="chartInfo.backgroundDim"></v-slider>
+              <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01"
+                v-model="chartInfo.backgroundDim"></v-slider>
             </v-col>
           </v-row>
 
           <v-row no-gutters class="mx-n2 mt-1">
             <v-col cols="12">
-              <v-text-field class="mx-2" :label="t('tip')" :placeholder="t('tip-placeholder')" v-model="chartInfo.tip"></v-text-field>
+              <v-text-field class="mx-2" :label="t('tip')" :placeholder="t('tip-placeholder')"
+                v-model="chartInfo.tip"></v-text-field>
             </v-col>
           </v-row>
         </v-form>
@@ -435,7 +447,8 @@ const folderStyle = computed(() => ({
         </div>
       </template>
     </v-stepper>
-    <v-overlay v-model="fileHovering" contained class="align-center justify-center drop-zone-overlay" persistent :close-on-content-click="false">
+    <v-overlay v-model="fileHovering" contained class="align-center justify-center drop-zone-overlay" persistent
+      :close-on-content-click="false">
       <div class="drop-pulse">
         <h1 v-t="'choose.drop'"></h1>
       </div>
@@ -445,12 +458,10 @@ const folderStyle = computed(() => ({
 
 <style scoped>
 .gradient-primary {
-  background: linear-gradient(
-    45deg,
-    #6366f1,
-    #8b5cf6,
-    #ec4899
-  ) !important;
+  background: linear-gradient(45deg,
+      #6366f1,
+      #8b5cf6,
+      #ec4899) !important;
   box-shadow: 0 4px 6px -1px rgb(99 102 241 / 0.3);
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
@@ -464,12 +475,10 @@ const folderStyle = computed(() => ({
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(
-    45deg,
-    transparent 25%,
-    rgba(255,255,255,0.1) 50%,
-    transparent 75%
-  );
+  background: linear-gradient(45deg,
+      transparent 25%,
+      rgba(255, 255, 255, 0.1) 50%,
+      transparent 75%);
   background-size: 200% 200%;
   opacity: 0;
   transition: opacity 0.3s;
@@ -481,8 +490,13 @@ const folderStyle = computed(() => ({
 }
 
 @keyframes shine {
-  0% { background-position: 150% 150%; }
-  100% { background-position: -50% -50%; }
+  0% {
+    background-position: 150% 150%;
+  }
+
+  100% {
+    background-position: -50% -50%;
+  }
 }
 
 .hover-scale-card {
@@ -492,9 +506,7 @@ const folderStyle = computed(() => ({
 
 .hover-scale-card:hover {
   transform:
-    scale(1.05)
-    translateY(-8px)
-    rotateZ(2deg);
+    scale(1.05) translateY(-8px) rotateZ(2deg);
   z-index: 10;
   box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.3);
 }
@@ -506,7 +518,7 @@ const folderStyle = computed(() => ({
     0 0 40px -10px rgb(99 102 241 / 0.3) !important;
   background: rgba(23, 9, 99, 0.9) !important;
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .drop-zone-overlay {
@@ -522,8 +534,15 @@ const folderStyle = computed(() => ({
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 :deep(.v-stepper-header__item) {
@@ -549,19 +568,13 @@ const folderStyle = computed(() => ({
 .v-stepper__content-leave-to {
   opacity: 0;
   transform:
-    translateX(-20px)
-    perspective(500px)
-    rotateY(10deg)
-    scale(0.98);
+    translateX(-20px) perspective(500px) rotateY(10deg) scale(0.98);
 }
 
 .v-stepper__content-enter-from {
   opacity: 0;
   transform:
-    translateX(20px)
-    perspective(500px)
-    rotateY(-10deg)
-    scale(0.98);
+    translateX(20px) perspective(500px) rotateY(-10deg) scale(0.98);
 }
 
 .v-text-field :deep(.v-field) {
@@ -588,5 +601,4 @@ const folderStyle = computed(() => ({
   box-shadow:
     0 0 0 6px rgb(99 102 241 / 0.15) !important;
 }
-
 </style>
