@@ -50,6 +50,7 @@ pub struct RenderConfig {
     autoplay: Option<bool>,
     bitrate_control: String,
     bitrate: String,
+    watermark: String,
 
     aggressive: bool,
     challenge_color: ChallengeModeColor,
@@ -95,6 +96,7 @@ impl RenderConfig {
             show_progress_text: self.show_progress_text,
             show_time_text: self.show_time_text,
             autoplay: self.autoplay,
+            watermark: self.watermark.clone(),
             ..Default::default()
         }
     }

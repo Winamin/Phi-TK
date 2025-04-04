@@ -61,6 +61,7 @@
     buffer_size-tips: Not very useful
     target_audio: Target sample rate
     combo: Customize COMBO Text
+    watermark: Watermark Text
     flid_x: Mirror Mode
     show_progress_text: Progress bar 1
     show_progress_text-tips: Percent scale display
@@ -144,6 +145,7 @@
     buffer_size-tips: 用处不大
     target_audio: 目标采样率
     combo: 自定义COMBO名称
+    watermark: 水印
     flid_x: 镜像模式
     show_progress_text: 进度条1
     show_progress_text-tips: 百分之比例显示
@@ -221,6 +223,7 @@
     playerRks = ref('15.0');
   
   const combo = ref('AUTOPLAY')
+  const watermark = ref('')
   
   async function chooseAvatar() {
     let file = await open({
@@ -334,6 +337,7 @@
       volumeMusic: volumeMusic.value,
       volumeSfx: volumeSfx.value,
       combo: combo.value,
+      watermark: watermark.value,
       showProgressText: showProgressText.value,
       showTimeText: showTimeText.value,
     };
@@ -391,6 +395,7 @@
     volumeMusic.value = config.volumeMusic;
     volumeSfx.value = config.volumeSfx;
     combo.value = config.combo;
+    watermark.value = config.watermark;
     showProgressText.value = config.showProgressText;
     showTimeText.value = config.showTimeText;
   }
@@ -428,6 +433,7 @@
     volumeMusic: 1,
     volumeSfx: 1,
     combo: 'AUTOPLAY',
+    watermark: '',
     showProgressText: false,
     showTimeText: false,
   };
@@ -831,8 +837,16 @@
               />
             </v-col>
             <v-col cols="12" md="6">
-              <v-text-field 
-                :label="t('combo')" 
+              <v-text-field
+                :label="t('watermark')"
+                density="compact"
+                variant="outlined"
+                v-model="watermark"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                :label="t('combo')"
                 density="compact"
                 variant="outlined"
                 v-model="combo"
