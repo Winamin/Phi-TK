@@ -61,6 +61,7 @@ export interface RenderConfig {
   chartRatio: number;
   bufferSize: number;
   combo: string;
+  watermark: string;
   fps: number;
   hardwareAccel: boolean;
   hevc: boolean;
