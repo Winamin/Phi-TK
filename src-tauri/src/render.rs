@@ -8,7 +8,7 @@ use prpr::{
     core::{internal_id, MSRenderTarget, NoteKind},
     fs,
     info::ChartInfo,
-    scene::{BasicPlayer, GameMode, GameScene, LoadingScene, EndingScene},
+    scene::{BasicPlayer, GameMode, GameScene, LoadingScene},
     time::TimeManager,
     ui::{FontArc, TextPainter},
     Main,
@@ -17,7 +17,7 @@ use sasa::AudioClip;
 use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
-    io::{BufRead, BufWriter, Write, self},
+    io::{BufRead, BufWriter, Write},
     ops::DerefMut,
     path::PathBuf,
     process::{Command, Stdio},
@@ -613,7 +613,7 @@ pub async fn main() -> Result<()> {
     };
 
     let ffmpeg_encoder = candidates.iter()
-        .find(|&&(name, available)| available)
+        .find(|&&(_name, available)| available)
         .map(|&(name, _)| name)
         .expect("At least one software encoder is available.");
 
@@ -740,7 +740,7 @@ pub async fn main() -> Result<()> {
         unsafe {
             use miniquad::gl::*;
             let tex = mst.output().texture.raw_miniquad_texture_handle();
-            let curr_index = frame as usize % N;
+            let _curr_index = frame as usize % N;
             let next_index = (frame as usize + 1) % N;
 
             if frame >= 1 {
