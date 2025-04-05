@@ -2,7 +2,7 @@ use crate::render::{build_player, RenderParams};
 use anyhow::Result;
 use macroquad::prelude::*;
 use prpr::{
-    config::{Config, Mods},
+    config::{Mods},
     fs,
     scene::{show_error, GameMode, LoadingScene, NextScene, Scene},
     time::TimeManager,
