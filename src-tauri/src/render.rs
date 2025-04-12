@@ -791,6 +791,19 @@ pub async fn main() -> Result<()> {
         }
         send(IPCEvent::Frame);
     }
+
+    for i in 1..N {
+        unsafe {
+            use miniquad::gl::*;
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[(frames as usize + i) % N]);
+            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
+            if !src.is_null() {
+                input.write_all(&std::slice::from_raw_parts(src as *const u8, byte_size))?;
+                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            }
+        }
+    }
+    input.flush()?;
     drop(input);
     info!("Render Time: {:.2?}", render_start_time.elapsed());
     info!(
