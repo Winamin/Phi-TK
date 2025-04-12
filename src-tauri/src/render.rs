@@ -502,7 +502,7 @@ pub async fn main() -> Result<()> {
 
     let fps = params.config.fps;
     let frame_delta = 1. / fps as f32;
-    let frames = (video_length / frame_delta as f64).ceil() as u64;
+    let frames = (video_length * fps as f64).round() as u64;
     send(IPCEvent::StartRender(frames));
     /*
         let codecs = String::from_utf8(
@@ -742,12 +742,21 @@ pub async fn main() -> Result<()> {
     let mut step_time = Instant::now();
     for frame in N as u64..frames {
         if frame % frames10 == 0 {
-            let proc = (frame as f32 / frames as f32 * 100.).ceil() as i8 / 10 * 10;
+            let progress = frame as f32 / frames as f32;
+            let percent = (progress * 100.).ceil() as i8;
+            let bar_width = 20;
+            let filled = (progress * bar_width as f32).round() as usize;
+            let empty = bar_width - filled;
+
             info!(
-                "Render Progress: {:.0}% Time Elapsed: {:.2}s",
-                proc,
-                step_time.elapsed().as_secs_f32()
-            );
+                "Rendering: [{}{}] {:>3}% | Time: {:.2}s | Frames: {}/{}",
+                "█".repeat(filled),
+                " ".repeat(empty),
+                percent,
+                step_time.elapsed().as_secs_f32(),
+                frame,
+                frames
+                );
             step_time = Instant::now();
         }
         *my_time.borrow_mut() = (frame as f64 / fps).max(0.);
