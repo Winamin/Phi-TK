@@ -294,14 +294,27 @@ function handleMouseLeave(taskId: string) {
       </v-card>
     </div>
 
-    <v-dialog v-model="errorDialog" width="auto" min-width="400px">
-      <v-card class="glass-background">
-        <v-card-title class="text-gradient" v-t="'error'"></v-card-title>
+    <v-dialog
+      v-model="errorDialog"
+      width="auto"
+      min-width="400px"
+      scrim="#000000CC"
+      persistent
+      transition="dialog-bottom-transition"
+    >
+      <v-card class="error-dialog">
+        <v-card-title class="d-flex align-center">
+          <v-icon color="error" class="mr-2">mdi-alert</v-icon>
+          <span class="text-error">Error</span>
+        </v-card-title>
+        <v-divider></v-divider>
         <v-card-text>
-          <pre class="block whitespace-pre overflow-auto" style="max-height: 60vh">{{ errorDialogMessage }}</pre>
+          <pre class="error-message">{{ errorDialogMessage }}</pre>
         </v-card-text>
         <v-card-actions class="justify-end">
-          <v-btn color="primary" variant="flat" @click="errorDialog = false" v-t="'confirm'" class="hover-scale"></v-btn>
+          <v-btn color="error" variant="text" @click="errorDialog = false">
+            Close
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -351,7 +364,7 @@ function handleMouseLeave(taskId: string) {
 }
 */
 .v-btn {
-  background: linear-gradient(45deg, #2196f3, #e91e63);
+  background: linear-gradient(45deg,#2196f3);
   border-radius: 50px;
   box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
   transition:
@@ -377,7 +390,7 @@ function handleMouseLeave(taskId: string) {
 }
 
 .text-gradient {
-  background: linear-gradient(45deg, #2196f3, #e91e63);
+  background: linear-gradient(45deg, #2196f3);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -403,5 +416,28 @@ pre {
 .v-slide-y-transition-enter-from {
   opacity: 0;
   transform: translateY(-20px);
+}
+
+.v-overlay--active {
+  opacity: 0.8 !important;
+  background-color: #000000 !important;
+  backdrop-filter: blur(10px);
+}
+
+.error-dialog {
+  background: #1E1E1E;
+  border-radius: 16px !important;
+  border: 2px solid #FF5252;
+  box-shadow: 0 0 20px rgba(255, 82, 82, 0.3);
+}
+
+.error-message {
+  color: #FF5252;
+  font-family: monospace;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 12px;
+  border-radius: 4px;
+  max-height: 60vh;
+  overflow: auto;
 }
 </style>
