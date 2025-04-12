@@ -271,7 +271,6 @@ pub fn find_ffmpeg() -> Result<Option<String>> {
         "ffmpeg"
     };
 
-    // 优先检查当前目录的FFmpeg（适用于所有系统，或特定调整）
     let exe_dir = std::env::current_exe()?
         .parent()
         .expect("Executable should have parent directory")
@@ -281,7 +280,6 @@ pub fn find_ffmpeg() -> Result<Option<String>> {
         return Ok(Some(bundled_ffmpeg.to_string_lossy().into_owned()));
     }
 
-    // 检查系统PATH中的FFmpeg
     if let Some(path_var) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&path_var) {
             let candidate = dir.join(ffmpeg_exe);
@@ -291,7 +289,6 @@ pub fn find_ffmpeg() -> Result<Option<String>> {
         }
     }
 
-    // 最终回退到当前目录（例如Linux下提示后使用）
     eprintln!("Failed to find global ffmpeg. Using bundled ffmpeg");
     Ok(if test(&bundled_ffmpeg) {
         Some(bundled_ffmpeg.to_string_lossy().into_owned())
