@@ -231,13 +231,12 @@ pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
     Ok(BasicPlayer {
         avatar: if let Some(path) = &config.player_avatar {
             Some(
-                Texture2D::from_file_with_format(
+                SafeTexture::from(Texture2D::from_file_with_format(
                     &tokio::fs::read(path)
                         .await
                         .with_context(|| tl!("load-avatar-failed"))?,
                     None,
-                )
-                    .into(),
+                ))
             )
         } else {
             None
