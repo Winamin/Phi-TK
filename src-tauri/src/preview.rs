@@ -10,6 +10,7 @@ use prpr::{
     Main,
 };
 use std::io::BufRead;
+use macroquad::texture::RenderTarget;
 
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
