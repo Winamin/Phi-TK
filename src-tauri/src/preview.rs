@@ -10,8 +10,6 @@ use prpr::{
     Main,
 };
 use std::io::BufRead;
-use macroquad::texture::RenderTarget;
-
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
     fn on_result(&mut self, _tm: &mut TimeManager, result: Box<dyn std::any::Any>) -> Result<()> {
@@ -24,7 +22,7 @@ impl Scene for BaseScene {
         self.1 = true;
         Ok(())
     }
-    fn enter(&mut self, _tm: &mut TimeManager, _target: std::option::Option<macroquad::texture::RenderTarget>) -> Result<()> {
+    fn enter(&mut self, _tm: &mut TimeManager, _target: Option<RenderTarget>) -> Result<()> {
         if self.0.is_none() && !self.1 {
             self.0 = Some(NextScene::Exit);
         }

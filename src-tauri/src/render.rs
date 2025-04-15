@@ -28,7 +28,6 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 use crate::Path;
-use macroquad::texture::Texture2D; 
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -232,12 +231,13 @@ pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
     Ok(BasicPlayer {
         avatar: if let Some(path) = &config.player_avatar {
             Some(
-                SafeTexture::from(Texture2D::from_file_with_format(
+                Texture2D::from_file_with_format(
                     &tokio::fs::read(path)
                         .await
                         .with_context(|| tl!("load-avatar-failed"))?,
                     None,
-                ))
+                )
+                .into(),
             )
         } else {
             None
