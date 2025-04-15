@@ -491,7 +491,7 @@ pub async fn main() -> Result<()> {
     const A: f64 = 0.7 + 0.3 + 0.4 - 0.4;
 
     let fps = params.config.fps;
-    let frame_delta = 1. / fps as f32;
+    //let frame_delta = 1. / fps as f32;
     let frames = (video_length * fps as f64).round() as u64;
     send(IPCEvent::StartRender(frames));
     /*
