@@ -67,6 +67,7 @@
     show_progress_text-tips: Percent scale display
     show_time_text: Progress bar 2
     show_time_text-tips: Time display
+    background: Remove background rendering
   
     presets: Presets
     preset-refresh: Refresh
@@ -151,6 +152,7 @@
     show_progress_text-tips: 百分之比例显示
     show_time_text: 进度条2
     show_time_text-tips: 时间显示
+    background: 只显示背景
   
     presets: 预设配置
     preset-refresh: 刷新
@@ -293,6 +295,7 @@
   const bufferSize = ref(256)
   const showProgressText = ref(false)
   const showTimeText = ref(false)
+  const background = ref(false)
   
   const STD_CHALLENGE_COLORS = ['white', 'green', 'blue', 'red', 'golden', 'rainbow'];
   
@@ -319,6 +322,7 @@
       bitrateControl: bitrateControl.value,
       bitrate: bitrate.value,
       targetAudio: targetAudio.value,
+      background: background.value,
   
       aggressive: aggressive.value,
       challengeColor: STD_CHALLENGE_COLORS[t('challenge-colors').split(',').indexOf(challengeColor.value)],
@@ -378,6 +382,7 @@
     bitrateControl.value = config.bitrateControl;
     bitrate.value = config.bitrate;
     targetAudio.value = config.targetAudio;
+    background.value = config.background;
   
     aggressive.value = config.aggressive;
     challengeColor.value = t('challenge-colors').split(',')[STD_CHALLENGE_COLORS.indexOf(config.challengeColor)];
@@ -415,6 +420,7 @@
     bitrateControl: 'CRF',
     bitrate: '28',
     targetAudio: 96000,
+    background: false,
   
     aggressive: false,
     challengeColor: 'golden',
@@ -827,7 +833,7 @@
           </div>
   
           <v-row dense>
-            <v-col cols="12" md="6">
+            <v-col cols="4" md="4">
               <v-text-field 
                 :label="t('ending-length')" 
                 type="number" 
@@ -836,7 +842,7 @@
                 v-model="endingLength"
               />
             </v-col>
-            <v-col cols="12" md="6">
+            <v-col cols="4" md="4">
               <v-text-field
                 :label="t('watermark')"
                 density="compact"
@@ -844,7 +850,7 @@
                 v-model="watermark"
               />
             </v-col>
-            <v-col cols="12" md="6">
+            <v-col cols="4" md="4">
               <v-text-field
                 :label="t('combo')"
                 density="compact"
@@ -872,7 +878,7 @@
           />
   
           <v-row dense>
-            <v-col cols="6" md="4">
+            <v-col cols="4" md="4">
               <v-switch 
                 :label="t('disable-loading')" 
                 density="compact" 
@@ -880,7 +886,15 @@
                 v-model="disableLoading"
               />
             </v-col>
-            <v-col cols="6" md="4">
+            <v-col cols="4" md="4">
+              <v-switch
+                :label="t('background')"
+                density="compact"
+                color="primary"
+                v-model="background"
+              />
+            </v-col>
+            <v-col cols="4" md="4">
               <v-switch 
                 :label="t('show_progress_text')" 
                 density="compact" 
@@ -888,7 +902,7 @@
                 v-model="showProgressText"
               />
             </v-col>
-            <v-col cols="6" md="4">
+            <v-col cols="4" md="4">
               <v-switch 
                 :label="t('show_time_text')" 
                 density="compact" 
@@ -896,7 +910,7 @@
                 v-model="showTimeText"
               />
             </v-col>
-            <v-col cols="6" md="4">
+            <v-col cols="4" md="4">
               <v-switch 
                 :label="t('chart_debug')" 
                 density="compact" 
@@ -904,7 +918,7 @@
                 v-model="chartDebug"
               />
             </v-col>
-            <v-col cols="6" md="4">
+            <v-col cols="4" md="4">
               <v-switch 
                 :label="t('flid_x')" 
                 density="compact" 

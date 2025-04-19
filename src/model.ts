@@ -62,6 +62,7 @@ export interface RenderConfig {
   bufferSize: number;
   combo: string;
   watermark: string;
+  background: boolean;
   fps: number;
   hardwareAccel: boolean;
   hevc: boolean;
