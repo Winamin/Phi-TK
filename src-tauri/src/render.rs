@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 prpr::tl_file!("render");
 
+use crate::Path;
 use anyhow::{bail, Context, Result};
 use macroquad::{miniquad::gl::GLuint, prelude::*};
 use prpr::{
@@ -27,7 +28,6 @@ use std::{
 };
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
-use crate::Path;
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -45,7 +45,7 @@ pub struct RenderConfig {
     hardware_accel: bool,
     hevc: bool,
     show_progress_text: bool,
-    show_time_text : bool,
+    show_time_text: bool,
     target_audio: u32,
     autoplay: Option<bool>,
     bitrate_control: String,
@@ -104,7 +104,6 @@ impl RenderConfig {
     }
 }
 
-
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderParams {
@@ -132,8 +131,8 @@ struct EncoderAvailability {
 
 #[cfg(target_os = "windows")]
 mod hw_detect {
-    use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};
     use std::path::Path;
+    use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
 
     pub fn detect_nvidia() -> bool {
         RegKey::predef(HKEY_LOCAL_MACHINE)
@@ -145,7 +144,7 @@ mod hw_detect {
         let mut found = false;
         let classes = [
             "{4d36e968-e325-11ce-bfc1-08002be10318}", // Display adapters
-            "{4d36e97d-e325-11ce-bfc1-08002be10318}"  // System devices
+            "{4d36e97d-e325-11ce-bfc1-08002be10318}", // System devices
         ];
 
         for class in classes {
@@ -168,8 +167,8 @@ mod hw_detect {
     }
 
     pub fn detect_amd() -> bool {
-        Path::new(r"C:\Windows\System32\amdvlk64.dll").exists() ||
-            Path::new(r"C:\Windows\System32\amfrt64.dll").exists()
+        Path::new(r"C:\Windows\System32\amdvlk64.dll").exists()
+            || Path::new(r"C:\Windows\System32\amfrt64.dll").exists()
     }
 }
 
@@ -179,21 +178,20 @@ mod hw_detect {
     use std::process::Command;
 
     pub fn detect_nvidia() -> bool {
-        Path::new("/dev/nvidia0").exists() ||
-            Command::new("nvidia-smi").status().is_ok()
+        Path::new("/dev/nvidia0").exists() || Command::new("nvidia-smi").status().is_ok()
     }
 
     pub fn detect_intel_qsv() -> bool {
-        Path::new("/dev/dri/renderD128").exists() &&
-            Command::new("vainfo")
+        Path::new("/dev/dri/renderD128").exists()
+            && Command::new("vainfo")
                 .output()
                 .map(|out| String::from_utf8_lossy(&out.stdout).contains("VAProfileH264"))
                 .unwrap_or(false)
     }
 
     pub fn detect_amd() -> bool {
-        Path::new("/dev/kfd").exists() &&
-            Command::new("vainfo")
+        Path::new("/dev/kfd").exists()
+            && Command::new("vainfo")
                 .output()
                 .map(|out| String::from_utf8_lossy(&out.stdout).contains("AMD"))
                 .unwrap_or(false)
@@ -485,7 +483,7 @@ pub async fn main() -> Result<()> {
             }
         },
     )
-        .await?;
+    .await?;
     main.top_level = false;
     main.viewport = Some((0, 0, vw as _, vh as _));
 
@@ -559,7 +557,17 @@ pub async fn main() -> Result<()> {
 
     fn test_encoder(ffmpeg: &Path, encoder: &str) -> Result<bool> {
         let output = cmd_hidden(&ffmpeg)
-            .args(&["-f", "lavfi", "-i", "color=c=black:s=320x240:d=0", "-c:v", encoder, "-f", "null", "-"])
+            .args(&[
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=black:s=320x240:d=0",
+                "-c:v",
+                encoder,
+                "-f",
+                "null",
+                "-",
+            ])
             .arg("-loglevel")
             .arg("fatal")
             .arg("-hide_banner")
@@ -572,9 +580,13 @@ pub async fn main() -> Result<()> {
 
     let hw_detected = EncoderAvailability {
         h264_nvenc: params.config.hardware_accel && hw_detect::detect_nvidia(),
-        hevc_nvenc: params.config.hardware_accel && params.config.hevc && hw_detect::detect_nvidia(),
+        hevc_nvenc: params.config.hardware_accel
+            && params.config.hevc
+            && hw_detect::detect_nvidia(),
         h264_qsv: params.config.hardware_accel && hw_detect::detect_intel_qsv(),
-        hevc_qsv: params.config.hardware_accel && params.config.hevc && hw_detect::detect_intel_qsv(),
+        hevc_qsv: params.config.hardware_accel
+            && params.config.hevc
+            && hw_detect::detect_intel_qsv(),
         h264_amf: params.config.hardware_accel && hw_detect::detect_amd(),
         hevc_amf: params.config.hardware_accel && params.config.hevc && hw_detect::detect_amd(),
     };
@@ -604,7 +616,8 @@ pub async fn main() -> Result<()> {
         ]
     };
 
-    let ffmpeg_encoder = candidates.iter()
+    let ffmpeg_encoder = candidates
+        .iter()
         .find(|&&(_name, available)| available)
         .map(|&(name, _)| name)
         .expect("At least one software encoder is available.");
@@ -617,10 +630,30 @@ pub async fn main() -> Result<()> {
     };
 
     let ffmpeg_preset_name = match ffmpeg_encoder {
-        "h264_nvenc" | "hevc_nvenc" => params.config.ffmpeg_preset.split_whitespace().nth(1).unwrap_or("p4"),
-        "h264_qsv" | "hevc_qsv" => params.config.ffmpeg_preset.split_whitespace().next().unwrap_or("medium"),
-        "h264_amf" | "hevc_amf" => params.config.ffmpeg_preset.split_whitespace().nth(2).unwrap_or("balanced"),
-        _ => params.config.ffmpeg_preset.split_whitespace().next().unwrap_or("medium"),
+        "h264_nvenc" | "hevc_nvenc" => params
+            .config
+            .ffmpeg_preset
+            .split_whitespace()
+            .nth(1)
+            .unwrap_or("p4"),
+        "h264_qsv" | "hevc_qsv" => params
+            .config
+            .ffmpeg_preset
+            .split_whitespace()
+            .next()
+            .unwrap_or("medium"),
+        "h264_amf" | "hevc_amf" => params
+            .config
+            .ffmpeg_preset
+            .split_whitespace()
+            .nth(2)
+            .unwrap_or("balanced"),
+        _ => params
+            .config
+            .ffmpeg_preset
+            .split_whitespace()
+            .next()
+            .unwrap_or("medium"),
     };
 
     let bitrate_control = if params.config.bitrate_control == "CRF" {
@@ -635,8 +668,12 @@ pub async fn main() -> Result<()> {
     };
 
     if params.config.hardware_accel {
-        let h264_supported = encoder_availability.h264_nvenc || encoder_availability.h264_qsv || encoder_availability.h264_amf;
-        let hevc_supported = encoder_availability.hevc_nvenc || encoder_availability.hevc_qsv || encoder_availability.hevc_amf;
+        let h264_supported = encoder_availability.h264_nvenc
+            || encoder_availability.h264_qsv
+            || encoder_availability.h264_amf;
+        let hevc_supported = encoder_availability.hevc_nvenc
+            || encoder_availability.hevc_qsv
+            || encoder_availability.hevc_amf;
 
         if params.config.hevc && !hevc_supported {
             bail!(tl!("no-hwacc"));
@@ -748,7 +785,7 @@ pub async fn main() -> Result<()> {
                 step_time.elapsed().as_secs_f32(),
                 frame,
                 frames
-                );
+            );
             step_time = Instant::now();
         }
         *my_time.borrow_mut() = (frame as f64 / fps).max(0.);

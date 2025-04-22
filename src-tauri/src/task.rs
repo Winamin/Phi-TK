@@ -66,7 +66,12 @@ impl Task {
         let mut cover = NamedTempFile::new()?;
         cover.write_all(&fs.load_file(&info.illustration).await?)?;
 
-        let level: String = info.level.split_whitespace().next().unwrap_or_default().to_string();
+        let level: String = info
+            .level
+            .split_whitespace()
+            .next()
+            .unwrap_or_default()
+            .to_string();
         let safe_name: String = info
             .name
             .chars()
@@ -122,7 +127,9 @@ impl Task {
         loop {
             let line = lines.next_line().await?;
             let Some(line) = line else { break };
-            let Ok(event): Result<IPCEvent, _> = serde_json::from_str(line.trim()) else { continue };
+            let Ok(event): Result<IPCEvent, _> = serde_json::from_str(line.trim()) else {
+                continue;
+            };
             match event {
                 IPCEvent::StartMixing => {
                     *self.status.lock().await = TaskStatus::Mixing;
@@ -242,7 +249,7 @@ impl TaskQueue {
             loop {
                 let Ok(task) = receiver.try_recv() else {
                     std::thread::sleep(std::time::Duration::from_millis(200));
-                    continue
+                    continue;
                 };
                 if let Err(err) = task.run().await {
                     error!("Failed to render: {err:?}");
