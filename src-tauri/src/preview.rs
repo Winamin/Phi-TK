@@ -2,7 +2,7 @@ use crate::render::{build_player, RenderParams};
 use anyhow::Result;
 use macroquad::prelude::*;
 use prpr::{
-    config::{Mods},
+    config::Mods,
     fs,
     scene::{show_error, GameMode, LoadingScene, NextScene, Scene},
     time::TimeManager,
@@ -69,8 +69,16 @@ pub async fn main() -> Result<()> {
     let mut main = Main::new(
         Box::new(BaseScene(
             Some(NextScene::Overlay(Box::new(
-                LoadingScene::new(GameMode::Normal, info, config_ref.clone(), fs, Some(player), None, None)
-                    .await?,
+                LoadingScene::new(
+                    GameMode::Normal,
+                    info,
+                    config_ref.clone(),
+                    fs,
+                    Some(player),
+                    None,
+                    None,
+                )
+                .await?,
             ))),
             false,
         )),

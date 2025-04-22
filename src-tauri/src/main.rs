@@ -10,7 +10,7 @@ mod render;
 mod task;
 
 use anyhow::{bail, Context, Result};
-use common::{ensure_dir, respack_dir, output_dir, CONFIG_DIR, DATA_DIR};
+use common::{ensure_dir, output_dir, respack_dir, CONFIG_DIR, DATA_DIR};
 use fs4::tokio::AsyncFileExt;
 use macroquad::prelude::set_pc_assets_folder;
 use prpr::{
@@ -268,7 +268,7 @@ fn show_in_folder(path: &Path) -> Result<(), InvokeError> {
 
         Ok(())
     })()
-        .map_err(InvokeError::from_anyhow)
+    .map_err(InvokeError::from_anyhow)
 }
 
 #[tauri::command]
@@ -281,7 +281,7 @@ async fn parse_chart(path: &Path) -> Result<ChartInfo, InvokeError> {
             .with_context(|| mtl!("load-info-failed"))?;
         Ok(info)
     })
-        .await
+    .await
 }
 
 #[tauri::command]
@@ -302,7 +302,7 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
 
         Ok(())
     })
-        .await
+    .await
 }
 
 #[tauri::command]
@@ -311,7 +311,7 @@ async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Resul
         queue.post(params).await?;
         Ok(())
     })
-        .await
+    .await
 }
 
 #[tauri::command]
@@ -348,7 +348,7 @@ fn get_respacks() -> Result<Vec<RespackInfo>, InvokeError> {
         names.sort_by(|x, y| x.name.cmp(&y.name));
         Ok(names)
     })()
-        .map_err(InvokeError::from_anyhow)
+    .map_err(InvokeError::from_anyhow)
 }
 
 #[tauri::command]
@@ -357,7 +357,7 @@ fn open_respack_folder() -> Result<(), InvokeError> {
         open::that_detached(respack_dir()?)?;
         Ok(())
     })()
-        .map_err(InvokeError::from_anyhow)
+    .map_err(InvokeError::from_anyhow)
 }
 
 fn get_presets_file() -> Result<PathBuf> {
@@ -378,7 +378,7 @@ async fn get_presets() -> Result<HashMap<String, RenderConfig>, InvokeError> {
             serde_json::from_reader(BufReader::new(File::open(file)?))?
         })
     })()
-        .map_err(InvokeError::from_anyhow)
+    .map_err(InvokeError::from_anyhow)
 }
 
 async fn save_presets(presets: &HashMap<String, RenderConfig>) -> Result<()> {
@@ -396,7 +396,7 @@ async fn add_preset(name: String, config: RenderConfig) -> Result<(), InvokeErro
         save_presets(&presets).await?;
         Ok(())
     })
-        .await
+    .await
 }
 
 #[tauri::command]
@@ -409,7 +409,7 @@ async fn remove_preset(name: String) -> Result<(), InvokeError> {
         save_presets(&presets).await?;
         Ok(())
     })
-        .await
+    .await
 }
 
 fn rpe_dir() -> Result<Option<PathBuf>> {
@@ -441,8 +441,8 @@ fn set_rpe_dir(path: PathBuf) -> Result<(), InvokeError> {
     (|| {
         if !path.is_dir()
             || ["PhiEdit.exe", "Resources"]
-            .iter()
-            .any(|it| !path.join(*it).exists())
+                .iter()
+                .any(|it| !path.join(*it).exists())
         {
             bail!(mtl!("not-valid-rpe"));
         }
@@ -452,7 +452,7 @@ fn set_rpe_dir(path: PathBuf) -> Result<(), InvokeError> {
         )?;
         Ok(())
     })()
-        .map_err(InvokeError::from_anyhow)
+    .map_err(InvokeError::from_anyhow)
 }
 
 #[tauri::command]
@@ -461,13 +461,15 @@ fn unset_rpe_dir() -> Result<(), InvokeError> {
         std::fs::remove_file(CONFIG_DIR.get().unwrap().join("rpe_path.txt"))?;
         Ok(())
     })()
-        .map_err(InvokeError::from_anyhow)
+    .map_err(InvokeError::from_anyhow)
 }
 
 #[tauri::command]
 fn get_rpe_charts() -> Result<Option<Vec<RPEChartInfo>>, InvokeError> {
     (|| {
-        let Some(dir) = rpe_dir()? else { return Ok(None) };
+        let Some(dir) = rpe_dir()? else {
+            return Ok(None);
+        };
         let mut results = Vec::new();
         let mut name = None;
         let mut id = None;
@@ -505,7 +507,9 @@ fn get_rpe_charts() -> Result<Option<Vec<RPEChartInfo>>, InvokeError> {
                     commit!();
                     continue;
                 }
-                let Some((key, value)) = line.split_once(':') else { continue };
+                let Some((key, value)) = line.split_once(':') else {
+                    continue;
+                };
                 *(match key {
                     "Name" => &mut name,
                     "Path" => &mut id,
@@ -544,7 +548,9 @@ fn get_rpe_charts() -> Result<Option<Vec<RPEChartInfo>>, InvokeError> {
                         commit!();
                         continue;
                     }
-                    let Some((key, value)) = line.split_once(':') else { continue };
+                    let Some((key, value)) = line.split_once(':') else {
+                        continue;
+                    };
                     *(match key {
                         "Name" => &mut name,
                         "Path" => &mut id,
@@ -563,7 +569,7 @@ fn get_rpe_charts() -> Result<Option<Vec<RPEChartInfo>>, InvokeError> {
 
         Ok(Some(results))
     })()
-        .map_err(InvokeError::from_anyhow)
+    .map_err(InvokeError::from_anyhow)
 }
 
 #[tauri::command]
@@ -577,5 +583,5 @@ fn open_app_folder() -> Result<(), InvokeError> {
         open::that_detached(std::env::current_exe()?.parent().unwrap())?;
         Ok(())
     })()
-        .map_err(InvokeError::from_anyhow)
+    .map_err(InvokeError::from_anyhow)
 }

@@ -11,9 +11,14 @@ import router from './router';
 
 import { createVuetify } from 'vuetify';
 import * as components from 'vuetify/components';
-import { VStepper, VStepperActions, VStepperHeader, VStepperItem } from 'vuetify/components';
 import * as directives from 'vuetify/directives';
 import { aliases, mdi } from 'vuetify/iconsets/mdi';
+import {
+  VStepper,
+  VStepperActions,
+  VStepperHeader,
+  VStepperItem
+} from 'vuetify/labs/components'
 import 'vuetify/styles';
 
 import theme from './theme';
@@ -30,7 +35,6 @@ if (!locale) {
     }
   }
 }
-
 const i18n = createI18n({
   locale: 'en',
   fallbackLocale: 'en',
@@ -68,11 +72,11 @@ changeLocale(locale);
 
 const vuetify = createVuetify({
   components: {
-    ...components,
     VStepper,
     VStepperActions,
     VStepperHeader,
     VStepperItem,
+    ...components,
   },
   directives,
   theme: {
