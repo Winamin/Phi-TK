@@ -45,9 +45,5 @@ opt-level = 2
 [profile.dev.package."*"]
 opt-level = 2
 
-[package.metadata]
-gl_version = "4.4"
-gl_profile = "core"
-
 [target.'cfg(windows)'.dependencies]
 winreg = "0.10"
