@@ -49,7 +49,7 @@ jobs:
         id: downlod-static-lib
         with:
           # url: "https://files-cf.phira.cn/prpr-avc-static-lib.tar.gz"
-          url: "https://raw.githubusercontent.com/Winamin/Phigros-TK/main/prpr-avc-static-"
+          url: "https://raw.githubusercontent.com/Winamin/Phi-TK/main/prpr-avc-static-"
           target: ./
 
       - name: Mkdir static-lib
