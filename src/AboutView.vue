@@ -12,7 +12,8 @@ zh-CN:
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getVersion } from '@tauri-apps/api/app'
-import { open } from '@tauri-apps/api/shell'
+import { open } from '@tauri-apps/plugin-shell'
+import * as shell from "@tauri-apps/plugin-shell"
 
 const { t } = useI18n()
 

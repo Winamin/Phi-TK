@@ -31,10 +31,7 @@ use std::{
     time::SystemTime,
 };
 use task::{TaskQueue, TaskView};
-use tauri::{
-    CustomMenuItem, InvokeError, Manager, State, SystemTray, SystemTrayEvent, SystemTrayMenu,
-    SystemTrayMenuItem, WindowEvent,
-};
+use tauri::{ipc::InvokeError, Manager, State};
 use tokio::{io::AsyncWriteExt, process::Command};
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
@@ -90,13 +87,11 @@ async fn main() -> Result<()> {
         }
     }
 
-    let tray_menu = SystemTrayMenu::new()
-        .add_item(CustomMenuItem::new("toggle".to_owned(), mtl!("tray-hide")))
-        .add_item(CustomMenuItem::new("tasks".to_owned(), mtl!("tray-tasks")))
-        .add_native_item(SystemTrayMenuItem::Separator)
-        .add_item(CustomMenuItem::new("quit".to_owned(), mtl!("tray-quit")));
+    //shit
     let app = tauri::Builder::default()
-        .system_tray(SystemTray::new().with_menu(tray_menu))
+        .setup(move |_app| {
+            Ok(())
+        })
         .manage(TaskQueue::new())
         .invoke_handler(tauri::generate_handler![
             is_the_only_instance,
@@ -119,6 +114,7 @@ async fn main() -> Result<()> {
             test_ffmpeg,
             open_app_folder,
         ])
+        /*
         .on_system_tray_event(|app, event| match event {
             SystemTrayEvent::MenuItemClick { id, .. } => {
                 let window = app.get_window("main").unwrap();
@@ -167,17 +163,18 @@ async fn main() -> Result<()> {
             }
             _ => {}
         })
+        */
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
 
-    let resolver = app.path_resolver();
+    let resolver = app.path();
     let exe = std::env::current_exe()?;
     let exe_dir = exe.parent().unwrap();
 
     let cache_dir = ensure_dir(
         resolver
             .app_cache_dir()
-            .unwrap_or_else(|| exe_dir.to_owned()),
+            .unwrap_or_else(|_| exe_dir.to_owned()),
     );
     let lock_file = tokio::fs::OpenOptions::new()
         .read(true)
@@ -195,23 +192,24 @@ async fn main() -> Result<()> {
         .set(ensure_dir(
             resolver
                 .app_config_dir()
-                .unwrap_or_else(|| exe_dir.to_owned()),
+                .unwrap_or_else(|_| exe_dir.to_owned()),
         ))
         .unwrap();
     DATA_DIR
         .set(ensure_dir(
             resolver
                 .app_data_dir()
-                .unwrap_or_else(|| exe_dir.to_owned()),
+                .unwrap_or_else(|_| exe_dir.to_owned()),
         ))
         .unwrap();
 
-    let asset_dir = resolver.resolve_resource("assets").unwrap();
+    let asset_dir = resolver
+        .resource_dir()
+        .expect("resource dir not found");
     ASSET_PATH.set(asset_dir.clone()).unwrap();
     set_pc_assets_folder(&asset_dir.display().to_string());
 
     app.run(|_, _| {});
-
     Ok(())
 }
 
@@ -304,7 +302,6 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
     })
     .await
 }
-
 #[tauri::command]
 async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
     wrap_async(async move {
@@ -521,7 +518,7 @@ fn get_rpe_charts() -> Result<Option<Vec<RPEChartInfo>>, InvokeError> {
             }
             commit!();
         } else {
-            use tauri::regex::Regex;
+            use regex::Regex;
             let onely_num = Regex::new(r"^\d+$").unwrap();
             let mut folders = Vec::new();
             let path = dir.join("Resources");
