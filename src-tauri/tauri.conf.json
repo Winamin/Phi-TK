@@ -1,7 +1,9 @@
 {
   "build": {
     "beforeBuildCommand": "pnpm run build",
-    "beforeDevCommand": "pnpm dev"
+    "beforeDevCommand": "pnpm dev",
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173"
   },
   "identifier": "com.sc.phi.tk",
   "bundle": {
