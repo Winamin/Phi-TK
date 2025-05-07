@@ -1,97 +1,82 @@
 {
   "build": {
     "beforeBuildCommand": "pnpm run build",
-    "beforeDevCommand": "pnpm dev",
-    "devPath": "http://localhost:5173",
-    "distDir": "../dist"
+    "beforeDevCommand": "pnpm dev"
   },
-  "package": {
-    "productName": "Phi-TK",
-    "version": "0.1.66"
-  },
-  "tauri": {
-    "allowlist": {
-      "http": {
-        "all": true
+  "identifier": "com.sc.phi.tk",
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "copyright": "",
+    "targets": "all",
+    "externalBin": [],
+    "fileAssociations": [
+      {
+        "ext": ["pez"],
+        "name": "RPE Chart Bundle",
+        "description": "RPE Chart Bundle",
+        "role": "Viewer"
       },
-      "dialog": {
-        "message": true,
-        "open": true
-      },
-      "os": {
-        "all": true
-      },
-      "fs": {
-        "readFile": true,
-        "scope": ["$RESOURCE/*"]
-      },
-      "protocol": {
-        "asset": true,
-        "assetScope": {
-          "allow": ["**"],
-          "requireLiteralLeadingDot": false
-        }
-      },
-      "shell": {
-        "open": true
+      {
+        "ext": ["zip"],
+        "name": "ZIP Bundle",
+        "description": "ZIP Bundle",
+        "role": "Viewer"
       }
+    ],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
     },
-    "bundle": {
-      "active": true,
-      "category": "DeveloperTool",
-      "copyright": "",
+    "longDescription": "",
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null
+    },
+    "resources": [
+      "assets",
+      "WebView2Loader.dll"
+    ],
+    "shortDescription": "",
+    "linux": {
       "deb": {
         "depends": []
-      },
-      "externalBin": [
-      ],
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "identifier": "com.sc.phi.tk",
-      "longDescription": "",
-      "macOS": {
-        "entitlements": null,
-        "exceptionDomain": "",
-        "frameworks": [],
-        "providerShortName": null,
-        "signingIdentity": null
-      },
-      "resources": [
-        "assets",
-        "WebView2Loader.dll"
-      ],
-      "shortDescription": "",
-      "targets": "all",
-      "windows": {
-        "certificateThumbprint": null,
-        "digestAlgorithm": "sha256",
-        "timestampUrl": ""
       }
-    },
-    "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: https://asset.localhost; style-src 'self' 'unsafe-inline'"
-    },
-    "updater": {
-      "active": false
-    },
+    }
+  },
+  "plugins": {},
+  "app": {
     "windows": [
       {
         "fullscreen": false,
-        "height": 660,
+        "height": 690,
         "resizable": true,
-        "title": "Phi-Tk",
-        "width": 880,
-        "fileDropEnabled": true
+        "title": "Phi-TK",
+        "width": 900,
+        "dragDropEnabled": true,
+        "useHttpsScheme": true
       }
     ],
-    "systemTray": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
+    "security": {
+      "assetProtocol": {
+        "scope": {
+          "allow": [
+            "**"
+          ],
+          "deny": [],
+          "requireLiteralLeadingDot": false
+        },
+        "enable": true
+      },
+      "csp": "default-src 'self'; img-src 'self' asset: https://asset.localhost https://api.github.com; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"
     }
   }
 }

@@ -10,15 +10,15 @@ edition = "2021"
 rust-version = "1.60"
 
 [build-dependencies]
-tauri-build = { version = "1.5.0", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
 futures = "0.3"
 log = "0.4"
 rayon = "1.5"
 serde_json = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.5.0", features = [ "http-all", "dialog-message", "system-tray", "shell-open", "fs-read-file", "protocol-asset", "dialog-open", "os-all"] }
+serde = { version = "1.0.217", features = ["derive"] }
+tauri = { version = "2", features = ["tray-icon", "custom-protocol", "protocol-asset"] }
 
 anyhow = { version = "1.0.70", features = ["backtrace"] }
 macroquad = { git = "https://github.com/Winamin/prpr-macroquad", default-features = false }
@@ -34,6 +34,9 @@ chrono = "0.4.28"
 open = "5.0.0"
 fs4 = { version = "0.6.6", features = ["tokio-async"] }
 smallvec = "1.11.2"
+regex = "1.10.0"
+
+
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
