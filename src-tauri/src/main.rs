@@ -87,11 +87,12 @@ async fn main() -> Result<()> {
         }
     }
 
-    //shit
     let app = tauri::Builder::default()
-        .setup(move |_app| {
-            Ok(())
-        })
+        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(TaskQueue::new())
         .invoke_handler(tauri::generate_handler![
             is_the_only_instance,
