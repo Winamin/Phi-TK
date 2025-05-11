@@ -99,8 +99,6 @@ const { t } = useI18n();
 
 import { invoke } from '@tauri-apps/api/core';
 import { event } from '@tauri-apps/api';
-import * as dialog from "@tauri-apps/plugin-dialog"
-import * as shell from "@tauri-apps/plugin-shell"
 
 import { toastError, RULES, toast, anyFilter, isString } from './common';
 import type { ChartInfo } from './model';
@@ -110,6 +108,8 @@ import { VForm } from 'vuetify/components';
 import ConfigView from './components/ConfigView.vue';
 
 import moment from 'moment';
+import * as dialog from "@tauri-apps/plugin-dialog"
+import * as shell from "@tauri-apps/plugin-shell"
 
 if (!(await invoke('is_the_only_instance'))) {
   await dialog.message(t('already-running'));
@@ -181,9 +181,9 @@ const aspectWidth = ref('0'),
   aspectHeight = ref('0');
 
 const fileHovering = ref(false);
-event.listen('tauri://file-drop-hover', (_event) => (fileHovering.value = step.value === 'choose'));
-event.listen('tauri://file-drop-cancelled', (_event) => (fileHovering.value = false));
-event.listen('tauri://file-drop', async (event) => {
+event.listen('tauri://drag-over', (_event) => (fileHovering.value = step.value === 'choose'));
+event.listen('tauri://drag-leave', (_event) => (fileHovering.value = false));
+event.listen('tauri://drag-drop', async (event) => {
   if (step.value === 'choose') {
     fileHovering.value = false;
     await loadChart((event.payload as string[])[0]);

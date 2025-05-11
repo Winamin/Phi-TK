@@ -24,9 +24,6 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
-        //'@tauri-apps/api/tauri': fileURLToPath(
-         // new URL('./node_modules/@tauri-apps/api/dist/tauri.js', import.meta.url)
-        //),
       },
     },
     build: {
