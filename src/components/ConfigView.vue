@@ -173,10 +173,10 @@
   
   import { useI18n } from 'vue-i18n';
   const { t } = useI18n();
-  
-  import { invoke } from '@tauri-apps/api/core';
-  import { open } from '@tauri-apps/plugin-dialog'
 
+  import { invoke } from '@tauri-apps/api/core';
+  import { open } from '@tauri-apps/plugin-dialog';
+  
   import { VDivider, VForm } from 'vuetify/components';
   
   import { RULES, isNumeric, toast, anyFilter, toastError } from '../common';

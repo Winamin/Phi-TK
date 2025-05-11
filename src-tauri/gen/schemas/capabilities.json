@@ -1,1 +1,1 @@
-{}
+{"migrated":{"identifier":"migrated","description":"permissions that were migrated from v1","local":true,"windows":["main"],"permissions":["core:default","fs:allow-read-file",{"identifier":"fs:scope","allow":["$RESOURCE/*"]},"shell:allow-open","dialog:allow-open","dialog:allow-message","http:default","os:allow-platform","os:allow-version","os:allow-os-type","os:allow-family","os:allow-arch","os:allow-exe-extension","os:allow-locale","os:allow-hostname","fs:default","os:default","shell:default","dialog:default","http:default"]}}

@@ -53,7 +53,8 @@ const { t } = useI18n();
 
 import type { Task, TaskStatus } from './model';
 
-import { invoke, convertFileSrc } from '@tauri-apps/api/core'
+import { invoke } from '@tauri-apps/api/core';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 import moment from 'moment';
 import { toastError } from './common';

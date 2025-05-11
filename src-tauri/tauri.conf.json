@@ -5,29 +5,17 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173"
   },
-  "identifier": "com.sc.phi.tk",
   "bundle": {
     "active": true,
     "category": "DeveloperTool",
     "copyright": "",
     "targets": "all",
     "externalBin": [],
-    "fileAssociations": [
-      {
-        "ext": ["pez"],
-        "name": "RPE Chart Bundle",
-        "description": "RPE Chart Bundle",
-        "role": "Viewer"
-      },
-      {
-        "ext": ["zip"],
-        "name": "ZIP Bundle",
-        "description": "ZIP Bundle",
-        "role": "Viewer"
-      }
-    ],
     "icon": [
-      "icons/icon.png",
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
       "icons/icon.ico"
     ],
     "windows": {
@@ -54,19 +42,26 @@
       }
     }
   },
+  "productName": "Phi-TK",
+  "mainBinaryName": "Phi-TK",
+  "version": "0.1.66",
+  "identifier": "com.sc.phi.tk",
   "plugins": {},
   "app": {
     "windows": [
       {
         "fullscreen": false,
-        "height": 690,
+        "height": 660,
         "resizable": true,
-        "title": "Phi-TK",
-        "width": 900,
-        "dragDropEnabled": true,
-        "useHttpsScheme": true
+        "title": "Phi-Tk",
+        "width": 880,
+        "dragDropEnabled": true
       }
     ],
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true
+    },
     "security": {
       "assetProtocol": {
         "scope": {
@@ -78,7 +73,7 @@
         },
         "enable": true
       },
-      "csp": "default-src 'self'; img-src 'self' asset: https://asset.localhost https://api.github.com; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; img-src 'self' asset: https://asset.localhost; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"
     }
   }
 }
