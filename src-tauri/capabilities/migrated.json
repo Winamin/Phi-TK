@@ -8,6 +8,7 @@
   "permissions": [
     "core:default",
     "fs:allow-read-file",
+    "fs:allow-write-file",
     {
       "identifier": "fs:scope",
       "allow": [
@@ -31,6 +32,5 @@
     "shell:default",
     "dialog:default",
     "http:default",
-    "fs:default"
   ]
 }
