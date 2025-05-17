@@ -13,7 +13,6 @@
     choose:
       archive: Archive
       folder: Folder
-      can-also-drop: You can also drag & drop the file to here
       drop: DROP CHART HERE
   
     chart-file: Chart file
@@ -60,7 +59,6 @@
     choose:
       archive: 压缩包
       folder: 文件夹
-      can-also-drop: 也可以直接拖谱面到窗口哦
       drop: 拖放谱面到这
   
     chart-file: 谱面文件
@@ -179,16 +177,6 @@ async function loadChart(file: string) {
 
 const aspectWidth = ref('0'),
   aspectHeight = ref('0');
-
-const fileHovering = ref(false);
-event.listen('tauri://drag-over', (_event) => (fileHovering.value = step.value === 'choose'));
-event.listen('tauri://drag-leave', (_event) => (fileHovering.value = false));
-event.listen('tauri://drag-drop', async (event) => {
-  if (step.value === 'choose') {
-    fileHovering.value = false;
-    await loadChart((event.payload as string[])[0]);
-  }
-});
 
 const form = ref<VForm>();
 
@@ -364,7 +352,7 @@ const folderStyle = computed(() => ({
         </v-btn>
       </div>
 
-      <template v-slot:item.1>
+      <template v-slot:[`item.1`]>
         <div class="mt-8 d-flex" style="gap: 1rem" @mousemove="onHoverMove" @mouseleave="resetHover"
           ref="hoverContainer">
           <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
@@ -377,14 +365,13 @@ const folderStyle = computed(() => ({
               @click="chooseChart(true)" prepend-icon="mdi-folder">{{ t('choose.folder') }}</v-btn>
           </div>
         </div>
-        <p class="mb-8 w-100 text-center mt-2 text-disabled" v-t="'choose.can-also-drop'"></p>
         <v-overlay v-model="parsingChart" contained class="align-center justify-center" persistent
           :close-on-content-click="false">
           <v-progress-circular indeterminate> </v-progress-circular>
         </v-overlay>
       </template>
 
-      <template v-slot:item.2>
+      <template v-slot:[`item.2`]>
         <v-form ref="form" v-if="chartInfo">
           <v-row no-gutters class="mx-n2">
             <v-col cols="8">
@@ -438,11 +425,11 @@ const folderStyle = computed(() => ({
         </v-form>
       </template>
 
-      <template v-slot:item.3>
+      <template v-slot:[`item.3`]>
         <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()"></ConfigView>
       </template>
 
-      <template v-slot:item.4>
+      <template v-slot:[`item.4`]>
         <div class="d-flex flex-column justify-center align-center mb-2" style="gap: 1rem">
           <span style="font-size: 84px">✨</span>
           <h2>{{ t('render-started') }}</h2>
@@ -450,12 +437,6 @@ const folderStyle = computed(() => ({
         </div>
       </template>
     </v-stepper>
-    <v-overlay v-model="fileHovering" contained class="align-center justify-center drop-zone-overlay" persistent
-      :close-on-content-click="false">
-      <div class="drop-pulse">
-        <h1 v-t="'choose.drop'"></h1>
-      </div>
-    </v-overlay>
   </div>
 </template>
 
@@ -502,18 +483,6 @@ const folderStyle = computed(() => ({
   }
 }
 
-.hover-scale-card {
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  transform-origin: center;
-}
-
-.hover-scale-card:hover {
-  transform:
-    scale(1.05) translateY(-8px) rotateZ(2deg);
-  z-index: 10;
-  box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.3);
-}
-
 .elevated-stepper {
   border-radius: 24px !important;
   box-shadow:
@@ -522,18 +491,6 @@ const folderStyle = computed(() => ({
   background: rgba(23, 9, 99, 0.9) !important;
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.drop-zone-overlay {
-  background: rgba(99, 102, 241, 0.2) !important;
-  backdrop-filter: blur(8px);
-}
-
-.drop-pulse {
-  animation:
-    pulse 2s infinite,
-    float 3s ease-in-out infinite;
-  text-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
 }
 
 @keyframes float {
@@ -546,62 +503,5 @@ const folderStyle = computed(() => ({
   50% {
     transform: translateY(-8px);
   }
-}
-
-:deep(.v-stepper-header__item) {
-  transition: all 0.4s ease;
-}
-
-:deep(.v-stepper-header__item):hover {
-  transform: translateY(-2px);
-}
-
-.v-stepper__content {
-  transition:
-    opacity 0.6s cubic-bezier(0.23, 1, 0.32, 1),
-    transform 0.8s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.v-stepper__content-leave-active {
-  transition:
-    opacity 0.3s ease,
-    transform 0.4s ease;
-}
-
-.v-stepper__content-leave-to {
-  opacity: 0;
-  transform:
-    translateX(-20px) perspective(500px) rotateY(10deg) scale(0.98);
-}
-
-.v-stepper__content-enter-from {
-  opacity: 0;
-  transform:
-    translateX(20px) perspective(500px) rotateY(-10deg) scale(0.98);
-}
-
-.v-text-field :deep(.v-field) {
-  transition:
-    box-shadow 0.4s ease,
-    transform 0.3s ease;
-}
-
-.v-text-field :deep(.v-field--focused) {
-  box-shadow:
-    0 0 0 2px rgb(99 102 241 / 0.3),
-    0 8px 24px -6px rgb(99 102 241 / 0.2) !important;
-  transform: scale(1.02);
-}
-
-.v-slider__thumb {
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.3s ease !important;
-}
-
-.v-slider__thumb:hover {
-  transform: scale(1.2);
-  box-shadow:
-    0 0 0 6px rgb(99 102 241 / 0.15) !important;
 }
 </style>
