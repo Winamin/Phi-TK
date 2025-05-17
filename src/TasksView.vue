@@ -344,7 +344,7 @@ function handleMouseLeave(taskId: string) {
   will-change: transform;
   backface-visibility: hidden;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  border-radius: 16px;
+  border-radius: 4px;
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -363,22 +363,13 @@ function handleMouseLeave(taskId: string) {
   transform: rotateY(15deg) translateZ(30px);
 }
 */
-.v-btn {
-  background: linear-gradient(45deg,#2196f3);
-  border-radius: 50px;
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
-  transition:
-    transform 0.3s ease,
-    box-shadow 0.3s ease;
-}
 
-.v-btn:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+.v-btn {
+  margin-left: 8px;
 }
 
 .task-cover {
-  border-radius: 16px 0 0 16px;
+  border-radius: 6px 0 0 16px;
   transform-origin: center;
 }
 
@@ -402,7 +393,7 @@ function handleMouseLeave(taskId: string) {
 
 pre {
   background: rgba(0, 0, 0, 0.3) !important;
-  padding: 16px !important;
+  padding: 8px !important;
   border-radius: 8px;
   font-family: 'Fira Code', monospace;
 }
@@ -435,9 +426,20 @@ pre {
   color: #FF5252;
   font-family: monospace;
   background: rgba(0, 0, 0, 0.5);
-  padding: 12px;
+  padding: 8px;
   border-radius: 4px;
   max-height: 60vh;
   overflow: auto;
 }
+
+.v-card-actions.justify-end {
+  justify-content: flex-start !important;
+  padding-left: 16px !important;
+}
+
+.v-btn {
+  min-width: 100px !important;
+  margin: 8px !important;
+}
+
 </style>
