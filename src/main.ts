@@ -2,6 +2,7 @@ import './assets/main.css';
 import '@mdi/font/css/materialdesignicons.css';
 
 import { createApp } from 'vue';
+
 import { createI18n } from 'vue-i18n';
 
 import { changeLocale } from './common';

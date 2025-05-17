@@ -86,6 +86,14 @@ export interface RenderConfig {
   speed: number;
   volumeMusic: number;
   volumeSfx: number;
+
+  uiScore: boolean;
+  uiName: boolean;
+  uiLine: boolean;
+  uiLevel: boolean;
+  uiCombo: boolean;
+  uiPb: boolean;
+  uiPause: boolean;
 }
 
 export interface RPEChart {

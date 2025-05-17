@@ -69,6 +69,14 @@ pub struct RenderConfig {
     speed: f32,
     volume_music: f32,
     volume_sfx: f32,
+
+    ui_score: bool,
+    ui_combo: bool,
+    ui_name: bool,
+    ui_level: bool,
+    ui_line: bool,
+    ui_pb: bool,
+    ui_pause: bool,
 }
 
 impl RenderConfig {
@@ -99,6 +107,14 @@ impl RenderConfig {
             autoplay: self.autoplay,
             watermark: self.watermark.clone(),
             background: self.background.clone(),
+
+            ui_score: self.ui_score,
+            ui_combo: self.ui_combo,
+            ui_name: self.ui_name,
+            ui_level: self.ui_level,
+            ui_line: self.ui_line,
+            ui_pb: self.ui_pb,
+            ui_pause: self.ui_pause,
             ..Default::default()
         }
     }
@@ -360,7 +376,7 @@ pub async fn main() -> Result<()> {
 
     send(IPCEvent::StartMixing);
     let mixing_output = NamedTempFile::new()?;
-    let target_sample_rate = params.config.target_audio as u32;
+    let target_sample_rate = params.config.target_audio;
     let sample_rate = 96000;
     let sample_rate_f64 = sample_rate as f64;
     assert_eq!(sample_rate, ending.sample_rate());

@@ -139,6 +139,7 @@ onUnmounted(() => {
     </v-main>
   </v-app>
 </template>
+
 <style>
 .dark-theme {
   background: linear-gradient(45deg, #292364, #302b63, #24243e);
