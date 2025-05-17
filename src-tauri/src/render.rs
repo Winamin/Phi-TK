@@ -28,7 +28,6 @@ use std::{
 };
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
-use rayon::prelude::*;
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -386,25 +385,17 @@ pub async fn main() -> Result<()> {
     assert_eq!(sample_rate, sfx_flick.sample_rate());
 
     let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
-
     if volume_music != 0.0 {
         let start_time = Instant::now();
         let pos = O - chart.offset.min(0.) as f64;
+        let count = (music.length() as f64 * sample_rate_f64) as usize;
         let start_index = (pos * sample_rate_f64).round() as usize * 2;
-        let frames = music.frames();
-        let len = frames.len().min((output.len() - start_index) / 2);
-
-        if start_index < output.len() && len > 0 {
-            let output_ptr = output.as_mut_ptr() as usize;
-            (0..len).into_par_iter().for_each(|i| {
-                let output_ptr = output_ptr as *mut f32;
-                unsafe {
-                    let idx0 = start_index + i * 2;
-                    let idx1 = idx0 + 1;
-                    *output_ptr.add(idx0) += frames[i].0 * volume_music;
-                    *output_ptr.add(idx1) += frames[i].1 * volume_music;
-                }
-            });
+        let ratio = 1.0 / sample_rate_f64;
+        for i in 0..count {
+            let position = i as f64 * ratio;
+            let frame = music.sample(position as f32).unwrap_or_default();
+            output[start_index + i * 2] += frame.0 * volume_music;
+            output[start_index + i * 2 + 1] += frame.1 * volume_music;
         }
         info!("music Time:{:?}", start_time.elapsed());
     }
@@ -416,13 +407,14 @@ pub async fn main() -> Result<()> {
         }
         let slice = &mut output[position..];
         let len = (slice.len() / 2).min(clip.frame_count());
-        let frames = clip.frames();
 
+        let frames = clip.frames();
         for i in 0..len {
             let sample = frames[i].0 * volume;
             slice[i * 2] += sample;
             slice[i * 2 + 1] += sample;
         }
+
         len
     };
 
