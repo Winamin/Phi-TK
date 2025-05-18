@@ -28,7 +28,7 @@ anyhow = { version = "1.0.70", features = ["backtrace"] }
 #prpr = { path = "/home/link/Phi-TK-render-lib/prpr" }
 macroquad = { git = "https://github.com/Winamin/prpr-macroquad", default-features = false }
 prpr = { git = "https://github.com/Winamin/Phi-TK-render-lib", package = "prpr", branch = "render-lib" }
-# prpr = { path = "../../phira/prpr" }
+#prpr = { path = "../../phira/prpr" }
 
 sasa = { git = "https://github.com/Winamin/sasa" }
 serde_yaml = "0.9"
