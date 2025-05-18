@@ -13,7 +13,6 @@
     choose:
       archive: Archive
       folder: Folder
-      drop: DROP CHART HERE
   
     chart-file: Chart file
   
@@ -59,7 +58,6 @@
     choose:
       archive: 压缩包
       folder: 文件夹
-      drop: 拖放谱面到这
   
     chart-file: 谱面文件
   
@@ -484,12 +482,12 @@ const folderStyle = computed(() => ({
 }
 
 .elevated-stepper {
-  border-radius: 24px !important;
+  border-radius: 12px !important;
   box-shadow:
     0 25px 50px -12px rgb(0 0 0 / 0.3),
     0 0 40px -10px rgb(99 102 241 / 0.3) !important;
-  background: rgba(23, 9, 99, 0.9) !important;
-  backdrop-filter: blur(12px);
+  background: rgba(42, 25, 138, 0.9) !important;
+  backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 

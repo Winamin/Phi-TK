@@ -4033,7 +4033,7 @@ dependencies = [
 [[package]]
 name = "prpr"
 version = "0.4.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#8ac877c0915aa57b7882850f24954dad0b70aa8c"
+source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#48dec058e171502002aec3e70b5a8663ede348b2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4102,7 +4102,7 @@ dependencies = [
 [[package]]
 name = "prpr-avc"
 version = "0.1.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#8ac877c0915aa57b7882850f24954dad0b70aa8c"
+source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#48dec058e171502002aec3e70b5a8663ede348b2"
 dependencies = [
  "anyhow",
  "tracing",
@@ -4348,11 +4348,10 @@ checksum = "60a357793950651c4ed0f3f52338f53b2f809f32d83a07f72909fa13e4c6c1e3"
 
 [[package]]
 name = "rayon"
-version = "1.6.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e060280438193c554f654141c9ea9417886713b7acd75974c85b18a69a88e0b"
+checksum = "fa7237101a77a10773db45d62004a272517633fbcc3df19d96455ede1122e051"
 dependencies = [
- "crossbeam-deque",
  "either",
  "rayon-core",
 ]

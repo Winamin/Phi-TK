@@ -234,7 +234,7 @@ function handleMouseLeave(taskId: string) {
       <v-form ref="form" style="max-height: 48vh" class="animated-form">
         <v-row class="text-center">
           <v-col cols="12" class="mt-n4">
-            <v-btn @click="showFolder()" v-t="'show-in-folder'" class="hover-scale"></v-btn>
+            <v-btn @click="showFolder()" v-t="'show-in-folder'" class="hover-scale" color="primary"></v-btn>
           </v-col>
         </v-row>
       </v-form>
@@ -440,6 +440,15 @@ pre {
 .v-btn {
   min-width: 100px !important;
   margin: 8px !important;
+}
+
+.v-btn--primary {
+  background: #2196F3 !important;
+  border-color: #5799d1 !important;
+}
+
+.v-btn--primary:hover {
+  background: #4a96e1 !important;
 }
 
 </style>
