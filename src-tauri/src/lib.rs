@@ -160,8 +160,19 @@ pub async fn run() -> Result<()> {
         ))
         .unwrap();
 
+    #[cfg(target_os = "linux")]
+    let asset_dir = {
+        exe_dir
+            .parent()
+            .unwrap()
+            .join("assets")
+    };
+
+    #[cfg(target_os = "windows")]
     let asset_dir = exe_dir.join("assets");
+
     ASSET_PATH.set(asset_dir.clone()).unwrap();
+    set_pc_assets_folder(&asset_dir.display().to_string());
     set_pc_assets_folder(&asset_dir.display().to_string());
     
     app.run(|_, _| {});
