@@ -173,7 +173,6 @@ pub async fn run() -> Result<()> {
 
     ASSET_PATH.set(asset_dir.clone()).unwrap();
     set_pc_assets_folder(&asset_dir.display().to_string());
-    set_pc_assets_folder(&asset_dir.display().to_string());
     
     app.run(|_, _| {});
     
