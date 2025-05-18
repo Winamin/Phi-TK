@@ -92,7 +92,7 @@ onUnmounted(() => {
   <v-app id="phi-tk" class="dark-theme">
     <v-sonner position="top-center" />
     <v-app-bar :elevation="0" class="app-bar-shadow blur-background">
-      <v-app-bar-title class="mx-5 text-gradient">Phi TK</v-app-bar-title>
+      <v-app-bar-title class="mx-5 text-gradient glow-title">Phi TK</v-app-bar-title>
     </v-app-bar>
 
     <v-navigation-drawer 
@@ -142,14 +142,14 @@ onUnmounted(() => {
 
 <style>
 .dark-theme {
-  background: linear-gradient(45deg, #292364, #302b63, #24243e);
+  background: linear-gradient(45deg, #312c5c, #554f83, #8a8ab6);
 }
 
 .blur-background {
   backdrop-filter: blur(40px) saturate(200%);
   background: linear-gradient(
-    135deg, 
-    rgba(98, 0, 234, 0.15) 0%, 
+    135deg,
+    rgba(88, 59, 126, 0.15) 0%,
     rgba(186, 104, 200, 0.1) 100%
   ) !important;
   border: 1px solid rgba(255,255,255,0.1) !important;
@@ -186,11 +186,11 @@ onUnmounted(() => {
   &:hover {
     transform: translateX(12px) scale(1.02);
     background: linear-gradient(
-      to right, 
-      rgba(98, 0, 234, 0.2) 30%, 
+      to right,
+      rgba(96, 67, 140, 0.2) 30%,
       transparent
     ) !important;
-    box-shadow: 2px 0 12px rgba(98, 0, 234, 0.3);
+    box-shadow: 2px 0 12px rgba(118, 64, 193, 0.3);
 
     &::before {
       left: 140%;
@@ -213,10 +213,14 @@ onUnmounted(() => {
   background: linear-gradient(45deg, #7c4dff, #ff6ec4);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+
+  text-shadow: 0 0 12px rgba(124, 77, 255, 0.6),
+  0 0 24px rgba(255, 110, 196, 0.4);
+  animation: glow-pulse 2s ease-in-out infinite;
 }
 
 .glow-spinner {
-  filter: drop-shadow(0 0 8px #6200ea);
+  filter: drop-shadow(0 0 8px #9552f3);
 }
 
 .animated-background::after {
