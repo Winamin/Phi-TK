@@ -404,18 +404,37 @@ pub async fn main() -> Result<()> {
 
     if volume_sfx != 0.0 {
         let start_time = Instant::now();
-        for line in &chart.lines {
-            for note in &line.notes {
-                if !note.fake {
-                    let sfx = match note.kind {
-                        NoteKind::Click | NoteKind::Hold { .. } => &sfx_click,
-                        NoteKind::Drag => &sfx_drag,
-                        NoteKind::Flick => &sfx_flick,
-                    };
-                    place(O + note.time as f64 + offset as f64, sfx, volume_sfx);
+
+        let offset_f64 = offset as f64;
+        let o_offset = O + offset_f64;
+
+        let sfx_click_ptr = &sfx_click as *const _;
+        let sfx_drag_ptr = &sfx_drag as *const _;
+        let sfx_flick_ptr = &sfx_flick as *const _;
+
+        unsafe {
+            let lines_ptr = chart.lines.as_ptr();
+            let lines_len = chart.lines.len();
+
+            for i in 0..lines_len {
+                let line = &*lines_ptr.add(i);
+                let notes_ptr = line.notes.as_ptr();
+                let notes_len = line.notes.len();
+                for j in 0..notes_len {
+                    let note = &*notes_ptr.add(j);
+                    if !note.fake {
+                        let sfx = match note.kind {
+                            NoteKind::Click | NoteKind::Hold { .. } => &*sfx_click_ptr,
+                            NoteKind::Drag => &*sfx_drag_ptr,
+                            NoteKind::Flick => &*sfx_flick_ptr,
+                        };
+                        let time = o_offset + note.time as f64;
+                        place(time, sfx, volume_sfx);
+                    }
                 }
             }
         }
+
         info!("sfx Time:{:?}", start_time.elapsed());
     }
 
