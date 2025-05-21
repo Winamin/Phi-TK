@@ -59,7 +59,7 @@ en:
   chart_ratio: Chart Zoom
   buffer_size: Adjust Buffer Size
   buffer_size-tips: Not very useful
-  target_audio: Target sample rate
+  target_audio: Target sample rate / Hz
   combo: Customize COMBO Text
   watermark: Watermark Text
   flid_x: Mirror Mode
@@ -142,7 +142,7 @@ zh-CN:
   chart_ratio: 谱面缩放
   buffer_size: 音频Buffer Size
   buffer_size-tips: 用处不大
-  target_audio: 目标采样率
+  target_audio: 目标采样率 / Hz
   combo: 自定义COMBO名称
   watermark: 水印
   flid_x: 镜像模式
