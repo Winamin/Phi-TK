@@ -457,7 +457,7 @@ function applyConfig(config: RenderConfig) {
 
   //ui [prpr]
   render.value = []
-  if (!config.uiLine) render.value.push(renderList.value[0]);
+  if (config.uiLine) render.value.push(renderList.value[0]);
   if (config.uiScore) render.value.push(renderList.value[1]);
   if (config.uiCombo) render.value.push(renderList.value[2]);
   if (config.uiLevel) render.value.push(renderList.value[3]);
