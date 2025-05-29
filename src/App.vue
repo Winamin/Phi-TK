@@ -214,7 +214,7 @@ onUnmounted(() => {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 
-  text-shadow: 0 0 12px rgba(124, 77, 255, 0.6),
+  text-shadow: 0 0 12px rgba(39, 21, 89, 0.6),
   0 0 24px rgba(255, 110, 196, 0.4);
   animation: glow-pulse 2s ease-in-out infinite;
 }
