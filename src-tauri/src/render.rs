@@ -107,6 +107,7 @@ impl RenderConfig {
             autoplay: self.autoplay,
             watermark: self.watermark.clone(),
             background: self.background.clone(),
+            disable_loading: self.disable_loading,
 
             ui_score: self.ui_score,
             ui_combo: self.ui_combo,

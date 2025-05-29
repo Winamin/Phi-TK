@@ -739,6 +739,16 @@ async function replacePreset() {
               v-model="playerRks"
             />
           </v-col>
+          <v-col cols="12" md="6">
+            <v-text-field
+              :label="t('challenge-rank')"
+              :rules="[RULES.positive]"
+              type="number"
+              density="compact"
+              variant="outlined"
+              v-model="challengeRank"
+            />
+          </v-col>
           <v-col cols="12">
             <v-combobox
               :label="t('challenge-color')"
