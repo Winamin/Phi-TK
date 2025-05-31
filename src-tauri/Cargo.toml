@@ -1,8 +1,8 @@
 [package]
 name = "Phi-TK"
-version = "0.1.67"
+version = "0.1.68"
 description = "Phi-TK"
-authors = ["Mivik", "HLMC", "Link"]
+authors = ["Mivik", "Link"]
 license = ""
 repository = ""
 default-run = "Phi-TK"
