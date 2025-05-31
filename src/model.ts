@@ -9,6 +9,7 @@ export interface ChartInfo {
 
   aspectRatio: number;
   backgroundDim: number;
+  HoldPartialCover: boolean;
 }
 
 export type TaskStatus =

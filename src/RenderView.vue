@@ -22,6 +22,7 @@
     level: Level
     aspect: Aspect ratio
     dim: Background dim
+    hold_cover: Hold Partial Cover
   
     tip: Tip
     tip-placeholder: Leave empty to choose randomly
@@ -68,6 +69,7 @@
     level: 难度
     aspect: 宽高比
     dim: 背景昏暗程度
+    hold_cover: Hold 遮罩
   
     tip: Tip
     tip-placeholder: 留空则随机选择
@@ -411,6 +413,18 @@ const folderStyle = computed(() => ({
             <v-col cols="8" class="px-6">
               <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01"
                 v-model="chartInfo.backgroundDim"></v-slider>
+              <v-row no-gutters class="mx-n2 mt-1 align-center">
+                <v-col cols="12" class="px-6">
+                  <v-switch
+                    :label="t('hold_cover')"
+                    v-model="chartInfo.HoldPartialCover"
+                    :true-value="1"
+                    :false-value="0"
+                    color="primary"
+                    persistent-hint
+                  ></v-switch>
+                </v-col>
+              </v-row>
             </v-col>
           </v-row>
 
