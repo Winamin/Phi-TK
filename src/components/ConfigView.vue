@@ -335,7 +335,6 @@ const showProgressText = ref(false);
 const showTimeText = ref(false);
 const background = ref(false);
 
-
 //prpr [ui]
 const renderList = ref(t('render-list').split(','))
 const render = ref<string[]>([])
@@ -810,8 +809,35 @@ async function replacePreset() {
           <v-col cols="6" md="3">
             <TipSwitch :label="t('disable-effect')" v-model="disableEffect" color="primary"/>
           </v-col>
-          <v-col cols="6" md="6">
-            <v-select v-model="render" :items="renderList" :label="t('render')" multiple></v-select>
+
+          <v-col cols="6" md="3">
+            <v-select
+              v-model="render"
+              :items="renderList"
+              :label="t('render')"
+              multiple
+              chips
+              small-chips
+              deletable-chips
+              :menu-props="{ contentClass: 'custom-select-menu' }"
+            >
+              <template v-slot:selection="{ item, index }">
+                <v-chip
+                  v-if="index === 0"
+                  close
+                  @click:close="render.splice(index, 1)"
+                  class="white-chip"
+                >
+                  {{ item }}
+                </v-chip>
+                <span
+                  v-if="index === 1"
+                  class="additional-chips"
+                >
+        +{{ render.length - 1 }}
+      </span>
+              </template>
+            </v-select>
           </v-col>
         </v-row>
       </div>
@@ -964,4 +990,36 @@ async function replacePreset() {
   padding: 1rem;
   border-radius: 8px;
 }
+
+.white-chip {
+  background: white !important;
+  border: 1px solid #e0e0e0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  padding: 0 12px;
+  height: 32px;
+}
+
+/* 额外计数样式 */
+.additional-chips {
+  margin-left: 8px;
+  align-self: center;
+  color: #666;
+  font-size: 14px;
+}
+
+/* 下拉菜单选项样式 - 白色圆角框 */
+:deep(.custom-select-menu .v-list-item) {
+  background: white !important;
+  border: 1px solid #f0f0f0 !important;
+  border-radius: 8px !important;
+  margin: 4px 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* 悬停效果增强 */
+:deep(.custom-select-menu .v-list-item:hover) {
+  background-color: #f9f9f9 !important;
+}
+
 </style>
