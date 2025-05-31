@@ -22,7 +22,7 @@
     level: Level
     aspect: Aspect ratio
     dim: Background dim
-    hold_cover: Hold Partial Cover
+    hold_cover: Hold Head Partial Cover
   
     tip: Tip
     tip-placeholder: Leave empty to choose randomly
@@ -69,7 +69,7 @@
     level: 难度
     aspect: 宽高比
     dim: 背景昏暗程度
-    hold_cover: Hold 遮罩
+    hold_cover: Hold 头部遮罩
   
     tip: Tip
     tip-placeholder: 留空则随机选择
@@ -341,7 +341,7 @@ const folderStyle = computed(() => ({
 <template>
   <div class="pa-8 w-100 h-100" style="max-width: 1280px">
     <v-stepper alt-labels v-model="stepIndex" hide-actions :items="steps.map((x) => t('steps.' + x))"
-      class="elevated-stepper">
+               class="elevated-stepper">
       <div v-if="step === 'config' || step === 'options'" class="d-flex flex-row pa-6 pb-4 pt-0">
         <v-btn variant="text" @click="stepIndex && stepIndex--" v-t="'prev-step'"></v-btn>
         <div class="flex-grow-1"></div>
@@ -354,19 +354,19 @@ const folderStyle = computed(() => ({
 
       <template v-slot:[`item.1`]>
         <div class="mt-8 d-flex" style="gap: 1rem" @mousemove="onHoverMove" @mouseleave="resetHover"
-          ref="hoverContainer">
+             ref="hoverContainer">
           <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
             <v-btn :style="archiveStyle" class="w-75 gradient-primary hover-movable" style="overflow: hidden"
-              size="large" @click="chooseChart(false)" prepend-icon="mdi-folder-zip">{{ t('choose.archive') }}</v-btn>
+                   size="large" @click="chooseChart(false)" prepend-icon="mdi-folder-zip">{{ t('choose.archive') }}</v-btn>
           </div>
           <v-divider vertical></v-divider>
           <div class="flex-grow-1 d-flex align-center justify-center w-0">
             <v-btn :style="folderStyle" class="w-75 gradient-primary hover-movable" size="large"
-              @click="chooseChart(true)" prepend-icon="mdi-folder">{{ t('choose.folder') }}</v-btn>
+                   @click="chooseChart(true)" prepend-icon="mdi-folder">{{ t('choose.folder') }}</v-btn>
           </div>
         </div>
         <v-overlay v-model="parsingChart" contained class="align-center justify-center" persistent
-          :close-on-content-click="false">
+                   :close-on-content-click="false">
           <v-progress-circular indeterminate> </v-progress-circular>
         </v-overlay>
       </template>
@@ -376,18 +376,18 @@ const folderStyle = computed(() => ({
           <v-row no-gutters class="mx-n2">
             <v-col cols="8">
               <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]"
-                v-model="chartInfo.name"></v-text-field>
+                            v-model="chartInfo.name"></v-text-field>
             </v-col>
             <v-col cols="4">
               <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]"
-                v-model="chartInfo.level"></v-text-field>
+                            v-model="chartInfo.level"></v-text-field>
             </v-col>
           </v-row>
 
           <v-row no-gutters class="mx-n2 mt-1">
             <v-col cols="12" sm="4">
               <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]"
-                v-model="chartInfo.charter"></v-text-field>
+                            v-model="chartInfo.charter"></v-text-field>
             </v-col>
             <v-col cols="12" sm="4">
               <v-text-field class="mx-2" :label="t('composer')" v-model="chartInfo.composer"></v-text-field>
@@ -403,16 +403,17 @@ const folderStyle = computed(() => ({
                 <p class="text-caption" v-t="'aspect'"></p>
                 <div class="d-flex flex-row align-center justify-center">
                   <v-text-field type="number" class="mr-2" :rules="[RULES.positive]" :label="t('width')"
-                    v-model="aspectWidth"></v-text-field>
+                                v-model="aspectWidth"></v-text-field>
                   <p>:</p>
                   <v-text-field type="number" class="ml-2" :rules="[RULES.positive]" :label="t('height')"
-                    v-model="aspectHeight"></v-text-field>
+                                v-model="aspectHeight"></v-text-field>
                 </div>
               </div>
             </v-col>
             <v-col cols="8" class="px-6">
               <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01"
-                v-model="chartInfo.backgroundDim"></v-slider>
+                        v-model="chartInfo.backgroundDim">
+              </v-slider>
               <v-row no-gutters class="mx-n2 mt-1 align-center">
                 <v-col cols="12" class="px-6">
                   <v-switch
@@ -455,9 +456,9 @@ const folderStyle = computed(() => ({
 <style scoped>
 .gradient-primary {
   background: linear-gradient(45deg,
-      #6366f1,
-      #8b5cf6,
-      #ec4899) !important;
+  #6366f1,
+  #8b5cf6,
+  #ec4899) !important;
   box-shadow: 0 4px 6px -1px rgb(99 102 241 / 0.3);
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
@@ -472,9 +473,9 @@ const folderStyle = computed(() => ({
   right: 0;
   bottom: 0;
   background: linear-gradient(45deg,
-      transparent 25%,
-      rgba(255, 255, 255, 0.1) 50%,
-      transparent 75%);
+  transparent 25%,
+  rgba(255, 255, 255, 0.1) 50%,
+  transparent 75%);
   background-size: 200% 200%;
   opacity: 0;
   transition: opacity 0.3s;

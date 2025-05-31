@@ -31,6 +31,7 @@ prpr = { git = "https://github.com/Winamin/Phi-TK-render-lib", package = "prpr",
 # prpr = { path = "../../phira/prpr" }
 
 sasa = { git = "https://github.com/Winamin/sasa" }
+#sasa = {path = "/home/link/sasa"}
 serde_yaml = "0.9"
 tokio = { version = "1.36.0", features = ["process", "rt-multi-thread", "fs", "full"] }
 tracing = "0.1.37"
@@ -50,11 +51,11 @@ tauri-plugin-http = "2"
 custom-protocol = ["tauri/custom-protocol"]
 
 [profile.release]
-opt-level = 2
+opt-level = 3
 # debug = 1
 
 [profile.dev.package."*"]
-opt-level = 2
+opt-level = 3
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.10"
