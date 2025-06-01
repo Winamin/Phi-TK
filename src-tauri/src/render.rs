@@ -108,6 +108,7 @@ impl RenderConfig {
             watermark: self.watermark.clone(),
             background: self.background.clone(),
             disable_loading: self.disable_loading,
+            target_audio: self.target_audio,
 
             ui_score: self.ui_score,
             ui_combo: self.ui_combo,
