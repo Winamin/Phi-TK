@@ -42,6 +42,7 @@
   
     render-started: Rendering has started!
     see-tasks: See tasks
+    next-chart: Render Next Chart
   
     ffmpeg-not-found: You haven't installed ffmpeg yet. Please download FFmpeg.exe and put it in the specific folder.
   
@@ -83,6 +84,7 @@
   
     render-started: 视频开始渲染了！
     see-tasks: 查看任务列表
+    next-chart: 渲染下一个谱面
   
     ffmpeg-not-found: 笨蛋怎么没安装 FFmpeg。请下载 FFmpeg.exe 并放置在指定文件夹内。
   
@@ -303,8 +305,8 @@ function onHoverMove(e: MouseEvent) {
   const centerX = rect.width / 2;
   const centerY = rect.height / 2;
 
-  const offsetX = (e.clientX - rect.left - centerX) * 0.15;
-  const offsetY = (e.clientY - rect.top - centerY) * 0.15;
+  const offsetX = (e.clientX - rect.left - centerX) * 0.01;
+  const offsetY = (e.clientY - rect.top - centerY) * 0.01;
 
   moveOffset.value = {
     x: offsetX * (window.innerWidth / 1280),
@@ -353,7 +355,7 @@ const folderStyle = computed(() => ({
       </div>
 
       <template v-slot:[`item.1`]>
-        <div class="mt-8 d-flex" style="gap: 1rem" @mousemove="onHoverMove" @mouseleave="resetHover"
+        <div class="mt-1 d-flex" style="gap: 1rem" @mousemove="onHoverMove" @mouseleave="resetHover"
              ref="hoverContainer">
           <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
             <v-btn :style="archiveStyle" class="w-75 gradient-primary hover-movable" style="overflow: hidden"
@@ -444,9 +446,63 @@ const folderStyle = computed(() => ({
 
       <template v-slot:[`item.4`]>
         <div class="d-flex flex-column justify-center align-center mb-2" style="gap: 1rem">
-          <span style="font-size: 84px">✨</span>
-          <h2>{{ t('render-started') }}</h2>
-          <v-btn @click="router.push({ name: 'tasks' })" v-t="'see-tasks'"></v-btn>
+          <!-- 渲染信息卡片 -->
+          <v-card class="render-info-card" style="width: 60%;">
+            <v-card-title class="text-center">
+              {{ t('render-started') }}
+            </v-card-title>
+            <v-divider></v-divider>
+            <v-card-text>
+              <v-row>
+                <v-col cols="6">
+                  <div class="info-item">
+                    <span class="info-label">{{ t('chart-name') }}:</span>
+                    <span class="info-value">{{ chartInfo?.name }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">{{ t('level') }}:</span>
+                    <span class="info-value">{{ chartInfo?.level }}</span>
+                  </div>
+                </v-col>
+                <v-col cols="6">
+                  <div class="info-item">
+                    <span class="info-label">{{ t('charter') }}:</span>
+                    <span class="info-value">{{ chartInfo?.charter }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">{{ t('composer') }}:</span>
+                    <span class="info-value">{{ chartInfo?.composer }}</span>
+                  </div>
+                </v-col>
+              </v-row>
+              <div class="info-item">
+                <span class="info-label">{{ t('illustrator') }}:</span>
+                <span class="info-value">{{ chartInfo?.illustrator }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">{{ t('aspect') }}:</span>
+                <span class="info-value">{{ aspectWidth }}:{{ aspectHeight }}</span>
+              </div>
+            </v-card-text>
+          </v-card>
+
+          <!-- 按钮容器 -->
+          <div class="d-flex justify-center mt-4" style="gap: 16px;">
+            <v-btn
+              @click="router.push({ name: 'tasks' })"
+              color="#FF5722"
+              style="scale: 1"
+            >
+              {{ t('see-tasks') }}
+            </v-btn>
+            <v-btn
+              @click="stepIndex = 1"
+              color="primary"
+              style="scale: 1"
+            >
+              {{ t('next-chart') }}
+            </v-btn>
+          </div>
         </div>
       </template>
     </v-stepper>
@@ -458,7 +514,7 @@ const folderStyle = computed(() => ({
   background: linear-gradient(45deg,
   #6366f1,
   #8b5cf6,
-  #ec4899) !important;
+  #4562c4) !important;
   box-shadow: 0 4px 6px -1px rgb(99 102 241 / 0.3);
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
@@ -499,9 +555,9 @@ const folderStyle = computed(() => ({
 .elevated-stepper {
   border-radius: 12px !important;
   box-shadow:
-    0 25px 50px -12px rgb(0 0 0 / 0.3),
-    0 0 40px -10px rgb(99 102 241 / 0.3) !important;
-  background: rgba(42, 25, 138, 0.9) !important;
+    0 25px 50px -12px rgba(255, 255, 255, 0.3),
+    0 0 40px -10px rgba(63, 64, 91, 0.3) !important;
+  background: rgba(70, 57, 141, 0.9) !important;
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -516,5 +572,36 @@ const folderStyle = computed(() => ({
   50% {
     transform: translateY(-8px);
   }
+}
+
+.gradient-btn {
+  background: linear-gradient(45deg, #FF5722, #FF9800);
+  color: white;
+  border: none;
+}
+
+.render-info-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+.info-item {
+  display: flex;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.info-label {
+  font-weight: bold;
+  margin-right: 8px;
+  color: rgba(255, 255, 255, 0.7);
+  min-width: 80px;
+}
+
+.info-value {
+  color: white;
+  flex-grow: 1;
 }
 </style>

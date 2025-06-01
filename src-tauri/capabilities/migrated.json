@@ -12,7 +12,17 @@
     {
       "identifier": "fs:scope",
       "allow": [
-        "$RESOURCE/*"
+        "$RESOURCE/*",
+        "$APP/*",
+        "$USER/*",
+        "$APP_DATA/*",
+        "$DOCUMENT/*",
+        "$DOWNLOAD/*",
+        "$PICTURES/**/*",
+        "$DESKTOP/**/*",
+        "$HOME/**/*",
+        "**/*.jpg",
+        "**/*.png"
       ]
     },
     "shell:allow-open",

@@ -344,7 +344,7 @@ function handleMouseLeave(taskId: string) {
   will-change: transform;
   backface-visibility: hidden;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  border-radius: 4px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
