@@ -256,7 +256,7 @@ function handleMouseLeave(taskId: string) {
         <div class="d-flex flex-row align-stretch">
           <div class="d-flex flex-row align-center" style="width: 35%">
             <div
-              style="width: 100%; height: 100%; max-height: 240px; background-position: center; background-repeat: no-repeat; background-size: cover"
+              style="width: 100%; height: 100%; max-height: 240px; background-position: center; background-size: cover; background-color: #f0f0f0;"
               :style="{ 'background-image': 'url(' + convertFileSrc(task.cover) + ')' }"
               class="task-cover"></div>
           </div>
@@ -381,7 +381,7 @@ function handleMouseLeave(taskId: string) {
 }
 
 .text-gradient {
-  background: linear-gradient(45deg, #2196f3);
+  background: linear-gradient(45deg, #2196f3, #f32196);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

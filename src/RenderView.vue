@@ -341,7 +341,7 @@ const folderStyle = computed(() => ({
 </script>
 
 <template>
-  <div class="pa-8 w-100 h-100" style="max-width: 1280px">
+  <div class="pa-8 w-100 h-100" style="max-width: 960px">
     <v-stepper alt-labels v-model="stepIndex" hide-actions :items="steps.map((x) => t('steps.' + x))"
                class="elevated-stepper">
       <div v-if="step === 'config' || step === 'options'" class="d-flex flex-row pa-6 pb-4 pt-0">
