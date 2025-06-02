@@ -72,6 +72,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         with:
           tagName: v${{ github.run_number }}
+          releaseName: "Release v${{ github.run_number }}"
+          releaseBody: "Automated release for run #${{ github.run_number }}"
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
