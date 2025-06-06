@@ -65,7 +65,7 @@ en:
   flid_x: Mirror Mode
   background: Remove background rendering
 
-  render-list: Total score,name,judgment line,level,combo,progress bar,Progress bar 1,Progress bar 2,Pause
+  render-list: Judgment line,Score,Combo,Level,Name,Progress bar,Time display,Percentage display,Pause
 
   presets: Presets
   preset-refresh: Refresh
