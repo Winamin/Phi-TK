@@ -1,4 +1,5 @@
 # Phi TK
+![render](arts/phi-tklogo.png)
 
 Replaced Phigros Spectral Surface renderer
 
