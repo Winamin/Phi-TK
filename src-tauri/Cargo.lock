@@ -1408,9 +1408,9 @@ dependencies = [
 
 [[package]]
 name = "flate2"
-version = "1.1.1"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ced92e76e966ca2fd84c8f7aa01a4aea65b0eb6648d72f7c8f3e2764a67fece"
+checksum = "4a3d7db9596fecd151c5f638c0ee5d5bd487b6e0ea232e5dc96d5250f6f94b1d"
 dependencies = [
  "crc32fast",
  "miniz_oxide 0.8.8",
@@ -2062,9 +2062,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.15.3"
+version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84b26c544d002229e640969970a2e74021aadf6e2f96372b9c58eff97de08eb3"
+checksum = "5971ac85611da7067dbfcabef3c70ebb5606018acd9e2a3903a0da507521e0d5"
 
 [[package]]
 name = "heck"
@@ -2405,7 +2405,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cea70ddb795996207ad57735b50c5982d8844f38ba9ee5f1aedcfb708a2aa11e"
 dependencies = [
  "equivalent",
- "hashbrown 0.15.3",
+ "hashbrown 0.15.4",
  "serde",
 ]
 
@@ -3632,11 +3632,12 @@ dependencies = [
 
 [[package]]
 name = "os_info"
-version = "3.11.0"
+version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41fc863e2ca13dc2d5c34fb22ea4a588248ac14db929616ba65c45f21744b1e9"
+checksum = "d0e1ac5fde8d43c34139135df8ea9ee9465394b2d8d20f032d38998f64afffc3"
 dependencies = [
  "log",
+ "plist",
  "serde",
  "windows-sys 0.52.0",
 ]
@@ -4048,7 +4049,7 @@ dependencies = [
 [[package]]
 name = "prpr"
 version = "0.4.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#2028d0731f6b0fa60ce510bf0755fb3423bd79c1"
+source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#0578aaa5a7f17ca074f487404a0413e9cede9d81"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4117,7 +4118,7 @@ dependencies = [
 [[package]]
 name = "prpr-avc"
 version = "0.1.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#2028d0731f6b0fa60ce510bf0755fb3423bd79c1"
+source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#0578aaa5a7f17ca074f487404a0413e9cede9d81"
 dependencies = [
  "anyhow",
  "tracing",
