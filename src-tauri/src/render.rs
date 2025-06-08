@@ -370,7 +370,15 @@ pub async fn main() -> Result<()> {
     let volume_sfx = std::mem::take(&mut config.volume_sfx);
 
     let length = track_length - chart.offset.min(0.) as f64 + 1.;
-    let video_length = O + length + A + params.config.ending_length;
+
+    // 修复：根据 disable_loading 调整时间偏移量
+    let loading_time = if params.config.disable_loading {
+        0.0
+    } else {
+        LoadingScene::TOTAL_TIME as f64
+    };
+
+    let video_length = loading_time + GameScene::BEFORE_TIME as f64 + length + params.config.ending_length +1.4;
     let offset = chart.offset.max(0.);
 
     let render_start_time = Instant::now();
@@ -385,18 +393,23 @@ pub async fn main() -> Result<()> {
     assert_eq!(sample_rate, sfx_drag.sample_rate());
     assert_eq!(sample_rate, sfx_flick.sample_rate());
 
-    let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
+    let mut output = vec![0.0_f32; ((video_length + 2.0) * sample_rate_f64).ceil() as usize * 2];
     if volume_music != 0.0 {
         let start_time = Instant::now();
-        let pos = O - chart.offset.min(0.) as f64;
+        // 修复：使用调整后的时间偏移量
+        let pos = loading_time + GameScene::BEFORE_TIME as f64 - chart.offset.min(0.) as f64;
         let count = (music.length() as f64 * sample_rate_f64) as usize;
         let start_index = (pos * sample_rate_f64).round() as usize * 2;
         let ratio = 1.0 / sample_rate_f64;
         for i in 0..count {
+            let idx0 = start_index + i * 2;
+                if idx0 + 1 >= output.len() {
+                    break;
+                }
             let position = i as f64 * ratio;
             let frame = music.sample(position as f32).unwrap_or_default();
-            output[start_index + i * 2] += frame.0 * volume_music;
-            output[start_index + i * 2 + 1] += frame.1 * volume_music;
+            output[idx0] += frame.0 * volume_music;
+            output[idx0 + 1] += frame.1 * volume_music;
         }
         info!("music Time:{:?}", start_time.elapsed());
     }
@@ -423,7 +436,8 @@ pub async fn main() -> Result<()> {
         let start_time = Instant::now();
 
         let offset_f64 = offset as f64;
-        let o_offset = O + offset_f64;
+        // 修复：使用调整后的时间偏移量
+        let o_offset = loading_time + GameScene::BEFORE_TIME as f64 + offset_f64;
 
         let sfx_click_ptr = &sfx_click as *const _;
         let sfx_drag_ptr = &sfx_drag as *const _;
@@ -528,7 +542,7 @@ pub async fn main() -> Result<()> {
 
     let fps = params.config.fps;
     //let frame_delta = 1. / fps as f32;
-    let frames = (video_length * fps as f64).round() as u64;
+    let frames = (video_length * fps as f64).ceil() as u64;
     send(IPCEvent::StartRender(frames));
     /*
         let codecs = String::from_utf8(
@@ -732,7 +746,7 @@ pub async fn main() -> Result<()> {
         ffmpeg_preset,
         ffmpeg_preset_name,
         if params.config.disable_loading {
-            format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
+            format!("-ss {}", GameScene::BEFORE_TIME as f64)
         } else {
             "-ss 0.1".to_string()
         },
@@ -753,7 +767,7 @@ pub async fn main() -> Result<()> {
 
     let byte_size = vw as usize * vh as usize * 4;
 
-    const N: usize = 180;
+    const N: usize = 60;
     let mut pbos: [GLuint; N] = [0; N];
     unsafe {
         use miniquad::gl::*;
@@ -774,7 +788,7 @@ pub async fn main() -> Result<()> {
 
     let fps = fps as f64;
     for frame in 0..N {
-        *my_time.borrow_mut() = (frame as f64 / fps).max(0.);
+        *my_time.borrow_mut() = (frame as f64 / fps).max(0.) + loading_time;
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
         main.update()?;
         main.render(&mut painter)?;
@@ -824,7 +838,7 @@ pub async fn main() -> Result<()> {
             );
             step_time = Instant::now();
         }
-        *my_time.borrow_mut() = (frame as f64 / fps).max(0.);
+        *my_time.borrow_mut() = (frame as f64 / fps).max(0.) + loading_time;
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
         //clear_background(BLACK);
         main.viewport = Some((0, 0, vw as _, vh as _));
