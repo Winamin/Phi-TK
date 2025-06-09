@@ -201,17 +201,17 @@ mod hw_detect {
     pub fn detect_intel_qsv() -> bool {
         Path::new("/dev/dri/renderD128").exists()
             && Command::new("vainfo")
-                .output()
-                .map(|out| String::from_utf8_lossy(&out.stdout).contains("VAProfileH264"))
-                .unwrap_or(false)
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).contains("VAProfileH264"))
+            .unwrap_or(false)
     }
 
     pub fn detect_amd() -> bool {
         Path::new("/dev/kfd").exists()
             && Command::new("vainfo")
-                .output()
-                .map(|out| String::from_utf8_lossy(&out.stdout).contains("AMD"))
-                .unwrap_or(false)
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).contains("AMD"))
+            .unwrap_or(false)
     }
 }
 
@@ -254,7 +254,7 @@ pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
                         .with_context(|| tl!("load-avatar-failed"))?,
                     None,
                 )
-                .into(),
+                    .into(),
             )
         } else {
             None
@@ -519,7 +519,7 @@ pub async fn main() -> Result<()> {
             }
         },
     )
-    .await?;
+        .await?;
     main.top_level = false;
     main.viewport = Some((0, 0, vw as _, vh as _));
 
