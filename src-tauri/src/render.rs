@@ -753,7 +753,7 @@ pub async fn main() -> Result<()> {
 
     let byte_size = vw as usize * vh as usize * 4;
 
-    const N: usize = 180;
+    const N: usize = 48;
     let mut pbos: [GLuint; N] = [0; N];
     unsafe {
         use miniquad::gl::*;
