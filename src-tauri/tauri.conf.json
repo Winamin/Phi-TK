@@ -55,13 +55,10 @@
         "resizable": true,
         "title": "Phi-Tk",
         "width": 880,
-        "dragDropEnabled": true
+        "dragDropEnabled": true,
+        "useHttpsScheme": true
       }
     ],
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
-    },
     "security": {
       "assetProtocol": {
         "scope": {

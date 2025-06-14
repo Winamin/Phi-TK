@@ -54,7 +54,7 @@ const { t } = useI18n();
 import type { Task, TaskStatus } from './model';
 
 import { invoke } from '@tauri-apps/api/core';
-//import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 import moment from 'moment';
 import { toastError } from './common';
@@ -253,80 +253,42 @@ function handleMouseLeave(taskId: string) {
           transform: cardTransforms[task.id.toString()]?.transform,
           transition: cardTransforms[task.id.toString()]?.transition,
         }">
-        <!-- 新的垂直布局 -->
-        <div class="d-flex flex-column w-100 pa-4">
-          <!-- 任务名称和路径 -->
-          <div class="d-flex flex-column">
-            <v-card-title class="text-h6 font-weight-bold">{{ task.name }}</v-card-title>
-            <v-card-subtitle class="mt-n2 text-truncate" :title="task.path">{{ task.path }}</v-card-subtitle>
+        <div class="d-flex flex-row align-stretch">
+          <div class="d-flex flex-row align-center" style="width: 35%">
+            <div
+              style="width: 100%; height: 100%; max-height: 240px; background-position: center; background-size: cover; background-color: #f0f0f0;"
+              :style="{ 'background-image': 'url(' + convertFileSrc(task.cover) + ')' }"
+              class="task-cover"></div>
           </div>
-
-          <!-- 状态信息和进度条 -->
-          <div class="w-100 mt-4">
-            <p class="mb-2 text-medium-emphasis">{{ describeStatus(task.status) }}</p>
-            <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
-              <v-progress-circular
-                v-if="task.status.type !== 'rendering'"
-                :indeterminate="true"
-                color="accent"
-                class="glow-spinner"
-                size="24"
-              ></v-progress-circular>
-              <v-progress-linear
-                v-else
-                :model-value="task.status.progress * 100"
-                color="accent"
-                height="12"
-                rounded
-              ></v-progress-linear>
-            </template>
-          </div>
-
-          <!-- 操作按钮 -->
-          <div class="pt-4 d-flex justify-end">
-            <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
-              <v-btn
-                variant="flat"
-                color="error"
-                prepend-icon="mdi-cancel"
-                @click="invoke('cancel_task', { id: task.id })"
-                v-t="'cancel'"
-                class="hover-scale"
-              ></v-btn>
-            </template>
-
-            <template v-else-if="task.status.type === 'failed'">
-              <v-btn
-                variant="flat"
-                color="error"
-                prepend-icon="mdi-alert-circle-outline"
-                @click="
-                  errorDialogMessage = task.status.error;
-                  errorDialog = true;
-                "
-                v-t="'details'"
-                class="hover-scale"
-              ></v-btn>
-            </template>
-
-            <template v-else-if="task.status.type === 'done'">
-              <v-btn
-                variant="flat"
-                color="secondary"
-                prepend-icon="mdi-text-box-outline"
-                @click="showOutput(task)"
-                v-t="'show-output'"
-                class="hover-scale mr-2"
-              ></v-btn>
-              <v-btn
-                variant="flat"
-                color="accent"
-                prepend-icon="mdi-folder-open-outline"
-                @click="showInFolder(task.output)"
-                v-t="'show-in-folder'"
-                class="hover-scale"
-              ></v-btn>
-            </template>
+          <div class="d-flex flex-column w-100">
+            <v-card-title>{{ task.name }}</v-card-title>
+            <v-card-subtitle class="mt-n2">{{ task.path }}</v-card-subtitle>
+            <div class="w-100 pa-4 pb-2 pr-2 mt-2">
+              <p class="mb-2 text-medium-emphasis">{{ describeStatus(task.status) }}</p>
+              <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
+                <v-progress-circular v-if="task.status.type !== 'rendering'" :indeterminate="true" color="accent" class="glow-spinner"></v-progress-circular>
+                <v-progress-linear v-else :model-value="task.status.progress * 100" color="accent" height="12" rounded></v-progress-linear>
+                <div class="pt-4 d-flex justify-end">
+                  <v-btn variant="flat" color="error" prepend-icon="mdi-cancel" @click="invoke('cancel_task', { id: task.id })" v-t="'cancel'" class="hover-scale"></v-btn>
+                </div>
+              </template>
+              <div v-if="task.status.type === 'failed'" class="pt-4 d-flex justify-end">
+                <v-btn
+                  variant="flat"
+                  color="error"
+                  prepend-icon="mdi-alert-circle-outline"
+                  @click="
+                    errorDialogMessage = task.status.error;
+                    errorDialog = true;
+                  "
+                  v-t="'details'"
+                  class="hover-scale"></v-btn>
+              </div>
+              <div v-if="task.status.type === 'done'" class="pt-4 d-flex justify-end gap-2">
+                <v-btn variant="flat" color="secondary" prepend-icon="mdi-text-box-outline" @click="showOutput(task)" v-t="'show-output'" class="hover-scale"></v-btn>
+                <v-btn variant="flat" color="accent" prepend-icon="mdi-folder-open-outline" @click="showInFolder(task.output)" v-t="'show-in-folder'" class="hover-scale"></v-btn>
+              </div>
+            </div>
           </div>
         </div>
       </v-card>
@@ -488,121 +450,4 @@ pre {
 .v-btn--primary:hover {
   background: #4a96e1 !important;
 }
-
-.task-card-container {
-  perspective: 916px;
-  transform-style: preserve-3d;
-  margin: 1rem 0;
-}
-
-.task-card {
-  will-change: transform;
-  backface-visibility: hidden;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.task-card:hover {
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-}
-
-.glass-background {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.text-gradient {
-  background: linear-gradient(45deg, #2196f3, #f32196);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.glow-spinner {
-  filter: drop-shadow(0 0 8px #2196f3);
-}
-
-pre {
-  background: rgba(0, 0, 0, 0.3) !important;
-  padding: 8px !important;
-  border-radius: 8px;
-  font-family: 'Fira Code', monospace;
-}
-
-.animated-form {
-  transition:
-    opacity 0.1s ease,
-    transform 0.1s ease;
-}
-
-.v-slide-y-transition-enter-from {
-  opacity: 0;
-  transform: translateY(-20px);
-}
-
-.v-overlay--active {
-  opacity: 0.8 !important;
-  background-color: #000000 !important;
-  backdrop-filter: blur(10px);
-}
-
-.error-dialog {
-  background: #1E1E1E;
-  border-radius: 16px !important;
-  border: 2px solid #FF5252;
-  box-shadow: 0 0 20px rgba(255, 82, 82, 0.3);
-}
-
-.error-message {
-  color: #FF5252;
-  font-family: monospace;
-  background: rgba(0, 0, 0, 0.5);
-  padding: 8px;
-  border-radius: 4px;
-  max-height: 60vh;
-  overflow: auto;
-}
-
-.v-card-actions.justify-end {
-  justify-content: flex-start !important;
-  padding-left: 16px !important;
-}
-
-.v-btn {
-  min-width: 100px !important;
-  margin: 8px !important;
-}
-
-.v-btn--primary {
-  background: #2196F3 !important;
-  border-color: #5799d1 !important;
-}
-
-.v-btn--primary:hover {
-  background: #4a96e1 !important;
-}
-
-/* 新增样式 */
-.task-card .v-card-title {
-  padding: 0;
-  padding-bottom: 4px;
-}
-
-.task-card .v-card-subtitle {
-  padding: 0;
-  opacity: 0.8;
-  font-size: 0.85rem;
-}
-
-.task-card .d-flex.justify-end {
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  margin-top: 12px;
-}
-
 </style>
