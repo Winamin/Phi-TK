@@ -96,6 +96,7 @@ import { useRouter } from 'vue-router';
 
 import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
+import { watch } from 'vue';
 
 import { invoke } from '@tauri-apps/api/core';
 import { event } from '@tauri-apps/api';
@@ -186,13 +187,32 @@ const configView = ref<typeof ConfigView>();
 async function buildParams() {
   let config = await configView.value!.buildConfig();
   if (!config) return null;
-  if (!chartInfo.value!.tip?.trim().length) chartInfo.value!.tip = null;
+
+  // 同步宽高比到 chartInfo
+  const aspect = tryParseAspect();
+  if (aspect !== undefined) {
+    chartInfo.value!.aspectRatio = aspect;
+  }
+
   return {
     path: chartPath,
     info: chartInfo.value,
     config,
   };
 }
+
+watch([aspectWidth, aspectHeight], ([newWidth, newHeight]) => {
+  try {
+    const width = parseFloat(newWidth);
+    const height = parseFloat(newHeight);
+    if (!isNaN(width) && !isNaN(height) && chartInfo.value) {
+      chartInfo.value.aspectRatio = width / height;
+    }
+  } catch (e) {
+    console.error("Failed to update aspect ratio:", e);
+  }
+});
+
 
 async function postRender() {
   try {
