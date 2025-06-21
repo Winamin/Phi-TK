@@ -210,11 +210,11 @@ onUnmounted(() => {
 }
 
 .text-gradient {
-  background: linear-gradient(45deg, #7c4dff, #ff6ec4);
+  background: linear-gradient(45deg, #c5c3ca, #d1cace);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 
-  text-shadow:0 0 12px rgb(242 237 255 / 60%), 0 0 24px rgb(0 0 0 / 40%);
+  text-shadow:0 0 12px rgb(242 237 255 / 44%), 0 0 24px rgb(0 0 0 / 22%);
   animation: glow-pulse 2s ease-in-out infinite;
 }
 

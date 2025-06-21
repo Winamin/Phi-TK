@@ -381,7 +381,6 @@ const folderStyle = computed(() => ({
             <v-btn :style="archiveStyle" class="w-75 gradient-primary hover-movable" style="overflow: hidden"
                    size="large" @click="chooseChart(false)" prepend-icon="mdi-folder-zip">{{ t('choose.archive') }}</v-btn>
           </div>
-          <v-divider vertical></v-divider>
           <div class="flex-grow-1 d-flex align-center justify-center w-0">
             <v-btn :style="folderStyle" class="w-75 gradient-primary hover-movable" size="large"
                    @click="chooseChart(true)" prepend-icon="mdi-folder">{{ t('choose.folder') }}</v-btn>
@@ -535,7 +534,6 @@ const folderStyle = computed(() => ({
   #6366f1,
   #8b5cf6,
   #4562c4) !important;
-  box-shadow: 0 4px 6px -1px rgb(99 102 241 / 0.3);
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
   overflow: hidden;
