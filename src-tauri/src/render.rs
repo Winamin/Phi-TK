@@ -553,7 +553,7 @@ pub async fn main() -> Result<()> {
 
     let fps = params.config.fps;
     //let frame_delta = 1. / fps as f32;
-    let frames = (video_length * fps as f64).round() as u64;
+    let frames = (video_length * fps as f64).ceil() as u64;
     send(IPCEvent::StartRender(frames));
     /*
         let codecs = String::from_utf8(
@@ -778,13 +778,13 @@ pub async fn main() -> Result<()> {
 
     let byte_size = vw as usize * vh as usize * 4;
 
-    const N: usize = 48;
+    const N: usize = 1;
     let mut pbos: [GLuint; N] = [0; N];
     unsafe {
         use miniquad::gl::*;
         glGenBuffers(N as _, pbos.as_mut_ptr());
-        for pbo in pbos {
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbo);
+        for pbo in &pbos {
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
             glBufferData(
                 GL_PIXEL_PACK_BUFFER,
                 (vw as u64 * vh as u64 * 4) as _,
@@ -797,65 +797,43 @@ pub async fn main() -> Result<()> {
 
     send(IPCEvent::StartRender(frames));
 
-    let fps = fps as f64;
-    for frame in 0..N {
-        *my_time.borrow_mut() = (frame as f64 / fps).max(0.);
-        gl.quad_gl.render_pass(Some(mst.output().render_pass));
-        main.update()?;
-        main.render(&mut painter)?;
-        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading {
-            draw_rectangle(0., 0., 0., 0., Color::default());
-        }
-        gl.flush();
+    let fps_f64 = fps as f64;
 
-        if MSAA.load(Ordering::SeqCst) {
-            mst.blit();
-        }
-        unsafe {
-            use miniquad::gl::*;
-            //let tex = mst.output().texture.raw_miniquad_texture_handle();
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[frame]);
-            glReadPixels(
-                0,
-                0,
-                vw as _,
-                vh as _,
-                GL_RGBA,
-                GL_UNSIGNED_BYTE,
-                std::ptr::null_mut(),
-            );
-        }
-        send(IPCEvent::Frame);
-    }
     let frames10 = frames / 10;
     let mut step_time = Instant::now();
-    for frame in N as u64..frames {
-        if frame % frames10 == 0 {
-            let progress = frame as f32 / frames as f32;
+
+    //TODO: The first frame + 1 function test_encoder
+    for frame in 0..frames {
+        if frame % frames10 == 0 || frame == frames - 1 {
+            let progress = (frame as f64 / frames as f64).min(1.0);
             let percent = (progress * 100.).ceil() as i8;
             let bar_width = 20;
-            let filled = (progress * bar_width as f32).round() as usize;
+            let filled = (progress * bar_width as f64).round() as usize;
             let empty = bar_width - filled;
 
+            let time_text = if frame == frames - 1 {
+                "Final frame".to_string()
+            } else {
+                format!("{:.2}s", step_time.elapsed().as_secs_f32())
+            };
+
             info!(
-                "Rendering: [{}{}] {:>3}% | Time: {:.2}s | Frames: {}/{}",
-                "█".repeat(filled),
-                " ".repeat(empty),
-                percent,
-                step_time.elapsed().as_secs_f32(),
-                frame,
-                frames
-            );
+            "Rendering: [{}{}] {:>3}% | Time: {} | Frames: {}/{}",
+            "█".repeat(filled),
+            " ".repeat(empty),
+            percent,
+            time_text,
+            frame + 1,
+            frames
+        );
             step_time = Instant::now();
         }
-        *my_time.borrow_mut() = (frame as f64 / fps).max(0.);
+
+        *my_time.borrow_mut() = (frame as f64 / fps_f64).max(0.);
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
-        //clear_background(BLACK);
-        main.viewport = Some((0, 0, vw as _, vh as _));
         main.update()?;
         main.render(&mut painter)?;
-        // TODO magic. can't remove this line.
+
         if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading {
             draw_rectangle(0., 0., 0., 0., Color::default());
         }
@@ -865,43 +843,33 @@ pub async fn main() -> Result<()> {
         if MSAA.load(Ordering::SeqCst) {
             mst.blit();
         }
+
         unsafe {
             use miniquad::gl::*;
-            //let tex = mst.output().texture.raw_miniquad_texture_handle();
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
 
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[frame as usize % N]);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[0]);
             glReadPixels(
-                0,
-                0,
-                vw as _,
-                vh as _,
-                GL_RGBA,
-                GL_UNSIGNED_BYTE,
-                std::ptr::null_mut(),
+                0, 0,
+                vw as _, vh as _,
+                GL_RGBA, GL_UNSIGNED_BYTE,
+                std::ptr::null_mut()
             );
 
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[(frame + 1) as usize % N]);
             let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
             if !src.is_null() {
-                input.write_all(&std::slice::from_raw_parts(src as *const u8, byte_size))?;
+                input.write_all(std::slice::from_raw_parts(
+                    src as *const u8,
+                    byte_size
+                ))?;
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
             }
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
         }
+
         send(IPCEvent::Frame);
     }
 
-    for i in 1..N {
-        unsafe {
-            use miniquad::gl::*;
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[(frames as usize + i) % N]);
-            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
-            if !src.is_null() {
-                input.write_all(&std::slice::from_raw_parts(src as *const u8, byte_size))?;
-                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-            }
-        }
-    }
     input.flush()?;
     drop(input);
     info!("Render Time: {:.2?}", render_start_time.elapsed());
