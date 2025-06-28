@@ -492,30 +492,21 @@ pub async fn main() -> Result<()> {
 
     //let (vw, vh) = params.config.resolution;
 
-    let target_aspect = info.aspect_ratio as f32;
+    let target_aspect = info.aspect_ratio as f64;
     let (mut vw, mut vh) = params.config.resolution;
-    let (orig_vw, orig_vh) = (vw, vh);
+    let (ow, oh) = (vw, vh);
+    let current_aspect = vw as f64 / vh as f64;
 
-    // 计算当前分辨率的宽高比
-    let current_aspect = vw as f32 / vh as f32;
-
-    // 如果当前分辨率宽高比与目标宽高比不匹配，调整分辨率
-    if (current_aspect - target_aspect).abs() > 0.01 {
-        // 计算新的分辨率以匹配目标宽高比
+    if (current_aspect - target_aspect).abs() > 1e-9 {
         if current_aspect > target_aspect {
-            // 太宽，减少宽度
-            vw = (vh as f32 * target_aspect) as u32;
+            vw = (vh as f64 * target_aspect).round() as u32;
         } else {
-            // 太高，减少高度
-            vh = (vw as f32 / target_aspect) as u32;
+            vh = (vw as f64 / target_aspect).round() as u32;
         }
-
-        // 记录调整信息
-        info!(
-            "调整分辨率以匹配宽高比: {}x{} -> {}x{} (目标宽高比: {})",
-            orig_vw, orig_vh, vw, vh, target_aspect
-        );
+        info!("{}x{} -> {}x{} (目标 {:.9})", ow, oh, vw, vh, target_aspect);
     }
+
+
     let mst = Rc::new(MSRenderTarget::new((vw, vh), config.sample_count));
     let my_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.));
     let tm = TimeManager::manual(Box::new({
