@@ -44,7 +44,7 @@
   },
   "productName": "Phi-TK",
   "mainBinaryName": "Phi-TK",
-  "version": "0.1.68",
+  "version": "1.0.2",
   "identifier": "com.sc.phi.tk",
   "plugins": {},
   "app": {
@@ -55,13 +55,10 @@
         "resizable": true,
         "title": "Phi-Tk",
         "width": 880,
-        "dragDropEnabled": true
+        "dragDropEnabled": true,
+        "useHttpsScheme": true
       }
     ],
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
-    },
     "security": {
       "assetProtocol": {
         "scope": {

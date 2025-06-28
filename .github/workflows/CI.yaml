@@ -70,6 +70,10 @@ jobs:
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
+        with:
+          tagName: v${{ github.run_number }}
+          releaseName: "Release v${{ github.run_number }}"
+          releaseBody: "Automated release for run #${{ github.run_number }}"
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,7 +89,7 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.exe
       - name: Upload Linux Installer
         uses: actions/upload-artifact@v4
-        if: matrix.platform == 'ubuntu-20.04'
+        if: matrix.platform == 'ubuntu-22.04'
         with:
           name: linux-installer
           path: |

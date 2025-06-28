@@ -168,7 +168,7 @@ pub async fn run() -> Result<()> {
 
     #[cfg(target_os = "windows")]
     let asset_dir = exe_dir.join("assets");
-    
+
     if !asset_dir.exists() {
         eprintln!("错误：资源目录不存在 - {:?}", asset_dir);
         bail!("资源目录未找到，请检查安装路径");
@@ -176,9 +176,9 @@ pub async fn run() -> Result<()> {
 
     ASSET_PATH.set(asset_dir.clone()).unwrap();
     set_pc_assets_folder(&asset_dir.display().to_string());
-    
+
     app.run(|_, _| {});
-    
+
     Ok(())
 }
 

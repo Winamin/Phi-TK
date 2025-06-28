@@ -1,6 +1,6 @@
 [package]
 name = "Phi-TK"
-version = "0.1.68"
+version = "1.0.2"
 description = "Phi-TK"
 authors = ["Mivik", "Link"]
 license = ""
@@ -52,6 +52,7 @@ custom-protocol = ["tauri/custom-protocol"]
 
 [profile.release]
 opt-level = 3
+lto = true
 # debug = 1
 
 [profile.dev.package."*"]
