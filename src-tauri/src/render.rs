@@ -392,11 +392,18 @@ pub async fn main() -> Result<()> {
         let count = (music.length() as f64 * sample_rate_f64) as usize;
         let start_index = (pos * sample_rate_f64).round() as usize * 2;
         let ratio = 1.0 / sample_rate_f64;
+
+        let output_ptr = output.as_mut_ptr();
         for i in 0..count {
             let position = i as f64 * ratio;
             let frame = music.sample(position as f32).unwrap_or_default();
-            output[start_index + i * 2] += frame.0 * volume_music;
-            output[start_index + i * 2 + 1] += frame.1 * volume_music;
+            let left = frame.0 * volume_music;
+            let right = frame.1 * volume_music;
+
+            unsafe {
+                *output_ptr.add(start_index + i * 2) += left;
+                *output_ptr.add(start_index + i * 2 + 1) += right;
+            }
         }
         info!("music Time:{:?}", start_time.elapsed());
     }
@@ -406,17 +413,21 @@ pub async fn main() -> Result<()> {
         if position >= output.len() {
             return 0;
         }
-        let slice = &mut output[position..];
-        let len = (slice.len() / 2).min(clip.frame_count());
+        let len = clip.frame_count();
+        let output_len = output.len() - position;
+        let valid_frames = (output_len / 2).min(len);
 
-        let frames = clip.frames();
-        for i in 0..len {
-            let sample = frames[i].0 * volume;
-            slice[i * 2] += sample;
-            slice[i * 2 + 1] += sample;
+        let output_ptr = unsafe { output.as_mut_ptr().add(position) };
+        let frames_ptr = clip.frames().as_ptr();
+
+        for i in 0..valid_frames {
+            unsafe {
+                let sample = (*frames_ptr.add(i)).0 * volume;
+                *output_ptr.add(i * 2) += sample;
+                *output_ptr.add(i * 2 + 1) += sample;
+            }
         }
-
-        len
+        valid_frames
     };
 
     if volume_sfx != 0.0 {
