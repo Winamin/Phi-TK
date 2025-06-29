@@ -47,16 +47,16 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-http = "2"
 
+
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 
 [profile.release]
 opt-level = 3
-lto = true
 # debug = 1
 
 [profile.dev.package."*"]
 opt-level = 3
 
 [target.'cfg(windows)'.dependencies]
-winreg = "0.10"
+winreg = "0.55.0"
