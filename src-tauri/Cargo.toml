@@ -1,6 +1,6 @@
 [package]
 name = "Phi-TK"
-version = "1.0.2"
+version = "1.0.3"
 description = "Phi-TK"
 authors = ["Mivik", "Link"]
 license = ""
