@@ -106,6 +106,7 @@ pub async fn run() -> Result<()> {
             get_rpe_charts,
             test_ffmpeg,
             open_app_folder,
+            list_chart_files,
         ])
         .on_window_event(|_, event| match event {
             //WindowEvent::CloseRequested { api, .. } => {
@@ -346,6 +347,29 @@ async fn batch_add_tasks(
         }
         Ok(())
     }).await
+}
+
+#[tauri::command]
+async fn list_chart_files(path: PathBuf) -> Result<Vec<String>, InvokeError> {
+    wrap_async(async move {
+        let mut files = Vec::new();
+        let mut dirs = vec![path];
+        while let Some(dir) = dirs.pop() {
+            let mut entries = tokio::fs::read_dir(dir).await?;
+            while let Some(entry) = entries.next_entry().await? {
+                let path = entry.path();
+                if path.is_dir() {
+                    dirs.push(path);
+                } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                    if ["zip", "json", "pek"].contains(&ext) {
+                        files.push(path.to_str().context("Invalid path")?.to_owned());
+                    }
+                }
+            }
+        }
+        Ok(files)
+    })
+        .await
 }
 
 pub fn create_default_render_config() -> RenderConfig {
