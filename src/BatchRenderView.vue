@@ -11,7 +11,6 @@ en:
   name: Name
   level: Level
   charter: Charter
-  preset: Preset
   status: Status
   pending: Pending
   rendering: Rendering
@@ -20,6 +19,22 @@ en:
   total-selected: "Total selected: {count}"
   all: All
   none: None
+  configure: Configure
+  close: Close
+  total-charts: "Total charts: {count}"
+  select-all: Select All
+  deselect-all: Deselect All
+  progress: Progress
+  eta: ETA
+  no-charts: No charts added
+  add-files-failed: Failed to add files
+  no-charts-found: No charts found in folder
+  charts-added: "{count} charts added"
+  add-folder-failed: Failed to add folder
+  no-charts-selected: No charts selected
+  batch-completed: "Batch completed: {count} charts rendered"
+  ffmpeg-not-found: FFmpeg not found
+  chart-info-missing: Chart info missing
 
 zh-CN:
   title: 批量渲染
@@ -33,7 +48,6 @@ zh-CN:
   name: 名称
   level: 难度
   charter: 谱师
-  preset: 预设
   status: 状态
   pending: 等待中
   rendering: 渲染中
@@ -42,6 +56,22 @@ zh-CN:
   total-selected: "已选择: {count}"
   all: 全选
   none: 取消全选
+  configure: 配置
+  close: 关闭
+  total-charts: "总谱面: {count}"
+  select-all: 全选
+  deselect-all: 取消全选
+  progress: 进度
+  eta: 预计
+  no-charts: 未添加谱面
+  add-files-failed: 添加文件失败
+  no-charts-found: 文件夹中未找到谱面
+  charts-added: "已添加 {count} 个谱面"
+  add-folder-failed: 添加文件夹失败
+  no-charts-selected: 未选择谱面
+  batch-completed: "批量渲染完成: {count} 个谱面已渲染"
+  ffmpeg-not-found: 未找到 FFmpeg
+  chart-info-missing: 谱面信息缺失
 </i18n>
 
 <script setup lang="ts">
@@ -57,14 +87,13 @@ import { event } from '@tauri-apps/api';
 
 import { toastError, toast } from './common';
 import type { ChartInfo, RenderConfig } from './model';
-import ConfigView from '@/components/ConfigView.vue'; // 确保路径正确
+import ConfigView from '@/components/ConfigView.vue';
 
 interface BatchChart {
   path: string;
   name: string;
   level: string;
   charter: string;
-  preset: string;
   status: 'pending' | 'rendering' | 'done' | 'failed';
   selected: boolean;
   error?: string;
@@ -76,6 +105,7 @@ const selectedPreset = ref<string>('default');
 const presets = ref<{name: string}[]>([]);
 const allSelected = ref(false);
 const configViewRef = ref<InstanceType<typeof ConfigView> | null>(null);
+const configDialog = ref(false);
 
 // 当前渲染状态
 const currentRenderingIndex = ref<number>(-1);
@@ -159,7 +189,6 @@ async function addChart(path: string) {
       name: chartInfo.name,
       level: chartInfo.level,
       charter: chartInfo.charter,
-      preset: selectedPreset.value,
       status: 'pending',
       selected: true,
       chartInfo
@@ -171,7 +200,6 @@ async function addChart(path: string) {
       name: t('parse-failed'),
       level: 'N/A',
       charter: 'N/A',
-      preset: selectedPreset.value,
       status: 'failed',
       selected: false,
       error: error instanceof Error ? error.message : String(error)
@@ -192,12 +220,8 @@ function toggleSelectAll() {
   });
 }
 
-// 构建渲染参数 - 使用ConfigView的方法
-async function buildRenderParams(chart: BatchChart) {
-  if (!chart.chartInfo) {
-    throw new Error(t('chart-info-missing'));
-  }
-
+// 构建渲染参数
+async function buildRenderParams() {
   // 检查 ffmpeg
   if (!(await invoke('test_ffmpeg'))) {
     throw new Error(t('ffmpeg-not-found'));
@@ -206,25 +230,114 @@ async function buildRenderParams(chart: BatchChart) {
   // 获取配置
   let config: RenderConfig;
 
-  if (chart.preset === 'default') {
-    // 使用ConfigView的默认配置
-    const builtConfig = await configViewRef.value!.buildConfig();
-    if (!builtConfig) {
-      throw new Error('Failed to build config: validation failed');
-    }
-    config = builtConfig;
-  } else {
-    // 获取预设配置
-    const presetsMap = await invoke('get_presets') as Record<string, RenderConfig>;
-    config = presetsMap[chart.preset];
-
-    // 如果预设不存在，使用默认配置
-    if (!config) {
-      const builtConfig = await configViewRef.value!.buildConfig();
+  if (selectedPreset.value === 'default') {
+    // 使用ConfigView的配置
+    if (!configViewRef.value) {
+      // 如果ConfigView未初始化，则创建一个临时配置
+      console.warn('ConfigView not initialized, using default config');
+      config = {
+        resolution: [1920, 1080],
+        ffmpegPreset: 'medium p4 balanced',
+        endingLength: -2.0,
+        disableLoading: true,
+        chartDebug: false,
+        flidX: false,
+        chartRatio: 1,
+        bufferSize: 256,
+        fps: 60,
+        hardwareAccel: true,
+        hevc: false,
+        bitrateControl: 'CRF',
+        bitrate: '28',
+        targetAudio: 96000,
+        background: false,
+        aggressive: false,
+        challengeColor: 'golden',
+        challengeRank: 45,
+        disableEffect: false,
+        doubleHint: true,
+        fxaa: false,
+        noteScale: 1,
+        particle: true,
+        playerAvatar: null,
+        playerName: '',
+        playerRks: 15,
+        sampleCount: 1,
+        resPackPath: null,
+        speed: 1,
+        volumeMusic: 1,
+        volumeSfx: 1,
+        combo: 'AUTOPLAY',
+        watermark: '',
+        showProgressText: false,
+        showTimeText: false,
+        uiLine: true,
+        uiScore: true,
+        uiCombo: true,
+        uiLevel: true,
+        uiName: true,
+        uiPb: true,
+        uiPause: true
+      };
+    } else {
+      const builtConfig = await configViewRef.value.buildConfig();
       if (!builtConfig) {
         throw new Error('Failed to build config: validation failed');
       }
       config = builtConfig;
+    }
+  } else {
+    // 获取预设配置
+    const presetsMap = await invoke('get_presets') as Record<string, RenderConfig>;
+    config = presetsMap[selectedPreset.value];
+
+    // 如果预设不存在，使用默认配置
+    if (!config) {
+      console.warn(`Preset '${selectedPreset.value}' not found, using default config`);
+      config = {
+        resolution: [1920, 1080],
+        ffmpegPreset: 'medium p4 balanced',
+        endingLength: -2.0,
+        disableLoading: true,
+        chartDebug: false,
+        flidX: false,
+        chartRatio: 1,
+        bufferSize: 256,
+        fps: 60,
+        hardwareAccel: true,
+        hevc: false,
+        bitrateControl: 'CRF',
+        bitrate: '28',
+        targetAudio: 96000,
+        background: false,
+        aggressive: false,
+        challengeColor: 'golden',
+        challengeRank: 45,
+        disableEffect: false,
+        doubleHint: true,
+        fxaa: false,
+        noteScale: 1,
+        particle: true,
+        playerAvatar: null,
+        playerName: '',
+        playerRks: 15,
+        sampleCount: 1,
+        resPackPath: null,
+        speed: 1,
+        volumeMusic: 1,
+        volumeSfx: 1,
+        combo: 'AUTOPLAY',
+        watermark: '',
+        showProgressText: false,
+        showTimeText: false,
+        uiLine: true,
+        uiScore: true,
+        uiCombo: true,
+        uiLevel: true,
+        uiName: true,
+        uiPb: true,
+        uiPause: true
+      };
     }
   }
 
@@ -233,21 +346,22 @@ async function buildRenderParams(chart: BatchChart) {
     throw new Error('Resolution is missing in config');
   }
 
-  return {
-    path: chart.path,
-    info: chart.chartInfo,
-    config
-  };
+  return config;
 }
 
 // 渲染单个谱面
-async function renderSingleChart(chart: BatchChart, index: number) {
+async function renderSingleChart(chart: BatchChart, index: number, config: RenderConfig) {
   try {
     chart.status = 'rendering';
     currentRenderingIndex.value = index;
 
-    const params = await buildRenderParams(chart);
-    await invoke('post_render', { params });
+    await invoke('post_render', {
+      params: {
+        path: chart.path,
+        info: chart.chartInfo,
+        config
+      }
+    });
 
     chart.status = 'done';
   } catch (error) {
@@ -267,26 +381,26 @@ async function startRender() {
     return;
   }
 
-  // 确保ConfigView已初始化
-  if (!configViewRef.value) {
-    toast('ConfigView is not initialized', 'error');
-    return;
+  try {
+    const config = await buildRenderParams();
+
+    for (let i = 0; i < selectedCharts.length; i++) {
+      const chart = selectedCharts[i];
+      const originalIndex = charts.value.findIndex(c => c === chart);
+
+      if (chart.status !== 'pending') continue;
+
+      await renderSingleChart(chart, originalIndex, config);
+    }
+
+    toast(t('batch-completed', { count: selectedCharts.length }), 'success');
+  } catch (error) {
+    toastError(error);
+  } finally {
+    currentRenderingIndex.value = -1;
+    renderMsg.value = '';
+    renderProgress.value = undefined;
   }
-
-  for (let i = 0; i < selectedCharts.length; i++) {
-    const chart = selectedCharts[i];
-    const originalIndex = charts.value.findIndex(c => c === chart);
-
-    if (chart.status !== 'pending') continue;
-
-    await renderSingleChart(chart, originalIndex);
-  }
-
-  currentRenderingIndex.value = -1;
-  renderMsg.value = '';
-  renderProgress.value = undefined;
-
-  toast(t('batch-completed', { count: selectedCharts.length }), 'success');
 }
 
 // 状态颜色
@@ -315,56 +429,89 @@ event.listen('render-progress', (msg) => {
   renderProgress.value = payload.progress * 100;
 });
 
-event.listen('render-done', () => {
-  console.log('Render completed');
-});
-
 onMounted(() => {
   getPresets();
 });
 </script>
 
 <template>
-  <div class="pa-8 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1.5rem">
-    <div class="d-flex align-center justify-space-between mb-6">
+  <div class="pa-6 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1.5rem">
+    <div class="d-flex align-center justify-space-between">
       <h1>{{ t('title') }}</h1>
-      <v-btn @click="router.go(-1)" prepend-icon="mdi-arrow-left">
+      <v-btn @click="router.go(-1)" prepend-icon="mdi-arrow-left" variant="text" size="small">
         {{ t('back') }}
       </v-btn>
     </div>
 
-    <!-- 隐藏的ConfigView用于构建配置 -->
-    <ConfigView ref="configViewRef" style="display: none;" />
+    <!-- 配置对话框 -->
+    <v-dialog v-model="configDialog" max-width="800" scrollable>
+      <v-card>
+        <v-toolbar color="primary">
+          <v-toolbar-title>{{ t('configure') }}</v-toolbar-title>
+          <v-spacer></v-spacer>
+          <v-btn icon @click="configDialog = false">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-toolbar>
+        <v-card-text class="pa-0">
+          <!-- 确保ConfigView组件在对话框打开时渲染 -->
+          <ConfigView ref="configViewRef" />
+        </v-card-text>
+        <v-card-actions class="justify-end pa-4">
+          <v-btn color="primary" @click="configDialog = false">{{ t('close') }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
-    <div class="batch-controls mb-6">
-      <div class="d-flex align-center gap-4 mb-4 flex-wrap">
-        <v-btn color="primary" @click="addFiles" prepend-icon="mdi-file-plus">
+    <div class="batch-controls">
+      <!-- 顶部控制栏 -->
+      <div class="d-flex align-center gap-2 mb-4 flex-wrap">
+        <v-btn color="primary" @click="addFiles" prepend-icon="mdi-file-plus" size="small">
           {{ t('add-files') }}
         </v-btn>
 
-        <v-btn color="primary" @click="addFolder" prepend-icon="mdi-folder-plus">
+        <v-btn color="primary" @click="addFolder" prepend-icon="mdi-folder-plus" size="small">
           {{ t('add-folder') }}
         </v-btn>
 
-        <v-btn color="error" @click="clearList" prepend-icon="mdi-delete">
+        <v-btn color="error" @click="clearList" prepend-icon="mdi-delete" size="small">
           {{ t('clear-list') }}
         </v-btn>
+
+        <v-btn color="secondary" @click="configDialog = true" prepend-icon="mdi-cog" size="small">
+          {{ t('configure') }}
+        </v-btn>
+
+        <v-spacer></v-spacer>
 
         <v-combobox
           v-model="selectedPreset"
           :label="t('select-preset')"
           :items="presets"
           item-title="name"
-          density="comfortable"
-          class="ml-auto"
-          style="min-width: 200px;"
+          density="compact"
+          variant="outlined"
+          style="min-width: 180px;"
+          class="mr-2"
         />
+
+        <v-btn
+          color="primary"
+          @click="startRender"
+          prepend-icon="mdi-play"
+          :disabled="selectedCount === 0 || currentRenderingIndex >= 0"
+          :loading="currentRenderingIndex >= 0"
+          size="small"
+        >
+          {{ t('start-render') }}
+        </v-btn>
       </div>
 
-      <div class="d-flex align-center justify-space-between mt-2">
+      <!-- 信息统计栏 -->
+      <div class="d-flex align-center justify-space-between mt-2 text-caption">
         <span>{{ t('total-charts', { count: charts.length }) }}</span>
         <span>{{ t('total-selected', { count: selectedCount }) }}</span>
-        <v-btn @click="toggleSelectAll" variant="text" size="small">
+        <v-btn @click="toggleSelectAll" variant="text" size="x-small" density="compact">
           {{ t(allSelected ? 'deselect-all' : 'select-all') }}
         </v-btn>
       </div>
@@ -372,7 +519,7 @@ onMounted(() => {
 
     <!-- 渲染进度显示 -->
     <v-card v-if="currentRenderingIndex >= 0" class="mb-4">
-      <v-card-title class="d-flex align-center">
+      <v-card-title class="d-flex align-center text-subtitle-1">
         <v-progress-circular indeterminate size="20" width="2" class="mr-2" />
         {{ t('rendering') }}: {{ charts[currentRenderingIndex]?.name }}
       </v-card-title>
@@ -387,15 +534,15 @@ onMounted(() => {
       </v-card-text>
     </v-card>
 
-    <div class="batch-table-container">
-      <v-table density="comfortable" fixed-header height="50vh">
+    <!-- 谱面表格 -->
+    <div class="batch-table-container flex-grow-1">
+      <v-table density="comfortable" fixed-header height="100%">
         <thead>
         <tr>
           <th width="40"></th>
           <th>{{ t('name') }}</th>
           <th width="100">{{ t('level') }}</th>
           <th width="120">{{ t('charter') }}</th>
-          <th width="180">{{ t('preset') }}</th>
           <th width="120">{{ t('status') }}</th>
           <th width="80">{{ t('actions') }}</th>
         </tr>
@@ -403,22 +550,16 @@ onMounted(() => {
         <tbody>
         <tr v-for="(chart, index) in charts" :key="index">
           <td>
-            <v-checkbox v-model="chart.selected" density="compact" hide-details :disabled="chart.status === 'rendering'" />
-          </td>
-          <td class="text-truncate" style="max-width: 200px;" :title="chart.name">{{ chart.name }}</td>
-          <td>{{ chart.level }}</td>
-          <td>{{ chart.charter }}</td>
-          <td>
-            <v-select
-              v-model="chart.preset"
-              :items="presets"
-              item-title="name"
+            <v-checkbox
+              v-model="chart.selected"
               density="compact"
-              variant="outlined"
               hide-details
               :disabled="chart.status === 'rendering'"
             />
           </td>
+          <td class="text-truncate" style="max-width: 200px;" :title="chart.name">{{ chart.name }}</td>
+          <td>{{ chart.level }}</td>
+          <td>{{ chart.charter }}</td>
           <td>
             <v-chip :color="statusColor(chart.status)" size="small">
               {{ t(chart.status) }}
@@ -437,25 +578,12 @@ onMounted(() => {
           </td>
         </tr>
         <tr v-if="charts.length === 0">
-          <td colspan="7" class="text-center py-8 text-disabled">
+          <td colspan="6" class="text-center py-8 text-disabled">
             {{ t('no-charts') }}
           </td>
         </tr>
         </tbody>
       </v-table>
-    </div>
-
-    <div class="mt-auto pt-4 d-flex justify-end">
-      <v-btn
-        color="primary"
-        size="large"
-        @click="startRender"
-        prepend-icon="mdi-play"
-        :disabled="selectedCount === 0 || currentRenderingIndex >= 0"
-        :loading="currentRenderingIndex >= 0"
-      >
-        {{ t('start-render') }}
-      </v-btn>
     </div>
   </div>
 </template>
@@ -465,10 +593,14 @@ onMounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   overflow: hidden;
+  flex: 1;
+  min-height: 300px;
 }
 
-.gap-4 {
-  gap: 16px;
+.batch-controls {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 16px;
 }
 
 .text-truncate {
@@ -477,9 +609,11 @@ onMounted(() => {
   text-overflow: ellipsis;
 }
 
-.batch-controls {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  padding: 16px;
+.gap-2 {
+  gap: 8px;
+}
+
+.flex-grow-1 {
+  flex-grow: 1;
 }
 </style>
