@@ -33,6 +33,7 @@ use std::{
 use task::{TaskQueue, TaskView};
 use tauri::{ipc::InvokeError, Manager, State, WindowEvent};
 use tokio::{io::AsyncWriteExt, process::Command};
+use prpr::config::ChallengeModeColor;
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
@@ -91,6 +92,7 @@ pub async fn run() -> Result<()> {
             show_in_folder,
             preview_chart,
             parse_chart,
+            batch_add_tasks,
             post_render,
             get_tasks,
             cancel_task,
@@ -315,6 +317,39 @@ fn get_respacks() -> Result<Vec<RespackInfo>, InvokeError> {
         Ok(names)
     })()
     .map_err(InvokeError::from_anyhow)
+}
+
+#[tauri::command]
+async fn batch_add_tasks(
+    queue: State<'_, TaskQueue>,
+    tasks: Vec<(String, String)> // (path, preset_name)
+) -> Result<(), InvokeError> {
+    wrap_async(async move {
+        for (path, preset_name) in tasks {
+            // 获取预设配置
+            let mut presets = get_presets().await.map_err(|e| anyhow::anyhow!("Failed to get presets: {:?}", e))?;
+
+            // 使用 unwrap_or_else 提供默认值
+            let config = presets.remove(&preset_name).unwrap_or_else(|| {
+                create_default_render_config()
+            });
+
+            // 创建渲染参数
+            let params = RenderParams {
+                path: PathBuf::from(path),
+                config,
+                info: ChartInfo::default(),// 或者根据实际需要设置
+            };
+
+            // 添加到队列
+            queue.post(params).await.map_err(|e| anyhow::anyhow!("Failed to post task: {:?}", e))?;
+        }
+        Ok(())
+    }).await
+}
+
+pub fn create_default_render_config() -> RenderConfig {
+    RenderConfig::default()
 }
 
 #[tauri::command]

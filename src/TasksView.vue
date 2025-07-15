@@ -20,6 +20,7 @@ en:
 
   show-output: Show Output
   show-in-folder: Open Folder
+  batch-render: Batch Render
 
 zh-CN:
   empty: 空空如也
@@ -42,6 +43,7 @@ zh-CN:
 
   show-output: 查看输出
   show-in-folder: 打开文件夹
+  batch-render: 批量渲染
 
 </i18n>
 
@@ -269,6 +271,16 @@ const progressRing = (progress: number) => {
         </v-row>
       </v-form>
     </v-slide-y-transition>
+
+    <div class="d-flex justify-end mb-4">
+      <v-btn
+        color="primary"
+        prepend-icon="mdi-playlist-plus"
+        @click="$router.push({ name: 'batch' })"
+      >
+        {{ t('batch-render') }}
+      </v-btn>
+    </div>
 
     <div class="task-grid">
       <div
