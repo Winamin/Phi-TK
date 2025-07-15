@@ -104,3 +104,13 @@ export interface RPEChart {
   illustration: string;
   charter: string;
 }
+
+export interface BatchChart {
+  path: string;
+  name: string;
+  level: string;
+  charter: string;
+  preset: string;
+  status: 'pending' | 'rendering' | 'done' | 'failed';
+  error?: string;
+}

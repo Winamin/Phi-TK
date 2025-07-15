@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "Phi-TK"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4093,7 +4093,6 @@ dependencies = [
 [[package]]
 name = "prpr"
 version = "0.4.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#cd908a8b772b77d09272d9950300bde2ff4788e6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4164,7 +4163,6 @@ dependencies = [
 [[package]]
 name = "prpr-avc"
 version = "0.1.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#cd908a8b772b77d09272d9950300bde2ff4788e6"
 dependencies = [
  "anyhow",
  "tracing",
