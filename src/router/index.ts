@@ -23,7 +23,7 @@ const router = createRouter({
     },
     {
       path: '/batch',
-      name: 'batch',
+      name: 'batch-render',
       component: BatchRenderView,
       meta: { title: 'Batch Render' }
     },
