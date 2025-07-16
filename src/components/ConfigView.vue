@@ -166,7 +166,6 @@ zh-CN:
 
 <script setup lang="ts">
 import { ref, h, computed } from 'vue';
-
 import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
@@ -188,68 +187,6 @@ const ffmpegPresetPresetList = ['veryfast p1 speed', 'faster p2 speed', 'fast p3
 const bitrateControlList = ['CRF', 'CBR'];
 const targetAudioOptions = [96000, 44100, 48000, 192000, 384000, 768000, 1536000, 3072000, 6144000, 12288000];
 const targetAudio = ref(targetAudioOptions[0]);
-
-const DEFAULT_CONFIG: RenderConfig = {
-  resolution: [1920, 1080],
-  ffmpegPreset: 'medium p4 balanced',
-  endingLength: -2.0,
-  disableLoading: true,
-  chartDebug: false,
-  flidX: false,
-  chartRatio: 1,
-  bufferSize: 256,
-  fps: 60,
-  hardwareAccel: true,
-  hevc: false,
-  bitrateControl: 'CRF',
-  bitrate: '28',
-  targetAudio: 96000,
-  background: false,
-
-  aggressive: false,
-  challengeColor: 'golden',
-  challengeRank: 45,
-  disableEffect: false,
-  doubleHint: true,
-  fxaa: false,
-  noteScale: 1,
-  particle: true,
-  playerAvatar: null,
-  playerName: '',
-  playerRks: 15,
-  sampleCount: 1,
-  resPackPath: null,
-  speed: 1,
-  volumeMusic: 1,
-  volumeSfx: 1,
-  combo: 'AUTOPLAY',
-  watermark: '',
-  showProgressText: false,
-  showTimeText: false,
-
-  //ui [prpr]
-  uiLine: true,
-  uiScore: true,
-  uiCombo: true,
-  uiLevel: true,
-  uiName: true,
-  uiPb: true,
-  uiPause: true,
-};
-
-function parseResolution(resolution: string): [number, number] | null {
-  let parts = resolution.split(/[xX]/g);
-  if (parts.length !== 2) return null;
-  let ws = parts[0].trim(),
-    hs = parts[1].trim();
-  if (!isNumeric(ws) || !isNumeric(hs)) return null;
-  let w = parseInt(ws),
-    h = parseInt(hs);
-  if (w <= 0 || h <= 0) return null;
-  return [w, h];
-}
-const resolutionRule = (value: string) => parseResolution(value) !== null || t('rules.resolution');
-const sampleCountRule = (value: string) => (isNumeric(value) && Math.log2(Number(value)) % 1 === 0) || t('rules.sample-count');
 
 const form = ref<VForm>();
 
@@ -399,26 +336,6 @@ async function buildConfig(): Promise<RenderConfig | null> {
   };
 }
 
-function onEnter() {
-  if (preset.value.key !== 'default') return;
-  resolution.value = RESOLUTIONS[1];
-  if (props.initAspectRatio) {
-    for (let res of RESOLUTIONS) {
-      let [w, h] = parseResolution(res)!;
-      if (Math.abs(w / h - props.initAspectRatio) < 0.01) {
-        resolution.value = res;
-        break;
-      }
-    }
-  }
-}
-
-defineExpose({ buildConfig, onEnter });
-
-function StickyLabel(props: { title: string }) {
-  return h('div', { class: 'mb-4 bg-surface sticky-label', style: 'position: sticky; top: 0; z-index: 2' }, [h('h3', { class: 'pa-1' }, props.title)]);
-}
-
 function applyConfig(config: RenderConfig) {
   resolution.value = config.resolution.join('x');
   ffmpegPreset.value = config.ffmpegPreset;
@@ -467,6 +384,12 @@ function applyConfig(config: RenderConfig) {
   if (config.uiPause) render.value.push(renderList.value[8]);
 }
 
+defineExpose({ buildConfig, applyConfig });
+
+function StickyLabel(props: { title: string }) {
+  return h('div', { class: 'mb-4 bg-surface sticky-label', style: 'position: sticky; top: 0; z-index: 2' }, [h('h3', { class: 'pa-1' }, props.title)]);
+}
+
 interface Preset {
   name: string;
   key: string;
@@ -475,7 +398,50 @@ interface Preset {
 const DEFAULT_PRESET: Preset = {
   name: t('default-preset'),
   key: 'default',
-  config: DEFAULT_CONFIG,
+  config: {
+    resolution: [1920, 1080],
+    ffmpegPreset: 'medium p4 balanced',
+    endingLength: -2.0,
+    disableLoading: true,
+    chartDebug: false,
+    flidX: false,
+    chartRatio: 1,
+    bufferSize: 256,
+    fps: 60,
+    hardwareAccel: true,
+    hevc: false,
+    bitrateControl: 'CRF',
+    bitrate: '28',
+    targetAudio: 96000,
+    background: false,
+    aggressive: false,
+    challengeColor: 'golden',
+    challengeRank: 45,
+    disableEffect: false,
+    doubleHint: true,
+    fxaa: false,
+    noteScale: 1,
+    particle: true,
+    playerAvatar: null,
+    playerName: '',
+    playerRks: 15,
+    sampleCount: 1,
+    resPackPath: null,
+    speed: 1,
+    volumeMusic: 1,
+    volumeSfx: 1,
+    combo: 'AUTOPLAY',
+    watermark: '',
+    showProgressText: false,
+    showTimeText: false,
+    uiLine: true,
+    uiScore: true,
+    uiCombo: true,
+    uiLevel: true,
+    uiName: true,
+    uiPb: true,
+    uiPause: true
+  }
 };
 
 async function getPresets() {
