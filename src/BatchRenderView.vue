@@ -7,7 +7,7 @@ en:
   add-folder: Add Folder
   clear-list: Clear List
   start-render: Start Render
-  back: Back
+  back: Tasks
   name: Name
   level: Level
   charter: Charter
@@ -45,12 +45,13 @@ en:
   composer: Composer
   illustrator: Illustrator
   background-dim: Background Dim
-  hold-cover: Hold Partial Cover
+  hold_cover: Hold Partial Cover
   tip: Tip
   aspect: Aspect Ratio
   width: Width
   height: Height
   dim: Background Dim
+  preview: Preview
 zh-CN:
   title: 批量渲染
   select-charts: 选择谱面
@@ -59,7 +60,7 @@ zh-CN:
   add-folder: 添加文件夹
   clear-list: 清空列表
   start-render: 开始渲染
-  back: 返回
+  back: 任务列表
   name: 名称
   level: 难度
   charter: 谱师
@@ -97,16 +98,17 @@ zh-CN:
   composer: 作曲家
   illustrator: 插画师
   background-dim: 背景暗度
-  hold-cover: Hold 头部遮罩
+  hold_cover: Hold 头部遮罩
   aspect: 宽高比
   tip: Tip
   width: 宽
   height: 高
   dim: 背景昏暗程度
+  preview: 预览
 </i18n>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
@@ -116,7 +118,6 @@ import { event } from '@tauri-apps/api';
 import { toast, toastError, RULES } from './common';
 import type { ChartInfo, RenderConfig } from './model';
 import ConfigView from '@/components/ConfigView.vue';
-import configView from '@/components/ConfigView.vue';
 import type { VForm } from 'vuetify/components';
 
 const { t } = useI18n();
@@ -224,6 +225,32 @@ function saveChartConfig() {
 
   toast(t('config-saved'), 'success');
   chartConfigDialog.value = false;
+}
+
+// 预览单个谱面
+async function previewChart(index: number) {
+  const chart = charts.value[index];
+  if (!chart.chartInfo) {
+    toast(t('chart-info-missing'), 'error');
+    return;
+  }
+
+  try {
+    const config = await buildRenderParams();
+    // 调用预览
+    await invoke('preview_chart', {
+      params: {
+        path: chart.path,
+        info: chart.chartInfo,
+        config: {
+          ...config,
+          autoplay: true, // 设置为自动播放
+        },
+      },
+    });
+  } catch (error) {
+    toastError(error);
+  }
 }
 
 function loadDefaultConfig(): RenderConfig {
@@ -609,9 +636,33 @@ async function applyDefaultConfig() {
   configViewRef.value?.applyConfig(defaultConfig.value);
 }
 
+// 本地存储键名
+const STORAGE_KEY = 'batch_render_charts';
+
+// 从本地存储加载任务列表
+function loadChartsFromStorage() {
+  const savedCharts = localStorage.getItem(STORAGE_KEY);
+  if (savedCharts) {
+    try {
+      charts.value = JSON.parse(savedCharts);
+    } catch (e) {
+      console.error('Failed to parse saved charts', e);
+    }
+  }
+}
+
+// 保存任务列表到本地存储
+function saveChartsToStorage() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(charts.value));
+}
+
 onMounted(() => {
   getPresets();
+  loadChartsFromStorage(); // 加载存储的任务
 });
+
+// 监听任务列表变化并保存
+watch(charts, saveChartsToStorage, { deep: true });
 </script>
 
 <template>
@@ -721,7 +772,7 @@ onMounted(() => {
           <th width="100">{{ t('level') }}</th>
           <th width="120">{{ t('charter') }}</th>
           <th width="120">{{ t('status') }}</th>
-          <th width="120">{{ t('actions') }}</th> <!-- 增加宽度 -->
+          <th width="160">{{ t('actions') }}</th> <!-- 增加宽度 -->
         </tr>
         </thead>
         <tbody>
@@ -743,6 +794,17 @@ onMounted(() => {
             <div v-if="chart.error" class="text-caption text-red mt-1">{{ chart.error }}</div>
           </td>
           <td>
+            <!-- 添加预览按钮 -->
+            <v-btn
+              @click="previewChart(index)"
+              color="primary"
+              icon="mdi-play"
+              size="small"
+              variant="tonal"
+              class="mr-1"
+              :disabled="!chart.chartInfo"
+            ></v-btn>
+
             <!-- 添加配置按钮 -->
             <v-btn
               @click="openChartConfig(index)"

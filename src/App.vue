@@ -4,18 +4,20 @@ en:
   rpe: RPE
   tasks: Tasks
   about: About
+  batch-render: Batch Render
 
 zh-CN:
   render: 渲染
   rpe: RPE
   tasks: 任务列表
   about: 关于
+  batch-render: 批量渲染
 
 </i18n>
 
 <script lang="ts">
 import { onMounted, onUnmounted } from 'vue'
-  
+
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -25,7 +27,7 @@ import { VSonner } from 'vuetify-sonner';
 
 const onLoaded = ref<() => void>();
 const component = ref();
-  
+
 watch(component, (comp) => {
   if (comp && onLoaded.value) onLoaded.value();
 });
@@ -66,6 +68,7 @@ const icons = {
   rpe: 'mdi-bookshelf',
   tasks: 'mdi-server',
   about: 'mdi-information-outline',
+  'batch-render': 'mdi-playlist-play',
 };
 
 window.goto = (name: string) => {
@@ -85,7 +88,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
 });
-  
+
 </script>
 
 <template>
@@ -95,16 +98,16 @@ onUnmounted(() => {
       <v-app-bar-title class="mx-5 text-gradient glow-title">Phi TK</v-app-bar-title>
     </v-app-bar>
 
-    <v-navigation-drawer 
-      v-model="drawer" 
-      expand-on-hover 
-      rail 
-      permanent 
+    <v-navigation-drawer
+      v-model="drawer"
+      expand-on-hover
+      rail
+      permanent
       class="nav-drawer-glass blur-background"
     >
       <v-list density="compact" nav>
         <v-list-item
-          v-for="key in ['render', 'rpe', 'tasks', 'about']"
+          v-for="key in ['render', 'rpe', 'tasks', 'batch-render', 'about']"
           :active="route.name === key"
           :key="key"
           :prepend-icon="icons[key as keyof typeof icons]"
@@ -119,16 +122,16 @@ onUnmounted(() => {
       <router-view v-slot="{ Component }">
         <Suspense timeout="0">
           <template #default>
-            <component 
-              :is="Component" 
+            <component
+              :is="Component"
               ref="component"
               class="route-transition"
             />
           </template>
           <template #fallback>
             <div class="flex justify-center pa-8">
-              <v-progress-circular 
-                indeterminate 
+              <v-progress-circular
+                indeterminate
                 size="large"
                 class="glow-spinner"
               />
@@ -244,7 +247,7 @@ onUnmounted(() => {
   .blur-background {
     backdrop-filter: blur(20px);
   }
-  
+
   .nav-drawer-glass {
     border-right-width: 0.5px;
   }

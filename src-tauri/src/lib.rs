@@ -33,7 +33,6 @@ use std::{
 use task::{TaskQueue, TaskView};
 use tauri::{ipc::InvokeError, Manager, State, WindowEvent};
 use tokio::{io::AsyncWriteExt, process::Command};
-use prpr::config::ChallengeModeColor;
 
 static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
 static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
