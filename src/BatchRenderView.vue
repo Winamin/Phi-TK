@@ -20,6 +20,8 @@ en:
   all: All
   none: None
   configure: Configure
+  save: Save
+  actions: Actions
   close: Close
   total-charts: "Total charts: {count}"
   select-all: Select All
@@ -32,14 +34,23 @@ en:
   charts-added: "{count} charts added"
   add-folder-failed: Failed to add folder
   no-charts-selected: No charts selected
-  batch-completed: "Submission completed: {count} scores""
+  batch-completed: "Submission completed: {count} scores"
   ffmpeg-not-found: FFmpeg not found
   chart-info-missing: Chart info missing
   adding-charts: Adding charts...
   invalid-chart-file: Invalid chart file
   file-type-error: "File type error: {message}"
   config-saved: "Configuration saved"
-
+  chart-name: Chart Name
+  composer: Composer
+  illustrator: Illustrator
+  background-dim: Background Dim
+  hold-cover: Hold Partial Cover
+  tip: Tip
+  aspect: Aspect Ratio
+  width: Width
+  height: Height
+  dim: Background Dim
 zh-CN:
   title: 批量渲染
   select-charts: 选择谱面
@@ -57,6 +68,7 @@ zh-CN:
   rendering: 提交中
   done: 已完成
   failed: 失败
+  actions: 操作
   total-selected: "已选择: {count}"
   all: 全选
   none: 取消全选
@@ -68,6 +80,7 @@ zh-CN:
   progress: 进度
   eta: 预计
   no-charts: 未添加谱面
+  save: 保存
   add-files-failed: 添加文件失败
   no-charts-found: 文件夹中未找到谱面
   charts-added: "已添加 {count} 个谱面"
@@ -80,6 +93,16 @@ zh-CN:
   invalid-chart-file: 无效的谱面文件
   file-type-error: "文件类型错误: {message}"
   config-saved: "配置已保存"
+  chart-name: 谱面名称
+  composer: 作曲家
+  illustrator: 插画师
+  background-dim: 背景暗度
+  hold-cover: Hold 头部遮罩
+  aspect: 宽高比
+  tip: Tip
+  width: 宽
+  height: 高
+  dim: 背景昏暗程度
 </i18n>
 
 <script setup lang="ts">
@@ -90,10 +113,11 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { event } from '@tauri-apps/api';
 
-import { toast, toastError } from './common';
+import { toast, toastError, RULES } from './common';
 import type { ChartInfo, RenderConfig } from './model';
 import ConfigView from '@/components/ConfigView.vue';
 import configView from '@/components/ConfigView.vue';
+import type { VForm } from 'vuetify/components';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -107,6 +131,14 @@ interface BatchChart {
   selected: boolean;
   error?: string;
   chartInfo?: ChartInfo;
+
+  composer?: string;
+  illustrator?: string;
+  backgroundDim?: number;
+  holdPartialCover?: number;
+  tip?: string;
+  aspectWidth?: string;
+  aspectHeight?: string;
 }
 
 const charts = ref<BatchChart[]>([]);
@@ -127,6 +159,72 @@ const isAddingFolder = ref(false);
 
 // 默认配置（从localStorage加载或使用默认值）
 const defaultConfig = ref<RenderConfig>(loadDefaultConfig());
+
+const chartConfigDialog = ref(false);
+const currentChartIndex = ref(-1);
+const chartForm = ref<VForm>();
+const currentChartConfig = ref<Partial<BatchChart> | null>(null);
+
+// 行颜色函数
+function rowColor(status: string) {
+  switch (status) {
+    case 'pending': return 'bg-blue-lighten-5';
+    case 'rendering': return 'bg-orange-lighten-5';
+    case 'done': return 'bg-green-lighten-5';
+    case 'failed': return 'bg-red-lighten-5';
+    default: return '';
+  }
+}
+
+// 打开谱面配置
+function openChartConfig(index: number) {
+  currentChartIndex.value = index;
+  currentChartConfig.value = { ...charts.value[index] };
+
+  // 初始化宽高比
+  if (currentChartConfig.value.chartInfo?.aspectRatio) {
+    const aspect = currentChartConfig.value.chartInfo.aspectRatio;
+    for (let asp of [
+      [16, 9],
+      [4, 3],
+      [8, 5],
+      [3, 2],
+    ]) {
+      if (Math.abs(asp[0] / asp[1] - aspect) < 1e-4) {
+        currentChartConfig.value.aspectWidth = String(asp[0]);
+        currentChartConfig.value.aspectHeight = String(asp[1]);
+        break;
+      }
+    }
+  }
+
+  chartConfigDialog.value = true;
+}
+
+// 保存谱面配置
+function saveChartConfig() {
+  if (!currentChartConfig.value || currentChartIndex.value === -1) return;
+
+  const index = currentChartIndex.value;
+
+  // 更新图表信息
+  charts.value[index] = {
+    ...charts.value[index],
+    ...currentChartConfig.value
+  };
+
+  // 更新宽高比
+  if (currentChartConfig.value.aspectWidth && currentChartConfig.value.aspectHeight) {
+    const width = parseFloat(currentChartConfig.value.aspectWidth);
+    const height = parseFloat(currentChartConfig.value.aspectHeight);
+    if (!isNaN(width) && !isNaN(height) && charts.value[index].chartInfo) {
+      charts.value[index].chartInfo!.aspectRatio = width / height;
+    }
+  }
+
+  toast(t('config-saved'), 'success');
+  chartConfigDialog.value = false;
+}
 
 function loadDefaultConfig(): RenderConfig {
   const savedConfig = localStorage.getItem('defaultRenderConfig');
@@ -543,6 +641,7 @@ onMounted(() => {
             color="primary"
             @click="saveConfig"
           >
+            {{ t('save') }}  <!-- 添加翻译文本 -->
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -613,44 +712,198 @@ onMounted(() => {
     </v-card>
 
     <!-- 谱面表格 -->
-    <div class="batch-table-container flex-grow-1">
+    <div class="batch-table-container flex-grow-1" color= "blue-grey-2">
       <v-table density="comfortable" fixed-header height="100%">
         <thead>
-          <tr>
-            <th width="40"></th>
-            <th>{{ t('name') }}</th>
-            <th width="100">{{ t('level') }}</th>
-            <th width="120">{{ t('charter') }}</th>
-            <th width="120">{{ t('status') }}</th>
-            <th width="80">{{ t('actions') }}</th>
-          </tr>
+        <tr>
+          <th width="40"></th>
+          <th>{{ t('name') }}</th>
+          <th width="100">{{ t('level') }}</th>
+          <th width="120">{{ t('charter') }}</th>
+          <th width="120">{{ t('status') }}</th>
+          <th width="120">{{ t('actions') }}</th> <!-- 增加宽度 -->
+        </tr>
         </thead>
         <tbody>
-          <tr v-for="(chart, index) in charts" :key="index">
-            <td>
-              <v-checkbox v-model="chart.selected" :disabled="chart.status === 'rendering'" density="compact" hide-details />
-            </td>
-            <td :title="chart.name" class="text-truncate" style="max-width: 200px">{{ chart.name }}</td>
-            <td>{{ chart.level }}</td>
-            <td>{{ chart.charter }}</td>
-            <td>
-              <v-chip :color="statusColor(chart.status)" size="small">
-                {{ t(chart.status) }}
-              </v-chip>
-              <div v-if="chart.error" class="text-caption text-red mt-1">{{ chart.error }}</div>
-            </td>
-            <td>
-              <v-btn :disabled="chart.status === 'rendering'" color="error" icon="mdi-delete" size="small" variant="tonal" @click="charts.splice(index, 1)" />
-            </td>
-          </tr>
-          <tr v-if="charts.length === 0">
-            <td class="text-center py-8 text-disabled" colspan="6">
-              {{ t('no-charts') }}
-            </td>
-          </tr>
+        <tr
+          v-for="(chart, index) in charts"
+          :key="index"
+          :class="rowColor(chart.status)"
+        >
+          <td>
+            <v-checkbox v-model="chart.selected" :disabled="chart.status === 'rendering'" density="compact" hide-details />
+          </td>
+          <td :title="chart.name" class="text-truncate" style="max-width: 200px">{{ chart.name }}</td>
+          <td>{{ chart.level }}</td>
+          <td>{{ chart.charter }}</td>
+          <td>
+            <v-chip :color="statusColor(chart.status)" size="small">
+              {{ t(chart.status) }}
+            </v-chip>
+            <div v-if="chart.error" class="text-caption text-red mt-1">{{ chart.error }}</div>
+          </td>
+          <td>
+            <!-- 添加配置按钮 -->
+            <v-btn
+              @click="openChartConfig(index)"
+              color="primary"
+              icon="mdi-cog"
+              size="small"
+              variant="tonal"
+              class="mr-1"
+            ></v-btn>
+
+            <v-btn
+              :disabled="chart.status === 'rendering'"
+              color="error"
+              icon="mdi-delete"
+              size="small"
+              variant="tonal"
+              @click="charts.splice(index, 1)"
+            />
+          </td>
+        </tr>
+        <tr v-if="charts.length === 0">
+          <td class="text-center py-8 text-disabled" colspan="6">
+            {{ t('no-charts') }}
+          </td>
+        </tr>
         </tbody>
       </v-table>
     </div>
+
+    <!-- 新增：单个谱面配置对话框 -->
+    <v-dialog v-model="chartConfigDialog" max-width="800" scrollable>
+      <v-card>
+        <v-toolbar color="primary">
+          <v-toolbar-title>{{ t('configure') }} - {{ currentChartConfig?.name }}</v-toolbar-title>
+          <v-spacer></v-spacer>
+          <v-btn
+            @click="chartConfigDialog = false"
+            color="white"
+            variant="text"
+            :aria-label="t('close')"
+          >
+            <v-icon left>mdi-close</v-icon>
+            {{ t('close') }}
+          </v-btn>
+        </v-toolbar>
+        <v-card-text class="pa-4">
+          <!-- 谱面配置表单 -->
+          <v-form v-if="currentChartConfig" ref="chartForm">
+            <v-row no-gutters class="mx-n2">
+              <v-col cols="8">
+                <v-text-field
+                  class="mx-2"
+                  :label="t('chart-name')"
+                  :rules="[RULES.non_empty]"
+                  v-model="currentChartConfig.name"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="4">
+                <v-text-field
+                  class="mx-2"
+                  :label="t('level')"
+                  :rules="[RULES.non_empty]"
+                  v-model="currentChartConfig.level"
+                ></v-text-field>
+              </v-col>
+            </v-row>
+
+            <v-row no-gutters class="mx-n2 mt-1">
+              <v-col cols="12" sm="4">
+                <v-text-field
+                  class="mx-2"
+                  :label="t('charter')"
+                  :rules="[RULES.non_empty]"
+                  v-model="currentChartConfig.charter"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <v-text-field
+                  class="mx-2"
+                  :label="t('composer')"
+                  v-model="currentChartConfig.composer"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <v-text-field
+                  class="mx-2"
+                  :label="t('illustrator')"
+                  v-model="currentChartConfig.illustrator"
+                ></v-text-field>
+              </v-col>
+            </v-row>
+
+            <v-row no-gutters class="mx-n2 mt-1 align-center">
+              <v-col cols="4">
+                <div class="mx-2 d-flex flex-column">
+                  <p class="text-caption" v-t="'aspect'"></p>
+                  <div class="d-flex flex-row align-center justify-center">
+                    <v-text-field
+                      type="number"
+                      class="mr-2"
+                      :rules="[RULES.positive]"
+                      :label="t('width')"
+                      v-model="currentChartConfig.aspectWidth"
+                    ></v-text-field>
+                    <p>:</p>
+                    <v-text-field
+                      type="number"
+                      class="ml-2"
+                      :rules="[RULES.positive]"
+                      :label="t('height')"
+                      v-model="currentChartConfig.aspectHeight"
+                    ></v-text-field>
+                  </div>
+                </div>
+              </v-col>
+              <v-col cols="8" class="px-6">
+                <v-slider
+                  :label="t('dim')"
+                  thumb-label="always"
+                  :min="0"
+                  :max="1"
+                  :step="0.01"
+                  v-model="currentChartConfig.backgroundDim"
+                ></v-slider>
+                <v-row no-gutters class="mx-n2 mt-1 align-center">
+                  <v-col cols="12" class="px-6">
+                    <v-switch
+                      :label="t('hold_cover')"
+                      v-model="currentChartConfig.holdPartialCover"
+                      :true-value="1"
+                      :false-value="0"
+                      color="primary"
+                      persistent-hint
+                    ></v-switch>
+                  </v-col>
+                </v-row>
+              </v-col>
+            </v-row>
+
+            <v-row no-gutters class="mx-n2 mt-1">
+              <v-col cols="12">
+                <v-text-field
+                  class="mx-2"
+                  :label="t('tip')"
+                  :placeholder="t('tip-placeholder')"
+                  v-model="currentChartConfig.tip"
+                ></v-text-field>
+              </v-col>
+            </v-row>
+          </v-form>
+        </v-card-text>
+        <v-card-actions class="justify-end pa-4">
+          <v-btn
+            color="primary"
+            @click="saveChartConfig"
+          >
+            {{ t('save') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -681,5 +934,14 @@ onMounted(() => {
 
 .flex-grow-1 {
   flex-grow: 1;
+}
+
+tr:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  transition: background-color 0.3s ease;
+}
+
+tr {
+  transition: background-color 0.5s ease;
 }
 </style>
