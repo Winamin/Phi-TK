@@ -12,8 +12,8 @@ en:
   level: Level
   charter: Charter
   status: Status
-  pending: Pending
-  rendering: Rendering
+  pending: Ready
+  rendering: Pulling
   done: Done
   failed: Failed
   total-selected: "Total selected: {count}"
@@ -32,9 +32,13 @@ en:
   charts-added: "{count} charts added"
   add-folder-failed: Failed to add folder
   no-charts-selected: No charts selected
-  batch-completed: "Batch completed: {count} charts rendered"
+  batch-completed: "Submission completed: {count} scores""
   ffmpeg-not-found: FFmpeg not found
   chart-info-missing: Chart info missing
+  adding-charts: Adding charts...
+  invalid-chart-file: Invalid chart file
+  file-type-error: "File type error: {message}"
+  config-saved: "Configuration saved"
 
 zh-CN:
   title: 批量渲染
@@ -49,8 +53,8 @@ zh-CN:
   level: 难度
   charter: 谱师
   status: 状态
-  pending: 等待中
-  rendering: 渲染中
+  pending: 已准备
+  rendering: 提交中
   done: 已完成
   failed: 失败
   total-selected: "已选择: {count}"
@@ -69,25 +73,30 @@ zh-CN:
   charts-added: "已添加 {count} 个谱面"
   add-folder-failed: 添加文件夹失败
   no-charts-selected: 未选择谱面
-  batch-completed: "批量渲染完成: {count} 个谱面已渲染"
+  batch-completed: "提交完成: {count} 个谱面"
   ffmpeg-not-found: 未找到 FFmpeg
   chart-info-missing: 谱面信息缺失
+  adding-charts: 正在添加谱面...
+  invalid-chart-file: 无效的谱面文件
+  file-type-error: "文件类型错误: {message}"
+  config-saved: "配置已保存"
 </i18n>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-const { t } = useI18n();
 import { useRouter } from 'vue-router';
-const router = useRouter();
-
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { event } from '@tauri-apps/api';
 
-import { toastError, toast } from './common';
+import { toast, toastError } from './common';
 import type { ChartInfo, RenderConfig } from './model';
 import ConfigView from '@/components/ConfigView.vue';
+import configView from '@/components/ConfigView.vue';
+
+const { t } = useI18n();
+const router = useRouter();
 
 interface BatchChart {
   path: string;
@@ -102,7 +111,7 @@ interface BatchChart {
 
 const charts = ref<BatchChart[]>([]);
 const selectedPreset = ref<string>('default');
-const presets = ref<{name: string}[]>([]);
+const presets = ref<{ name: string }[]>([]);
 const allSelected = ref(false);
 const configViewRef = ref<InstanceType<typeof ConfigView> | null>(null);
 const configDialog = ref(false);
@@ -112,11 +121,82 @@ const currentRenderingIndex = ref<number>(-1);
 const renderMsg = ref('');
 const renderProgress = ref<number>();
 
+// 添加状态
+const isAddingFiles = ref(false);
+const isAddingFolder = ref(false);
+
+// 默认配置（从localStorage加载或使用默认值）
+const defaultConfig = ref<RenderConfig>(loadDefaultConfig());
+
+function loadDefaultConfig(): RenderConfig {
+  const savedConfig = localStorage.getItem('defaultRenderConfig');
+  if (savedConfig) {
+    try {
+      return JSON.parse(savedConfig) as RenderConfig;
+    } catch (e) {
+      console.error('Failed to parse saved config', e);
+    }
+  }
+
+  // 默认配置
+  return {
+    resolution: [1920, 1080],
+    ffmpegPreset: 'medium p4 balanced',
+    endingLength: -2.0,
+    disableLoading: true,
+    chartDebug: false,
+    flidX: false,
+    chartRatio: 1,
+    bufferSize: 256,
+    fps: 60,
+    hardwareAccel: true,
+    hevc: false,
+    bitrateControl: 'CRF',
+    bitrate: '28',
+    targetAudio: 96000,
+    background: false,
+    aggressive: false,
+    challengeColor: 'golden',
+    challengeRank: 45,
+    disableEffect: false,
+    doubleHint: true,
+    fxaa: false,
+    noteScale: 1,
+    particle: true,
+    playerAvatar: null,
+    playerName: '',
+    playerRks: 15,
+    sampleCount: 1,
+    resPackPath: null,
+    speed: 1,
+    volumeMusic: 1,
+    volumeSfx: 1,
+    combo: 'AUTOPLAY',
+    watermark: '',
+    showProgressText: false,
+    showTimeText: false,
+    uiLine: true,
+    uiScore: true,
+    uiCombo: true,
+    uiLevel: true,
+    uiName: true,
+    uiPb: true,
+    uiPause: true,
+  };
+}
+
+// 保存默认配置到localStorage
+function saveDefaultConfig(config: RenderConfig) {
+  defaultConfig.value = config;
+  localStorage.setItem('defaultRenderConfig', JSON.stringify(config));
+  toast(t('config-saved'), 'success');
+}
+
 // 获取预设列表
 async function getPresets() {
   try {
-    const presetsMap = await invoke('get_presets') as Record<string, any>;
-    presets.value = Object.keys(presetsMap).map(name => ({ name }));
+    const presetsMap = (await invoke('get_presets')) as Record<string, any>;
+    presets.value = Object.keys(presetsMap).map((name) => ({ name }));
     presets.value.unshift({ name: 'default' });
 
     if (presets.value.length > 0) {
@@ -129,48 +209,93 @@ async function getPresets() {
 
 // 添加文件
 async function addFiles() {
+  if (isAddingFiles.value) return;
+
+  isAddingFiles.value = true;
   try {
     const files = await open({
       multiple: true,
-      filters: [{ name: t('chart-file'), extensions: ['zip', 'json', 'pek'] }]
+      filters: [{ name: t('chart-file'), extensions: ['zip', 'json', 'pek'] }],
     });
 
     if (!files) return;
 
     const fileArray = Array.isArray(files) ? files : [files];
+    const paths = fileArray.map((file) => (typeof file === 'string' ? file : (file as any).path));
 
-    for (const file of fileArray) {
-      const filePath = typeof file === 'string' ? file : (file as any).path;
-      await addChart(filePath);
+    // 去重处理
+    const uniquePaths = [...new Set(paths)];
+    const existingPaths = new Set(charts.value.map((c) => c.path));
+    const newPaths = uniquePaths.filter((path) => !existingPaths.has(path));
+
+    if (newPaths.length === 0) {
+      toast(t('no-charts-found'), 'warning');
+      return;
     }
+
+    // 批量添加
+    for (const path of newPaths) {
+      await addChart(path);
+    }
+
+    toast(t('charts-added', { count: newPaths.length }), 'success');
   } catch (error) {
     console.error('Failed to add files', error);
     toast(t('add-files-failed'), 'error');
+  } finally {
+    isAddingFiles.value = false;
   }
 }
 
 // 添加文件夹并解析所有谱面
 async function addFolder() {
+  if (isAddingFolder.value) return;
+
+  isAddingFolder.value = true;
   try {
     const folder = await open({ directory: true });
     if (!folder) return;
 
     const folderPath = typeof folder === 'string' ? folder : (folder as any).path;
-    const files = await invoke('list_chart_files', { path: folderPath }) as string[];
+    const files = (await invoke('list_chart_files', { path: folderPath })) as string[];
 
     if (!files || files.length === 0) {
       toast(t('no-charts-found'), 'warning');
       return;
     }
 
-    for (const file of files) {
+    // 只处理谱面文件扩展名
+    const validExtensions = ['.json', '.zip', '.pek'];
+    const filteredFiles = files.filter((file) => {
+      const ext = file.toLowerCase().slice(file.lastIndexOf('.'));
+      return validExtensions.includes(ext);
+    });
+
+    if (filteredFiles.length === 0) {
+      toast(t('no-charts-found'), 'warning');
+      return;
+    }
+
+    // 去重处理
+    const existingPaths = new Set(charts.value.map((c) => c.path));
+    const newFiles = filteredFiles.filter((file) => !existingPaths.has(file));
+
+    if (newFiles.length === 0) {
+      toast(t('no-charts-found'), 'warning');
+      return;
+    }
+
+    // 批量添加
+    for (const file of newFiles) {
       await addChart(file);
     }
 
-    toast(t('charts-added', { count: files.length }), 'success');
+    toast(t('charts-added', { count: newFiles.length }), 'success');
   } catch (error) {
     console.error('Failed to add folder', error);
     toast(t('add-folder-failed'), 'error');
+  } finally {
+    isAddingFolder.value = false;
   }
 }
 
@@ -178,32 +303,62 @@ async function addFolder() {
 async function addChart(path: string) {
   try {
     // 检查是否已添加
-    if (charts.value.some(c => c.path === path)) {
+    if (charts.value.some((c) => c.path === path)) {
       return;
     }
 
-    const chartInfo = await invoke('parse_chart', { path }) as ChartInfo;
+    // 先添加一个占位符
+    const placeholderIndex =
+      charts.value.push({
+        path,
+        name: t('adding-charts'),
+        level: '...',
+        charter: '...',
+        status: 'pending',
+        selected: true,
+      }) - 1;
 
-    charts.value.push({
+    const chartInfo = (await invoke('parse_chart', { path })) as ChartInfo;
+
+    // 更新占位符为实际数据
+    charts.value[placeholderIndex] = {
       path,
       name: chartInfo.name,
       level: chartInfo.level,
       charter: chartInfo.charter,
       status: 'pending',
       selected: true,
-      chartInfo
-    });
+      chartInfo,
+    };
   } catch (error) {
     console.error(`Failed to parse chart: ${path}`, error);
-    charts.value.push({
-      path,
-      name: t('parse-failed'),
-      level: 'N/A',
-      charter: 'N/A',
-      status: 'failed',
-      selected: false,
-      error: error instanceof Error ? error.message : String(error)
-    });
+
+    // 更新错误状态
+    const index = charts.value.findIndex((c) => c.path === path);
+    if (index !== -1) {
+      let errorMessage = t('invalid-chart-file');
+
+      if (error instanceof Error) {
+        // 提取更友好的错误消息
+        if (error.message.includes('as zip archive')) {
+          errorMessage = t('file-type-error', { message: 'JSON file is not a ZIP archive' });
+        } else if (error.message.includes('Could not find central directory')) {
+          errorMessage = t('file-type-error', { message: 'Invalid ZIP file format' });
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      charts.value[index] = {
+        path,
+        name: t('parse-failed'),
+        level: 'N/A',
+        charter: 'N/A',
+        status: 'failed',
+        selected: false,
+        error: errorMessage,
+      };
+    }
   }
 }
 
@@ -215,7 +370,7 @@ function clearList() {
 // 全选/取消全选
 function toggleSelectAll() {
   allSelected.value = !allSelected.value;
-  charts.value.forEach(chart => {
+  charts.value.forEach((chart) => {
     chart.selected = allSelected.value;
   });
 }
@@ -231,113 +386,16 @@ async function buildRenderParams() {
   let config: RenderConfig;
 
   if (selectedPreset.value === 'default') {
-    // 使用ConfigView的配置
-    if (!configViewRef.value) {
-      // 如果ConfigView未初始化，则创建一个临时配置
-      console.warn('ConfigView not initialized, using default config');
-      config = {
-        resolution: [1920, 1080],
-        ffmpegPreset: 'medium p4 balanced',
-        endingLength: -2.0,
-        disableLoading: true,
-        chartDebug: false,
-        flidX: false,
-        chartRatio: 1,
-        bufferSize: 256,
-        fps: 60,
-        hardwareAccel: true,
-        hevc: false,
-        bitrateControl: 'CRF',
-        bitrate: '28',
-        targetAudio: 96000,
-        background: false,
-        aggressive: false,
-        challengeColor: 'golden',
-        challengeRank: 45,
-        disableEffect: false,
-        doubleHint: true,
-        fxaa: false,
-        noteScale: 1,
-        particle: true,
-        playerAvatar: null,
-        playerName: '',
-        playerRks: 15,
-        sampleCount: 1,
-        resPackPath: null,
-        speed: 1,
-        volumeMusic: 1,
-        volumeSfx: 1,
-        combo: 'AUTOPLAY',
-        watermark: '',
-        showProgressText: false,
-        showTimeText: false,
-        uiLine: true,
-        uiScore: true,
-        uiCombo: true,
-        uiLevel: true,
-        uiName: true,
-        uiPb: true,
-        uiPause: true
-      };
-    } else {
-      const builtConfig = await configViewRef.value.buildConfig();
-      if (!builtConfig) {
-        throw new Error('Failed to build config: validation failed');
-      }
-      config = builtConfig;
-    }
+    // 使用保存的默认配置
+    config = defaultConfig.value;
   } else {
     // 获取预设配置
-    const presetsMap = await invoke('get_presets') as Record<string, RenderConfig>;
+    const presetsMap = (await invoke('get_presets')) as Record<string, RenderConfig>;
     config = presetsMap[selectedPreset.value];
 
     // 如果预设不存在，使用默认配置
     if (!config) {
-      console.warn(`Preset '${selectedPreset.value}' not found, using default config`);
-      config = {
-        resolution: [1920, 1080],
-        ffmpegPreset: 'medium p4 balanced',
-        endingLength: -2.0,
-        disableLoading: true,
-        chartDebug: false,
-        flidX: false,
-        chartRatio: 1,
-        bufferSize: 256,
-        fps: 60,
-        hardwareAccel: true,
-        hevc: false,
-        bitrateControl: 'CRF',
-        bitrate: '28',
-        targetAudio: 96000,
-        background: false,
-        aggressive: false,
-        challengeColor: 'golden',
-        challengeRank: 45,
-        disableEffect: false,
-        doubleHint: true,
-        fxaa: false,
-        noteScale: 1,
-        particle: true,
-        playerAvatar: null,
-        playerName: '',
-        playerRks: 15,
-        sampleCount: 1,
-        resPackPath: null,
-        speed: 1,
-        volumeMusic: 1,
-        volumeSfx: 1,
-        combo: 'AUTOPLAY',
-        watermark: '',
-        showProgressText: false,
-        showTimeText: false,
-        uiLine: true,
-        uiScore: true,
-        uiCombo: true,
-        uiLevel: true,
-        uiName: true,
-        uiPb: true,
-        uiPause: true
-      };
+      config = defaultConfig.value;
     }
   }
 
@@ -349,9 +407,24 @@ async function buildRenderParams() {
   return config;
 }
 
+async function saveConfig() {
+  if (!configViewRef.value) return;
+
+  const config = await configViewRef.value.buildConfig();
+  if (config) {
+    saveDefaultConfig(config);
+    configDialog.value = false;
+  }
+}
+
 // 渲染单个谱面
 async function renderSingleChart(chart: BatchChart, index: number, config: RenderConfig) {
   try {
+    // 检查谱面信息是否存在
+    if (!chart.chartInfo) {
+      throw new Error(t('chart-info-missing'));
+    }
+
     chart.status = 'rendering';
     currentRenderingIndex.value = index;
 
@@ -359,8 +432,8 @@ async function renderSingleChart(chart: BatchChart, index: number, config: Rende
       params: {
         path: chart.path,
         info: chart.chartInfo,
-        config
-      }
+        config,
+      },
     });
 
     chart.status = 'done';
@@ -374,7 +447,7 @@ async function renderSingleChart(chart: BatchChart, index: number, config: Rende
 
 // 开始批量渲染
 async function startRender() {
-  const selectedCharts = charts.value.filter(chart => chart.selected && chart.status !== 'done');
+  const selectedCharts = charts.value.filter((chart) => chart.selected && chart.status !== 'done');
 
   if (selectedCharts.length === 0) {
     toast(t('no-charts-selected'), 'warning');
@@ -386,7 +459,7 @@ async function startRender() {
 
     for (let i = 0; i < selectedCharts.length; i++) {
       const chart = selectedCharts[i];
-      const originalIndex = charts.value.findIndex(c => c === chart);
+      const originalIndex = charts.value.findIndex((c) => c === chart);
 
       if (chart.status !== 'pending') continue;
 
@@ -406,16 +479,20 @@ async function startRender() {
 // 状态颜色
 function statusColor(status: string) {
   switch (status) {
-    case 'rendering': return 'blue';
-    case 'done': return 'green';
-    case 'failed': return 'red';
-    default: return 'gray';
+    case 'rendering':
+      return 'blue';
+    case 'done':
+      return 'green';
+    case 'failed':
+      return 'red';
+    default:
+      return 'gray';
   }
 }
 
 // 计算选中数量
 const selectedCount = computed(() => {
-  return charts.value.filter(chart => chart.selected).length;
+  return charts.value.filter((chart) => chart.selected).length;
 });
 
 // 监听渲染事件
@@ -428,6 +505,11 @@ event.listen('render-progress', (msg) => {
   renderMsg.value = `${t('progress')}: ${(payload.progress * 100).toFixed(2)}% | FPS: ${payload.fps} | ${t('eta')}: ${payload.estimate}s`;
   renderProgress.value = payload.progress * 100;
 });
+
+async function applyDefaultConfig() {
+  await nextTick();
+  configViewRef.value?.applyConfig(defaultConfig.value);
+}
 
 onMounted(() => {
   getPresets();
@@ -444,21 +526,24 @@ onMounted(() => {
     </div>
 
     <!-- 配置对话框 -->
-    <v-dialog v-model="configDialog" max-width="800" scrollable>
+    <v-dialog v-model="configDialog" max-width="800" scrollable @after-enter="applyDefaultConfig">
       <v-card>
         <v-toolbar color="primary">
           <v-toolbar-title>{{ t('configure') }}</v-toolbar-title>
           <v-spacer></v-spacer>
-          <v-btn icon @click="configDialog = false">
+          <v-btn icon @click="configDialog = false" color="blue-darken-2">
             <v-icon>mdi-close</v-icon>
           </v-btn>
         </v-toolbar>
         <v-card-text class="pa-0">
-          <!-- 确保ConfigView组件在对话框打开时渲染 -->
           <ConfigView ref="configViewRef" />
         </v-card-text>
         <v-card-actions class="justify-end pa-4">
-          <v-btn color="primary" @click="configDialog = false">{{ t('close') }}</v-btn>
+          <v-btn
+            color="primary"
+            @click="saveConfig"
+          >
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -466,11 +551,11 @@ onMounted(() => {
     <div class="batch-controls">
       <!-- 顶部控制栏 -->
       <div class="d-flex align-center gap-2 mb-4 flex-wrap">
-        <v-btn color="primary" @click="addFiles" prepend-icon="mdi-file-plus" size="small">
+        <v-btn :disabled="isAddingFolder" :loading="isAddingFiles" color="primary" prepend-icon="mdi-file-plus" size="small" @click="addFiles">
           {{ t('add-files') }}
         </v-btn>
 
-        <v-btn color="primary" @click="addFolder" prepend-icon="mdi-folder-plus" size="small">
+        <v-btn :disabled="isAddingFiles" :loading="isAddingFolder" color="primary" prepend-icon="mdi-folder-plus" size="small" @click="addFolder">
           {{ t('add-folder') }}
         </v-btn>
 
@@ -491,9 +576,8 @@ onMounted(() => {
           item-title="name"
           density="compact"
           variant="outlined"
-          style="min-width: 180px;"
           class="mr-2"
-        />
+          style="min-width: 180px" />
 
         <v-btn
           color="primary"
@@ -501,8 +585,7 @@ onMounted(() => {
           prepend-icon="mdi-play"
           :disabled="selectedCount === 0 || currentRenderingIndex >= 0"
           :loading="currentRenderingIndex >= 0"
-          size="small"
-        >
+          size="small">
           {{ t('start-render') }}
         </v-btn>
       </div>
@@ -524,12 +607,7 @@ onMounted(() => {
         {{ t('rendering') }}: {{ charts[currentRenderingIndex]?.name }}
       </v-card-title>
       <v-card-text>
-        <v-progress-linear
-          :model-value="renderProgress"
-          color="primary"
-          height="8"
-          rounded
-        />
+        <v-progress-linear :model-value="renderProgress" color="primary" height="8" rounded />
         <p class="mt-2 text-caption">{{ renderMsg }}</p>
       </v-card-text>
     </v-card>
@@ -538,50 +616,38 @@ onMounted(() => {
     <div class="batch-table-container flex-grow-1">
       <v-table density="comfortable" fixed-header height="100%">
         <thead>
-        <tr>
-          <th width="40"></th>
-          <th>{{ t('name') }}</th>
-          <th width="100">{{ t('level') }}</th>
-          <th width="120">{{ t('charter') }}</th>
-          <th width="120">{{ t('status') }}</th>
-          <th width="80">{{ t('actions') }}</th>
-        </tr>
+          <tr>
+            <th width="40"></th>
+            <th>{{ t('name') }}</th>
+            <th width="100">{{ t('level') }}</th>
+            <th width="120">{{ t('charter') }}</th>
+            <th width="120">{{ t('status') }}</th>
+            <th width="80">{{ t('actions') }}</th>
+          </tr>
         </thead>
         <tbody>
-        <tr v-for="(chart, index) in charts" :key="index">
-          <td>
-            <v-checkbox
-              v-model="chart.selected"
-              density="compact"
-              hide-details
-              :disabled="chart.status === 'rendering'"
-            />
-          </td>
-          <td class="text-truncate" style="max-width: 200px;" :title="chart.name">{{ chart.name }}</td>
-          <td>{{ chart.level }}</td>
-          <td>{{ chart.charter }}</td>
-          <td>
-            <v-chip :color="statusColor(chart.status)" size="small">
-              {{ t(chart.status) }}
-            </v-chip>
-            <div v-if="chart.error" class="text-caption text-red mt-1">{{ chart.error }}</div>
-          </td>
-          <td>
-            <v-btn
-              size="small"
-              icon="mdi-delete"
-              @click="charts.splice(index, 1)"
-              variant="tonal"
-              color="error"
-              :disabled="chart.status === 'rendering'"
-            />
-          </td>
-        </tr>
-        <tr v-if="charts.length === 0">
-          <td colspan="6" class="text-center py-8 text-disabled">
-            {{ t('no-charts') }}
-          </td>
-        </tr>
+          <tr v-for="(chart, index) in charts" :key="index">
+            <td>
+              <v-checkbox v-model="chart.selected" :disabled="chart.status === 'rendering'" density="compact" hide-details />
+            </td>
+            <td :title="chart.name" class="text-truncate" style="max-width: 200px">{{ chart.name }}</td>
+            <td>{{ chart.level }}</td>
+            <td>{{ chart.charter }}</td>
+            <td>
+              <v-chip :color="statusColor(chart.status)" size="small">
+                {{ t(chart.status) }}
+              </v-chip>
+              <div v-if="chart.error" class="text-caption text-red mt-1">{{ chart.error }}</div>
+            </td>
+            <td>
+              <v-btn :disabled="chart.status === 'rendering'" color="error" icon="mdi-delete" size="small" variant="tonal" @click="charts.splice(index, 1)" />
+            </td>
+          </tr>
+          <tr v-if="charts.length === 0">
+            <td class="text-center py-8 text-disabled" colspan="6">
+              {{ t('no-charts') }}
+            </td>
+          </tr>
         </tbody>
       </v-table>
     </div>
