@@ -52,6 +52,8 @@ en:
   height: Height
   dim: Background Dim
   preview: Preview
+  edit: Edit
+  chart-info: Chart Info
 zh-CN:
   title: 批量渲染
   select-charts: 选择谱面
@@ -105,6 +107,8 @@ zh-CN:
   height: 高
   dim: 背景昏暗程度
   preview: 预览
+  edit: 编辑
+  chart-info: 谱面信息
 </i18n>
 
 <script setup lang="ts">
@@ -131,6 +135,8 @@ interface BatchChart {
   selected: boolean;
   error?: string;
   chartInfo?: ChartInfo;
+  aspectWidth?: string;
+  aspectHeight?: string;
 }
 
 const charts = ref<BatchChart[]>([]);
@@ -139,6 +145,9 @@ const presets = ref<{ name: string }[]>([]);
 const allSelected = ref(false);
 const configViewRef = ref<InstanceType<typeof ConfigView> | null>(null);
 const configDialog = ref(false);
+const editDialog = ref(false);
+const editingChartIndex = ref(-1);
+const form = ref<any>();
 
 // 当前渲染状态
 const currentRenderingIndex = ref<number>(-1);
@@ -382,6 +391,23 @@ async function addChart(path: string) {
     const chartInfo = (await invoke('parse_chart', { path })) as ChartInfo;
 
     // 更新占位符为实际数据
+    const aspectWidth = ref('0');
+    const aspectHeight = ref('0');
+    aspectWidth.value = String(chartInfo.aspectRatio);
+    aspectHeight.value = '1.0';
+    for (let asp of [
+      [16, 9],
+      [4, 3],
+      [8, 5],
+      [3, 2],
+    ]) {
+      if (Math.abs(asp[0] / asp[1] - chartInfo.aspectRatio) < 1e-4) {
+        aspectWidth.value = String(asp[0]);
+        aspectHeight.value = String(asp[1]);
+        break;
+      }
+    }
+
     charts.value[placeholderIndex] = {
       path,
       name: chartInfo.name,
@@ -390,6 +416,8 @@ async function addChart(path: string) {
       status: 'pending',
       selected: true,
       chartInfo,
+      aspectWidth: aspectWidth.value,
+      aspectHeight: aspectHeight.value
     };
   } catch (error) {
     console.error(`Failed to parse chart: ${path}`, error);
@@ -572,6 +600,90 @@ async function applyDefaultConfig() {
   configViewRef.value?.applyConfig(defaultConfig.value);
 }
 
+// 打开编辑对话框
+/*
+function openEditDialog(index: number) {
+  editingChartIndex.value = index;
+  editDialog.value = true;
+}
+
+
+ */
+function openEditDialog(index: number) {
+  editingChartIndex.value = index;
+  // 确保aspectWidth和aspectHeight有值
+  if (!charts.value[index].aspectWidth || !charts.value[index].aspectHeight) {
+    const chart = charts.value[index];
+    if (chart.chartInfo) {
+      charts.value[index].aspectWidth = String(chart.chartInfo.aspectRatio);
+      charts.value[index].aspectHeight = '1.0';
+      for (let asp of [
+        [16, 9],
+        [4, 3],
+        [8, 5],
+        [3, 2],
+      ]) {
+        if (Math.abs(asp[0] / asp[1] - chart.chartInfo.aspectRatio) < 1e-4) {
+          charts.value[index].aspectWidth = String(asp[0]);
+          charts.value[index].aspectHeight = String(asp[1]);
+          break;
+        }
+      }
+    }
+  }
+  editDialog.value = true;
+}
+
+// 保存编辑的谱面信息
+async function saveChartInfo() {
+  if (editingChartIndex.value === -1 || !charts.value[editingChartIndex.value]?.chartInfo) return;
+
+  // Safely check if form.value exists before calling validate
+  if (!form.value) {
+    toast(t('has-error'), 'error');
+    return;
+  }
+
+  const { valid } = await form.value.validate();
+  if (!valid) {
+    toast(t('has-error'), 'error');
+    return;
+  }
+
+  const chart = charts.value[editingChartIndex.value];
+  const aspect = tryParseAspect(chart.aspectWidth, chart.aspectHeight);
+  if (aspect !== undefined && chart.chartInfo) {
+    chart.chartInfo.aspectRatio = aspect;
+  }
+
+  // Update display information in the list
+  if (chart.chartInfo) {
+    charts.value[editingChartIndex.value] = {
+      ...chart,
+      name: chart.chartInfo.name,
+      level: chart.chartInfo.level,
+      charter: chart.chartInfo.charter
+    };
+  }
+
+  editDialog.value = false;
+  toast(t('config-saved'), 'success');
+}
+
+// 尝试解析宽高比
+function tryParseAspect(width: string | undefined, height: string | undefined): number | undefined {
+  if (!width || !height) return undefined;
+
+  try {
+    let w = parseFloat(width);
+    let h = parseFloat(height);
+    if (isNaN(w) || isNaN(h)) return undefined;
+    return w / h;
+  } catch (e) {
+    return undefined;
+  }
+}
+
 // 本地存储键名
 const STORAGE_KEY = 'batch_render_charts';
 
@@ -628,8 +740,92 @@ watch(charts, saveChartsToStorage, { deep: true });
             color="primary"
             @click="saveConfig"
           >
-            {{ t('save') }}  <!-- 添加翻译文本 -->
+            {{ t('save') }}
           </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- 谱面信息编辑对话框 -->
+    <v-dialog v-model="editDialog" max-width="600">
+      <v-card>
+        <v-toolbar color="primary">
+          <v-toolbar-title>{{ t('chart-info') }}</v-toolbar-title>
+          <v-spacer></v-spacer>
+          <v-btn icon @click="editDialog = false" color="blue-darken-2">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-toolbar>
+        <v-card-text class="pa-4">
+          <v-form ref="form" v-if="editingChartIndex >= 0 && charts[editingChartIndex]?.chartInfo">
+            <v-row no-gutters class="mx-n2">
+              <v-col cols="8">
+                <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]"
+                              v-model="charts[editingChartIndex].chartInfo!.name"></v-text-field>
+              </v-col>
+              <v-col cols="4">
+                <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]"
+                              v-model="charts[editingChartIndex].chartInfo!.level"></v-text-field>
+              </v-col>
+            </v-row>
+
+            <v-row no-gutters class="mx-n2 mt-1">
+              <v-col cols="12" sm="4">
+                <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]"
+                              v-model="charts[editingChartIndex].chartInfo!.charter"></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <v-text-field class="mx-2" :label="t('composer')"
+                              v-model="charts[editingChartIndex].chartInfo!.composer"></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="4">
+                <v-text-field class="mx-2" :label="t('illustrator')"
+                              v-model="charts[editingChartIndex].chartInfo!.illustrator"></v-text-field>
+              </v-col>
+            </v-row>
+
+            <v-row no-gutters class="mx-n2 mt-1 align-center">
+              <v-col cols="4">
+                <div class="mx-2 d-flex flex-column">
+                  <p class="text-caption" v-t="'aspect'"></p>
+                  <div class="d-flex flex-row align-center justify-center">
+                    <v-text-field type="number" class="mr-2" :rules="[RULES.positive]" :label="t('width')"
+                                  v-model="charts[editingChartIndex].aspectWidth"></v-text-field>
+                    <p>:</p>
+                    <v-text-field type="number" class="ml-2" :rules="[RULES.positive]" :label="t('height')"
+                                  v-model="charts[editingChartIndex].aspectHeight"></v-text-field>
+                  </div>
+                </div>
+              </v-col>
+              <v-col cols="8" class="px-6">
+                <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01"
+                          v-model="charts[editingChartIndex].chartInfo!.backgroundDim">
+                </v-slider>
+                <v-row no-gutters class="mx-n2 mt-1 align-center">
+                  <v-col cols="12" class="px-6">
+                    <v-switch
+                      :label="t('hold_cover')"
+                      v-model="charts[editingChartIndex].chartInfo!.HoldPartialCover"
+                      :true-value="1"
+                      :false-value="0"
+                      color="primary"
+                      persistent-hint
+                    ></v-switch>
+                  </v-col>
+                </v-row>
+              </v-col>
+            </v-row>
+
+            <v-row no-gutters class="mx-n2 mt-1">
+              <v-col cols="12">
+                <v-text-field class="mx-2" :label="t('tip')" :placeholder="t('tip-placeholder')"
+                              v-model="charts[editingChartIndex].chartInfo!.tip"></v-text-field>
+              </v-col>
+            </v-row>
+          </v-form>
+        </v-card-text>
+        <v-card-actions class="justify-end pa-4">
+          <v-btn color="primary" @click="saveChartInfo">{{ t('save') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -708,7 +904,7 @@ watch(charts, saveChartsToStorage, { deep: true });
           <th width="100">{{ t('level') }}</th>
           <th width="120">{{ t('charter') }}</th>
           <th width="120">{{ t('status') }}</th>
-          <th width="160">{{ t('actions') }}</th> <!-- 增加宽度 -->
+          <th width="160">{{ t('actions') }}</th>
         </tr>
         </thead>
         <tbody>
@@ -730,7 +926,15 @@ watch(charts, saveChartsToStorage, { deep: true });
             <div v-if="chart.error" class="text-caption text-red mt-1">{{ chart.error }}</div>
           </td>
           <td>
-            <!-- 添加预览按钮 -->
+            <v-btn
+              @click="openEditDialog(index)"
+              color="primary"
+              icon="mdi-pencil"
+              size="small"
+              variant="tonal"
+              class="mr-1"
+              :disabled="!chart.chartInfo"
+            ></v-btn>
             <v-btn
               @click="previewChart(index)"
               color="primary"
@@ -740,7 +944,6 @@ watch(charts, saveChartsToStorage, { deep: true });
               class="mr-1"
               :disabled="!chart.chartInfo"
             ></v-btn>
-
             <v-btn
               :disabled="chart.status === 'rendering'"
               color="error"
