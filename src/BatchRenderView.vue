@@ -118,7 +118,6 @@ import { event } from '@tauri-apps/api';
 import { toast, toastError, RULES } from './common';
 import type { ChartInfo, RenderConfig } from './model';
 import ConfigView from '@/components/ConfigView.vue';
-import type { VForm } from 'vuetify/components';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -132,14 +131,6 @@ interface BatchChart {
   selected: boolean;
   error?: string;
   chartInfo?: ChartInfo;
-
-  composer?: string;
-  illustrator?: string;
-  backgroundDim?: number;
-  holdPartialCover?: number;
-  tip?: string;
-  aspectWidth?: string;
-  aspectHeight?: string;
 }
 
 const charts = ref<BatchChart[]>([]);
@@ -161,11 +152,6 @@ const isAddingFolder = ref(false);
 // 默认配置（从localStorage加载或使用默认值）
 const defaultConfig = ref<RenderConfig>(loadDefaultConfig());
 
-const chartConfigDialog = ref(false);
-const currentChartIndex = ref(-1);
-const chartForm = ref<VForm>();
-const currentChartConfig = ref<Partial<BatchChart> | null>(null);
-
 // 行颜色函数
 function rowColor(status: string) {
   switch (status) {
@@ -175,56 +161,6 @@ function rowColor(status: string) {
     case 'failed': return 'bg-red-lighten-5';
     default: return '';
   }
-}
-
-// 打开谱面配置
-function openChartConfig(index: number) {
-  currentChartIndex.value = index;
-  currentChartConfig.value = { ...charts.value[index] };
-
-  // 初始化宽高比
-  if (currentChartConfig.value.chartInfo?.aspectRatio) {
-    const aspect = currentChartConfig.value.chartInfo.aspectRatio;
-    for (let asp of [
-      [16, 9],
-      [4, 3],
-      [8, 5],
-      [3, 2],
-    ]) {
-      if (Math.abs(asp[0] / asp[1] - aspect) < 1e-4) {
-        currentChartConfig.value.aspectWidth = String(asp[0]);
-        currentChartConfig.value.aspectHeight = String(asp[1]);
-        break;
-      }
-    }
-  }
-
-  chartConfigDialog.value = true;
-}
-
-// 保存谱面配置
-function saveChartConfig() {
-  if (!currentChartConfig.value || currentChartIndex.value === -1) return;
-
-  const index = currentChartIndex.value;
-
-  // 更新图表信息
-  charts.value[index] = {
-    ...charts.value[index],
-    ...currentChartConfig.value
-  };
-
-  // 更新宽高比
-  if (currentChartConfig.value.aspectWidth && currentChartConfig.value.aspectHeight) {
-    const width = parseFloat(currentChartConfig.value.aspectWidth);
-    const height = parseFloat(currentChartConfig.value.aspectHeight);
-    if (!isNaN(width) && !isNaN(height) && charts.value[index].chartInfo) {
-      charts.value[index].chartInfo!.aspectRatio = width / height;
-    }
-  }
-
-  toast(t('config-saved'), 'success');
-  chartConfigDialog.value = false;
 }
 
 // 预览单个谱面
@@ -805,16 +741,6 @@ watch(charts, saveChartsToStorage, { deep: true });
               :disabled="!chart.chartInfo"
             ></v-btn>
 
-            <!-- 添加配置按钮 -->
-            <v-btn
-              @click="openChartConfig(index)"
-              color="primary"
-              icon="mdi-cog"
-              size="small"
-              variant="tonal"
-              class="mr-1"
-            ></v-btn>
-
             <v-btn
               :disabled="chart.status === 'rendering'"
               color="error"
@@ -833,139 +759,6 @@ watch(charts, saveChartsToStorage, { deep: true });
         </tbody>
       </v-table>
     </div>
-
-    <!-- 新增：单个谱面配置对话框 -->
-    <v-dialog v-model="chartConfigDialog" max-width="800" scrollable>
-      <v-card>
-        <v-toolbar color="primary">
-          <v-toolbar-title>{{ t('configure') }} - {{ currentChartConfig?.name }}</v-toolbar-title>
-          <v-spacer></v-spacer>
-          <v-btn
-            @click="chartConfigDialog = false"
-            color="white"
-            variant="text"
-            :aria-label="t('close')"
-          >
-            <v-icon left>mdi-close</v-icon>
-            {{ t('close') }}
-          </v-btn>
-        </v-toolbar>
-        <v-card-text class="pa-4">
-          <!-- 谱面配置表单 -->
-          <v-form v-if="currentChartConfig" ref="chartForm">
-            <v-row no-gutters class="mx-n2">
-              <v-col cols="8">
-                <v-text-field
-                  class="mx-2"
-                  :label="t('chart-name')"
-                  :rules="[RULES.non_empty]"
-                  v-model="currentChartConfig.name"
-                ></v-text-field>
-              </v-col>
-              <v-col cols="4">
-                <v-text-field
-                  class="mx-2"
-                  :label="t('level')"
-                  :rules="[RULES.non_empty]"
-                  v-model="currentChartConfig.level"
-                ></v-text-field>
-              </v-col>
-            </v-row>
-
-            <v-row no-gutters class="mx-n2 mt-1">
-              <v-col cols="12" sm="4">
-                <v-text-field
-                  class="mx-2"
-                  :label="t('charter')"
-                  :rules="[RULES.non_empty]"
-                  v-model="currentChartConfig.charter"
-                ></v-text-field>
-              </v-col>
-              <v-col cols="12" sm="4">
-                <v-text-field
-                  class="mx-2"
-                  :label="t('composer')"
-                  v-model="currentChartConfig.composer"
-                ></v-text-field>
-              </v-col>
-              <v-col cols="12" sm="4">
-                <v-text-field
-                  class="mx-2"
-                  :label="t('illustrator')"
-                  v-model="currentChartConfig.illustrator"
-                ></v-text-field>
-              </v-col>
-            </v-row>
-
-            <v-row no-gutters class="mx-n2 mt-1 align-center">
-              <v-col cols="4">
-                <div class="mx-2 d-flex flex-column">
-                  <p class="text-caption" v-t="'aspect'"></p>
-                  <div class="d-flex flex-row align-center justify-center">
-                    <v-text-field
-                      type="number"
-                      class="mr-2"
-                      :rules="[RULES.positive]"
-                      :label="t('width')"
-                      v-model="currentChartConfig.aspectWidth"
-                    ></v-text-field>
-                    <p>:</p>
-                    <v-text-field
-                      type="number"
-                      class="ml-2"
-                      :rules="[RULES.positive]"
-                      :label="t('height')"
-                      v-model="currentChartConfig.aspectHeight"
-                    ></v-text-field>
-                  </div>
-                </div>
-              </v-col>
-              <v-col cols="8" class="px-6">
-                <v-slider
-                  :label="t('dim')"
-                  thumb-label="always"
-                  :min="0"
-                  :max="1"
-                  :step="0.01"
-                  v-model="currentChartConfig.backgroundDim"
-                ></v-slider>
-                <v-row no-gutters class="mx-n2 mt-1 align-center">
-                  <v-col cols="12" class="px-6">
-                    <v-switch
-                      :label="t('hold_cover')"
-                      v-model="currentChartConfig.holdPartialCover"
-                      :true-value="1"
-                      :false-value="0"
-                      color="primary"
-                      persistent-hint
-                    ></v-switch>
-                  </v-col>
-                </v-row>
-              </v-col>
-            </v-row>
-
-            <v-row no-gutters class="mx-n2 mt-1">
-              <v-col cols="12">
-                <v-text-field
-                  class="mx-2"
-                  :label="t('tip')"
-                  :placeholder="t('tip-placeholder')"
-                  v-model="currentChartConfig.tip"
-                ></v-text-field>
-              </v-col>
-            </v-row>
-          </v-form>
-        </v-card-text>
-        <v-card-actions class="justify-end pa-4">
-          <v-btn
-            color="primary"
-            @click="saveChartConfig"
-          >
-            {{ t('save') }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
   </div>
 </template>
 
