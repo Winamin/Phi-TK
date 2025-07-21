@@ -44,7 +44,7 @@
   },
   "productName": "Phi-TK",
   "mainBinaryName": "Phi-TK",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "identifier": "com.sc.phi.tk",
   "plugins": {},
   "app": {

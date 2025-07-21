@@ -668,29 +668,32 @@ pub async fn main() -> Result<()> {
         );
     */
 
-    fn test_encoder(ffmpeg: &Path, encoder: &str) -> Result<bool> {
-        let output = cmd_hidden(&ffmpeg)
-            .args(&[
-                "-f",
-                "lavfi",
-                "-i",
-                "color=c=black:s=320x240:d=0",
-                "-c:v",
-                encoder,
-                "-f",
-                "null",
-                "-",
-            ])
+    fn test_encoder(ffmpeg: &Path, encoder: &str) -> Result<(bool, String)> {
+        // 创建FFmpeg命令
+        let mut cmd = Command::new(ffmpeg);
+        cmd.args(&[
+            "-f", "lavfi",
+            "-i", "color=c=black:s=320x240:d=0",
+            "-c:v", encoder,
+            "-f", "null", "-",
+        ])
             .arg("-loglevel")
-            .arg("fatal")
+            .arg("warning")  // 提高日志级别以获取更多信息
             .arg("-hide_banner")
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());  // 捕获标准错误
+
+        // 执行命令并捕获输出
+        let output = cmd
             .output()
-            .with_context(|| format!("Failed to test encoder {}", encoder))?;
-        Ok(output.status.success())
+            .with_context(|| format!("Failed to start encoder test for {}", encoder))?;
+
+        // 提取错误信息
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        Ok((output.status.success(), stderr))
     }
 
+    // 在函数主体中修改硬件检测部分
     let hw_detected = EncoderAvailability {
         h264_nvenc: params.config.hardware_accel && hw_detect::detect_nvidia(),
         hevc_nvenc: params.config.hardware_accel
@@ -704,15 +707,52 @@ pub async fn main() -> Result<()> {
         hevc_amf: params.config.hardware_accel && params.config.hevc && hw_detect::detect_amd(),
     };
 
-    let encoder_availability = EncoderAvailability {
-        h264_nvenc: hw_detected.h264_nvenc && test_encoder(ffmpeg.as_ref(), "h264_nvenc")?,
-        hevc_nvenc: hw_detected.hevc_nvenc && test_encoder(ffmpeg.as_ref(), "hevc_nvenc")?,
-        h264_qsv: hw_detected.h264_qsv && test_encoder(ffmpeg.as_ref(), "h264_qsv")?,
-        hevc_qsv: hw_detected.hevc_qsv && test_encoder(ffmpeg.as_ref(), "hevc_qsv")?,
-        h264_amf: hw_detected.h264_amf && test_encoder(ffmpeg.as_ref(), "h264_amf")?,
-        hevc_amf: hw_detected.hevc_amf && test_encoder(ffmpeg.as_ref(), "hevc_amf")?,
+    // 错误收集器
+    let mut hw_errors = Vec::new();
+
+    // 创建编码器可用性结构
+    let mut encoder_availability = EncoderAvailability {
+        h264_nvenc: false,
+        hevc_nvenc: false,
+        h264_qsv: false,
+        hevc_qsv: false,
+        h264_amf: false,
+        hevc_amf: false,
     };
 
+    // 测试每个硬件编码器并收集错误
+    let encoders_to_test = [
+        ("h264_nvenc", hw_detected.h264_nvenc, &mut encoder_availability.h264_nvenc),
+        ("hevc_nvenc", hw_detected.hevc_nvenc, &mut encoder_availability.hevc_nvenc),
+        ("h264_qsv", hw_detected.h264_qsv, &mut encoder_availability.h264_qsv),
+        ("hevc_qsv", hw_detected.hevc_qsv, &mut encoder_availability.hevc_qsv),
+        ("h264_amf", hw_detected.h264_amf, &mut encoder_availability.h264_amf),
+        ("hevc_amf", hw_detected.hevc_amf, &mut encoder_availability.hevc_amf),
+    ];
+
+    for (name, detected, availability_flag) in encoders_to_test {
+        if detected {
+            match test_encoder(ffmpeg.as_ref(), name) {
+                Ok((success, error_output)) => {
+                    *availability_flag = success;
+
+                    if !success {
+                        hw_errors.push(format!(
+                            "{} test failed:\n{}",
+                            name,
+                            error_output.trim()
+                        ));
+                    }
+                }
+                Err(e) => {
+                    *availability_flag = false;
+                    hw_errors.push(format!("{} test error: {}", name, e));
+                }
+            }
+        }
+    }
+
+    // 构建候选编码器列表
     let candidates = if params.config.hevc {
         vec![
             ("hevc_nvenc", encoder_availability.hevc_nvenc),
@@ -780,6 +820,7 @@ pub async fn main() -> Result<()> {
         "-b:v"
     };
 
+    // 硬件加速检查（包含详细错误报告）
     if params.config.hardware_accel {
         let h264_supported = encoder_availability.h264_nvenc
             || encoder_availability.h264_qsv
@@ -788,10 +829,63 @@ pub async fn main() -> Result<()> {
             || encoder_availability.hevc_qsv
             || encoder_availability.hevc_amf;
 
-        if params.config.hevc && !hevc_supported {
-            bail!(tl!("no-hwacc"));
-        } else if !params.config.hevc && !h264_supported {
-            bail!(tl!("no-hwacc"));
+        if (params.config.hevc && !hevc_supported) || (!params.config.hevc && !h264_supported) {
+            // 构建详细的错误报告
+            let mut detailed_error = String::new();
+
+            // 主错误信息
+            detailed_error += &format!("{}\n", tl!("no-hwacc"));
+
+            // 硬件检测摘要
+            detailed_error += &format!(
+                "Hardware detection summary:\n\
+             - NVIDIA: {}\n\
+             - Intel Quick Sync: {}\n\
+             - AMD AMF: {}\n\n",
+                hw_detected.h264_nvenc,
+                hw_detected.h264_qsv,
+                hw_detected.h264_amf
+            );
+
+            // 编码器测试结果
+            detailed_error += "Encoder test results:\n";
+            detailed_error += &format!(
+                "- h264_nvenc: {}\n",
+                if encoder_availability.h264_nvenc { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
+                "- hevc_nvenc: {}\n",
+                if encoder_availability.hevc_nvenc { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
+                "- h264_qsv: {}\n",
+                if encoder_availability.h264_qsv { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
+                "- hevc_qsv: {}\n",
+                if encoder_availability.hevc_qsv { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
+                "- h264_amf: {}\n",
+                if encoder_availability.h264_amf { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
+                "- hevc_amf: {}\n\n",
+                if encoder_availability.hevc_amf { "SUCCESS" } else { "FAILED" }
+            );
+
+            // 详细的错误日志
+            if !hw_errors.is_empty() {
+                detailed_error += "Detailed error logs:\n";
+                for (i, error) in hw_errors.iter().enumerate() {
+                    detailed_error += &format!("{}. {}\n", i + 1, error);
+                }
+                detailed_error += "\n";
+            } else {
+                detailed_error += "No hardware encoders were tested (all detection failed).\n\n";
+            }
+
+            bail!(detailed_error);
         }
     }
 
