@@ -15,6 +15,7 @@
       folder: Folder
   
     chart-file: Chart file
+    choose-drop: Drag and drop chart file here
   
     chart-name: Chart name
     charter: Charter
@@ -62,6 +63,7 @@
       folder: 文件夹
   
     chart-file: 谱面文件
+    choose-drop: 拖拽谱面文件到此处
   
     chart-name: 谱面名
     charter: 谱师
@@ -102,15 +104,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { event } from '@tauri-apps/api';
 
 import { toastError, RULES, toast, anyFilter, isString } from './common';
-import type { ChartInfo } from './model';
+import type { ChartInfo, FileDropEvent } from './model';
 
 import { VForm } from 'vuetify/components';
 
 import ConfigView from './components/ConfigView.vue';
 
 import moment from 'moment';
-import * as dialog from "@tauri-apps/plugin-dialog"
-import * as shell from "@tauri-apps/plugin-shell"
+import * as dialog from '@tauri-apps/plugin-dialog';
+import * as shell from '@tauri-apps/plugin-shell';
+import { listen } from '@tauri-apps/api/event';
 
 if (!(await invoke('is_the_only_instance'))) {
   await dialog.message(t('already-running'));
@@ -136,14 +139,14 @@ async function chooseChart(folder?: boolean) {
     let file = folder
       ? await dialog.open({ directory: true })
       : await dialog.open({
-        filters: [
-          {
-            name: t('choose.filter-name'),
-            extensions: ['zip', 'pez'],
-          },
-          anyFilter(),
-        ],
-      });
+          filters: [
+            {
+              name: t('choose.filter-name'),
+              extensions: ['zip', 'pez'],
+            },
+            anyFilter(),
+          ],
+        });
     if (!file) return;
     await loadChart(file as string);
   } finally {
@@ -209,10 +212,9 @@ watch([aspectWidth, aspectHeight], ([newWidth, newHeight]) => {
       chartInfo.value.aspectRatio = width / height;
     }
   } catch (e) {
-    console.error("Failed to update aspect ratio:", e);
+    console.error('Failed to update aspect ratio:', e);
   }
 });
-
 
 async function postRender() {
   try {
@@ -311,6 +313,24 @@ function tryParseAspect(): number | undefined {
   }
 }
 
+const fileHovering = ref(false);
+
+listen('tauri://drag-over', () => (fileHovering.value = step.value === 'choose'));
+listen('tauri://drag-leave', () => (fileHovering.value = false));
+
+listen('tauri://drag-drop', async (event) => {
+  const files = (event.payload as FileDropEvent).paths;
+
+  if (step.value === 'choose') {
+    fileHovering.value = false;
+    await loadChart(files[0]);
+  } else if (step.value === 'config' || step.value === 'options' || step.value === 'render') {
+    fileHovering.value = false;
+    stepIndex.value = 1;
+    await loadChart(files[0]);
+  }
+});
+
 const hoverContainer = ref<HTMLElement>();
 const moveOffset = ref({ x: 0, y: 0 });
 
@@ -330,7 +350,7 @@ function onHoverMove(e: MouseEvent) {
 
   moveOffset.value = {
     x: offsetX * (window.innerWidth / 1280),
-    y: offsetY * (window.innerHeight / 720)
+    y: offsetY * (window.innerHeight / 720),
   };
 }
 const archiveStyle = computed(() => ({
@@ -343,7 +363,7 @@ const archiveStyle = computed(() => ({
       0,
       ${Math.sqrt(moveOffset.value.x ** 2 + moveOffset.value.y ** 2) / 4}deg
     )`,
-  filter: `drop-shadow(${moveOffset.value.x / 4}px ${moveOffset.value.y / 4}px 6px rgba(99, 102, 241, 0.2))`
+  filter: `drop-shadow(${moveOffset.value.x / 4}px ${moveOffset.value.y / 4}px 6px rgba(99, 102, 241, 0.2))`,
 }));
 
 const folderStyle = computed(() => ({
@@ -356,14 +376,13 @@ const folderStyle = computed(() => ({
       0,
       ${Math.sqrt(moveOffset.value.x ** 2 + moveOffset.value.y ** 2) / 6}deg
     )`,
-  filter: `drop-shadow(${-moveOffset.value.x / 4}px ${-moveOffset.value.y / 4}px 6px rgba(99, 102, 241, 0.2))`
+  filter: `drop-shadow(${-moveOffset.value.x / 4}px ${-moveOffset.value.y / 4}px 6px rgba(99, 102, 241, 0.2))`,
 }));
 </script>
 
 <template>
   <div class="pa-8 w-100 h-100" style="max-width: 960px">
-    <v-stepper alt-labels v-model="stepIndex" hide-actions :items="steps.map((x) => t('steps.' + x))"
-               class="elevated-stepper">
+    <v-stepper alt-labels v-model="stepIndex" hide-actions :items="steps.map((x) => t('steps.' + x))" class="elevated-stepper">
       <div v-if="step === 'config' || step === 'options'" class="d-flex flex-row pa-6 pb-4 pt-0">
         <v-btn variant="text" @click="stepIndex && stepIndex--" v-t="'prev-step'"></v-btn>
         <div class="flex-grow-1"></div>
@@ -375,19 +394,25 @@ const folderStyle = computed(() => ({
       </div>
 
       <template v-slot:[`item.1`]>
-        <div class="mt-1 d-flex" style="gap: 1rem" @mousemove="onHoverMove" @mouseleave="resetHover"
-             ref="hoverContainer">
+        <div class="mt-1 d-flex" style="gap: 1rem" @mousemove="onHoverMove" @mouseleave="resetHover" ref="hoverContainer">
           <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
-            <v-btn :style="archiveStyle" class="w-75 gradient-primary hover-movable" style="overflow: hidden"
-                   size="large" @click="chooseChart(false)" prepend-icon="mdi-folder-zip">{{ t('choose.archive') }}</v-btn>
+            <v-btn
+              :style="archiveStyle"
+              class="w-75 gradient-primary hover-movable"
+              style="overflow: hidden"
+              size="large"
+              @click="chooseChart(false)"
+              prepend-icon="mdi-folder-zip"
+              >{{ t('choose.archive') }}</v-btn
+            >
           </div>
           <div class="flex-grow-1 d-flex align-center justify-center w-0">
-            <v-btn :style="folderStyle" class="w-75 gradient-primary hover-movable" size="large"
-                   @click="chooseChart(true)" prepend-icon="mdi-folder">{{ t('choose.folder') }}</v-btn>
+            <v-btn :style="folderStyle" class="w-75 gradient-primary hover-movable" size="large" @click="chooseChart(true)" prepend-icon="mdi-folder">{{
+              t('choose.folder')
+            }}</v-btn>
           </div>
         </div>
-        <v-overlay v-model="parsingChart" contained class="align-center justify-center" persistent
-                   :close-on-content-click="false">
+        <v-overlay v-model="parsingChart" contained class="align-center justify-center" persistent :close-on-content-click="false">
           <v-progress-circular indeterminate> </v-progress-circular>
         </v-overlay>
       </template>
@@ -396,19 +421,16 @@ const folderStyle = computed(() => ({
         <v-form ref="form" v-if="chartInfo">
           <v-row no-gutters class="mx-n2">
             <v-col cols="8">
-              <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]"
-                            v-model="chartInfo.name"></v-text-field>
+              <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="chartInfo.name"></v-text-field>
             </v-col>
             <v-col cols="4">
-              <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]"
-                            v-model="chartInfo.level"></v-text-field>
+              <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]" v-model="chartInfo.level"></v-text-field>
             </v-col>
           </v-row>
 
           <v-row no-gutters class="mx-n2 mt-1">
             <v-col cols="12" sm="4">
-              <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]"
-                            v-model="chartInfo.charter"></v-text-field>
+              <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]" v-model="chartInfo.charter"></v-text-field>
             </v-col>
             <v-col cols="12" sm="4">
               <v-text-field class="mx-2" :label="t('composer')" v-model="chartInfo.composer"></v-text-field>
@@ -423,28 +445,17 @@ const folderStyle = computed(() => ({
               <div class="mx-2 d-flex flex-column">
                 <p class="text-caption" v-t="'aspect'"></p>
                 <div class="d-flex flex-row align-center justify-center">
-                  <v-text-field type="number" class="mr-2" :rules="[RULES.positive]" :label="t('width')"
-                                v-model="aspectWidth"></v-text-field>
+                  <v-text-field type="number" class="mr-2" :rules="[RULES.positive]" :label="t('width')" v-model="aspectWidth"></v-text-field>
                   <p>:</p>
-                  <v-text-field type="number" class="ml-2" :rules="[RULES.positive]" :label="t('height')"
-                                v-model="aspectHeight"></v-text-field>
+                  <v-text-field type="number" class="ml-2" :rules="[RULES.positive]" :label="t('height')" v-model="aspectHeight"></v-text-field>
                 </div>
               </div>
             </v-col>
             <v-col cols="8" class="px-6">
-              <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01"
-                        v-model="chartInfo.backgroundDim">
-              </v-slider>
+              <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01" v-model="chartInfo.backgroundDim"> </v-slider>
               <v-row no-gutters class="mx-n2 mt-1 align-center">
                 <v-col cols="12" class="px-6">
-                  <v-switch
-                    :label="t('hold_cover')"
-                    v-model="chartInfo.HoldPartialCover"
-                    :true-value="1"
-                    :false-value="0"
-                    color="primary"
-                    persistent-hint
-                  ></v-switch>
+                  <v-switch :label="t('hold_cover')" v-model="chartInfo.HoldPartialCover" :true-value="1" :false-value="0" color="primary" persistent-hint></v-switch>
                 </v-col>
               </v-row>
             </v-col>
@@ -452,8 +463,7 @@ const folderStyle = computed(() => ({
 
           <v-row no-gutters class="mx-n2 mt-1">
             <v-col cols="12">
-              <v-text-field class="mx-2" :label="t('tip')" :placeholder="t('tip-placeholder')"
-                v-model="chartInfo.tip"></v-text-field>
+              <v-text-field class="mx-2" :label="t('tip')" :placeholder="t('tip-placeholder')" v-model="chartInfo.tip"></v-text-field>
             </v-col>
           </v-row>
         </v-form>
@@ -466,7 +476,7 @@ const folderStyle = computed(() => ({
       <template v-slot:[`item.4`]>
         <div class="d-flex flex-column justify-center align-center mb-2" style="gap: 1rem">
           <!-- 渲染信息卡片 -->
-          <v-card class="render-info-card" style="width: 60%;">
+          <v-card class="render-info-card" style="width: 60%">
             <v-card-title class="text-center">
               {{ t('render-started') }}
             </v-card-title>
@@ -506,34 +516,28 @@ const folderStyle = computed(() => ({
           </v-card>
 
           <!-- 按钮容器 -->
-          <div class="d-flex justify-center mt-4" style="gap: 16px;">
-            <v-btn
-              @click="router.push({ name: 'tasks' })"
-              color="#FF5722"
-              style="scale: 1"
-            >
+          <div class="d-flex justify-center mt-4" style="gap: 16px">
+            <v-btn @click="router.push({ name: 'tasks' })" color="#FF5722" style="scale: 1">
               {{ t('see-tasks') }}
             </v-btn>
-            <v-btn
-              @click="stepIndex = 1"
-              color="primary"
-              style="scale: 1"
-            >
+            <v-btn @click="stepIndex = 1" color="primary" style="scale: 1">
               {{ t('next-chart') }}
             </v-btn>
           </div>
         </div>
       </template>
     </v-stepper>
+    <v-overlay v-model="fileHovering" contained class="align-center justify-center drop-zone-overlay" persistent :close-on-content-click="false">
+      <div class="drop-pulse">
+        <h1 v-t="'choose.drop'"></h1>
+      </div>
+    </v-overlay>
   </div>
 </template>
 
 <style scoped>
 .gradient-primary {
-  background: linear-gradient(45deg,
-  #6366f1,
-  #8b5cf6,
-  #4562c4) !important;
+  background: linear-gradient(45deg, #6366f1, #8b5cf6, #4562c4) !important;
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
   overflow: hidden;
@@ -546,10 +550,7 @@ const folderStyle = computed(() => ({
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(45deg,
-  transparent 25%,
-  rgba(255, 255, 255, 0.1) 50%,
-  transparent 75%);
+  background: linear-gradient(45deg, transparent 25%, rgba(255, 255, 255, 0.1) 50%, transparent 75%);
   background-size: 200% 200%;
   opacity: 0;
   transition: opacity 0.3s;
@@ -581,7 +582,6 @@ const folderStyle = computed(() => ({
 }
 
 @keyframes float {
-
   0%,
   100% {
     transform: translateY(0);
@@ -593,7 +593,7 @@ const folderStyle = computed(() => ({
 }
 
 .gradient-btn {
-  background: linear-gradient(45deg, #FF5722, #FF9800);
+  background: linear-gradient(45deg, #ff5722, #ff9800);
   color: white;
   border: none;
 }
