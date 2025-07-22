@@ -1015,9 +1015,15 @@ pub async fn main() -> Result<()> {
 
         send(IPCEvent::Frame);
     }
-
+    /*
+    wft bro??
     input.flush()?;
     drop(input);
+
+     */
+
+    drop(input);
+    proc.wait()?;
     info!("Render Time: {:.2?}", render_start_time.elapsed());
     info!(
         "Average FPS: {:.2}",
