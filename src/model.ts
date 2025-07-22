@@ -114,3 +114,8 @@ export interface BatchChart {
   status: 'pending' | 'rendering' | 'done' | 'failed';
   error?: string;
 }
+
+export interface FileDropEvent {
+  paths: string[];
+  position: { x: number; y: number };
+}
