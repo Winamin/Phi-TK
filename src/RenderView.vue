@@ -529,7 +529,7 @@ const folderStyle = computed(() => ({
     </v-stepper>
     <v-overlay v-model="fileHovering" contained class="align-center justify-center drop-zone-overlay" persistent :close-on-content-click="false">
       <div class="drop-pulse">
-        <h1 v-t="'choose.drop'"></h1>
+        {{ t('choose-drop') }}
       </div>
     </v-overlay>
   </div>

@@ -65,7 +65,7 @@ en:
   flid_x: Mirror Mode
   background: Remove background rendering
 
-  render-list: Judgment line,Score,Combo,Level,Name,Progress bar,Time display,Percentage display,Pause
+  render-list: Judgment line,Score,Combo,Level,Name,Progress bar,Percentage display,Time display,Pause
 
   presets: Presets
   preset-refresh: Refresh
@@ -148,7 +148,7 @@ zh-CN:
   flid_x: 镜像模式
   background: 只显示背景
 
-  render-list: 判定线,分数,连击,等级,名字,进度条,时间显示,百分比显示,暂停
+  render-list: 判定线,分数,连击,等级,名字,进度条,百分比时间显示,时间显示,暂停
 
   presets: 预设配置
   preset-refresh: 刷新
