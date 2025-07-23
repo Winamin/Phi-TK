@@ -194,6 +194,8 @@ struct EncoderAvailability {
     hevc_qsv: bool,
     h264_amf: bool,
     hevc_amf: bool,
+    h264_cuvid: bool,
+    hevc_cuvid: bool,
 }
 
 #[cfg(target_os = "windows")]
@@ -705,6 +707,8 @@ pub async fn main() -> Result<()> {
             && hw_detect::detect_intel_qsv(),
         h264_amf: params.config.hardware_accel && hw_detect::detect_amd(),
         hevc_amf: params.config.hardware_accel && params.config.hevc && hw_detect::detect_amd(),
+        h264_cuvid: params.config.hardware_accel && hw_detect::detect_nvidia(),
+        hevc_cuvid: params.config.hardware_accel && params.config.hevc && hw_detect::detect_nvidia(),
     };
 
     // 错误收集器
@@ -718,6 +722,8 @@ pub async fn main() -> Result<()> {
         hevc_qsv: false,
         h264_amf: false,
         hevc_amf: false,
+        h264_cuvid: false,  // 初始化 cuvid 状态
+        hevc_cuvid: false,
     };
 
     // 测试每个硬件编码器并收集错误
@@ -741,6 +747,48 @@ pub async fn main() -> Result<()> {
                             "{} test failed:\n{}",
                             name,
                             error_output.trim()
+                        ));
+                    }
+                }
+                Err(e) => {
+                    *availability_flag = false;
+                    hw_errors.push(format!("{} test error: {}", name, e));
+                }
+            }
+        }
+    }
+
+    // 测试 cuvid 解码器（单独处理）
+    let cuvid_to_test = [
+        ("h264_cuvid", hw_detected.h264_cuvid, &mut encoder_availability.h264_cuvid),
+        ("hevc_cuvid", hw_detected.hevc_cuvid, &mut encoder_availability.hevc_cuvid),
+    ];
+
+    for (name, detected, availability_flag) in cuvid_to_test {
+        if detected {
+            let mut cmd = Command::new(&ffmpeg);
+            cmd.args(&[
+                "-hwaccel", "cuvid",
+                "-c:v", name,
+                "-f", "lavfi",
+                "-i", "color=c=black:s=320x240:d=0",
+                "-f", "null", "-"
+            ])
+                .arg("-loglevel")
+                .arg("warning")
+                .arg("-hide_banner")
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+
+            match cmd.output() {
+                Ok(output) => {
+                    *availability_flag = output.status.success();
+                    if !output.status.success() {
+                        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+                        hw_errors.push(format!(
+                            "{} test failed:\n{}",
+                            name,
+                            stderr.trim()
                         ));
                     }
                 }
@@ -839,9 +887,9 @@ pub async fn main() -> Result<()> {
             // 硬件检测摘要
             detailed_error += &format!(
                 "Hardware detection summary:\n\
-             - NVIDIA: {}\n\
-             - Intel Quick Sync: {}\n\
-             - AMD AMF: {}\n\n",
+         - NVIDIA: {}\n\
+         - Intel Quick Sync: {}\n\
+         - AMD AMF: {}\n\n",
                 hw_detected.h264_nvenc,
                 hw_detected.h264_qsv,
                 hw_detected.h264_amf
@@ -870,8 +918,16 @@ pub async fn main() -> Result<()> {
                 if encoder_availability.h264_amf { "SUCCESS" } else { "FAILED" }
             );
             detailed_error += &format!(
-                "- hevc_amf: {}\n\n",
+                "- hevc_amf: {}\n",
                 if encoder_availability.hevc_amf { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
+                "- h264_cuvid: {}\n",
+                if encoder_availability.h264_cuvid { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
+                "- hevc_cuvid: {}\n\n",
+                if encoder_availability.hevc_cuvid { "SUCCESS" } else { "FAILED" }
             );
 
             // 详细的错误日志
@@ -889,10 +945,30 @@ pub async fn main() -> Result<()> {
         }
     }
 
-    let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
-    if ffmpeg_encoder.contains("nvenc") {
-        args += " -hwaccel_output_format cuda";
+    // 构建FFmpeg命令参数
+    let mut args = String::new();
+
+    // 添加硬件加速选项（如果启用）
+    if params.config.hardware_accel {
+        // 优先使用 cuvid 进行硬件加速解码
+        if params.config.hevc && encoder_availability.hevc_cuvid {
+            args.push_str("-hwaccel cuvid -c:v hevc_cuvid ");
+        } else if !params.config.hevc && encoder_availability.h264_cuvid {
+            args.push_str("-hwaccel cuvid -c:v h264_cuvid ");
+        }
+        // 设置硬件加速输出格式
+        else if ffmpeg_encoder.contains("nvenc") {
+            args.push_str("-hwaccel_output_format cuda ");
+        } else if ffmpeg_encoder.contains("qsv") {
+            args.push_str("-hwaccel qsv ");
+        }
     }
+
+    args.push_str("-y -f rawvideo -c:v rawvideo");
+    if ffmpeg_encoder.contains("nvenc") && !args.contains("cuda") {
+        args.push_str(" -hwaccel_output_format cuda");
+    }
+
     write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
     let args2 = format!(
