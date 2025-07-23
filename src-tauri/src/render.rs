@@ -1027,11 +1027,21 @@ pub async fn main() -> Result<()> {
 
     let byte_size = vw as usize * vh as usize * 4;
 
-    const N: usize = 1;
-    let mut pbos: [GLuint; N] = [0; N];
+    //const N: usize = 1;
+    //let mut pbos: [GLuint; N] = [0; N];
+
+    const MAX_PBO_COUNT: usize = 20;
+    let mut n = MAX_PBO_COUNT;
+    while n > 0 && fps as usize % n != 0 {
+        n -= 1;
+    }
+    let n = if n == 0 { 1 } else { n };
+    let mut pbos: Vec<GLuint> = vec![0; n];
+    info!("Using {} PBOs for rendering", n);
+
     unsafe {
         use miniquad::gl::*;
-        glGenBuffers(N as _, pbos.as_mut_ptr());
+        glGenBuffers(n as _, pbos.as_mut_ptr());
         for pbo in &pbos {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
             glBufferData(
@@ -1077,6 +1087,7 @@ pub async fn main() -> Result<()> {
         );
             step_time = Instant::now();
         }
+        let pbo_index = (frame as usize) % n;
 
         *my_time.borrow_mut() = (frame as f64 / fps_f64).max(0.);
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
@@ -1096,8 +1107,7 @@ pub async fn main() -> Result<()> {
         unsafe {
             use miniquad::gl::*;
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
-
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[0]);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[pbo_index]);  // 使用动态索引
             glReadPixels(
                 0, 0,
                 vw as _, vh as _,
@@ -1133,6 +1143,10 @@ pub async fn main() -> Result<()> {
         frames as f64 / render_start_time.elapsed().as_secs_f64()
     );
     proc.wait()?;
+    unsafe {
+        use miniquad::gl::*;
+        glDeleteBuffers(n as _, pbos.as_ptr());
+    }
 
     send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
     Ok(())
