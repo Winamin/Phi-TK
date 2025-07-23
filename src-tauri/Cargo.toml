@@ -36,6 +36,7 @@ serde_yaml = "0.9"
 tokio = { version = "1.36.0", features = ["process", "rt-multi-thread", "fs", "full"] }
 tracing = "0.1.37"
 tempfile = "3.8.0"
+crossbeam-deque = "0.8.6"
 chrono = "0.4.28"
 open = "5.0.0"
 fs4 = { version = "0.6.6", features = ["tokio-async"] }

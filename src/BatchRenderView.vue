@@ -7,7 +7,7 @@ en:
   add-folder: Add Folder
   clear-list: Clear List
   start-render: Start Render
-  back: Tasks
+  back: Back
   name: Name
   level: Level
   charter: Charter
@@ -62,7 +62,7 @@ zh-CN:
   add-folder: 添加文件夹
   clear-list: 清空列表
   start-render: 开始渲染
-  back: 任务列表
+  back: 返回上一级
   name: 名称
   level: 难度
   charter: 谱师
@@ -716,15 +716,14 @@ watch(charts, saveChartsToStorage, { deep: true });
 <template>
   <div class="pa-6 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1.5rem">
     <div class="d-flex align-center justify-space-between">
-      <h1>{{ t('title') }}</h1>
       <v-btn @click="router.go(-1)" prepend-icon="mdi-arrow-left" variant="text" size="small">
         {{ t('back') }}
       </v-btn>
     </div>
 
     <!-- 配置对话框 -->
-    <v-dialog v-model="configDialog" max-width="800" scrollable @after-enter="applyDefaultConfig">
-      <v-card>
+     <v-dialog v-model="configDialog" max-width="700" scrollable @after-enter="applyDefaultConfig" class="dialog-blur">
+      <v-card rounded="xl" class="transparent-blur-card">
         <v-toolbar color="primary">
           <v-toolbar-title>{{ t('configure') }}</v-toolbar-title>
           <v-spacer></v-spacer>
@@ -747,8 +746,8 @@ watch(charts, saveChartsToStorage, { deep: true });
     </v-dialog>
 
     <!-- 谱面信息编辑对话框 -->
-    <v-dialog v-model="editDialog" max-width="600">
-      <v-card>
+    <v-dialog v-model="editDialog" max-width="700" class="dialog-blur">
+      <v-card rounded="xl" class="transparent-blur-card">
         <v-toolbar color="primary">
           <v-toolbar-title>{{ t('chart-info') }}</v-toolbar-title>
           <v-spacer></v-spacer>
@@ -859,7 +858,11 @@ watch(charts, saveChartsToStorage, { deep: true });
           density="compact"
           variant="outlined"
           class="mr-2"
-          style="min-width: 180px" />
+          style="min-width: 180px"
+          :menu-props="{
+          transition: 'slide-y-transition'
+          }"
+        />
 
         <v-btn
           color="primary"
@@ -883,7 +886,7 @@ watch(charts, saveChartsToStorage, { deep: true });
     </div>
 
     <!-- 渲染进度显示 -->
-    <v-card v-if="currentRenderingIndex >= 0" class="mb-4">
+    <v-card v-if="currentRenderingIndex >= 0" class="mb-4 dialog-blur">
       <v-card-title class="d-flex align-center text-subtitle-1">
         <v-progress-circular indeterminate size="20" width="2" class="mr-2" />
         {{ t('rendering') }}: {{ charts[currentRenderingIndex]?.name }}
@@ -895,8 +898,9 @@ watch(charts, saveChartsToStorage, { deep: true });
     </v-card>
 
     <!-- 谱面表格 -->
-    <div class="batch-table-container flex-grow-1" color= "blue-grey-2">
-      <v-table density="comfortable" fixed-header height="100%">
+    <div class="batch-table-container flex-grow-1">
+      <!-- 优化后的表格，添加自定义类名用于样式控制 -->
+      <v-table density="comfortable" fixed-header height="100%" class="custom-table">
         <thead>
         <tr>
           <th width="40"></th>
@@ -912,51 +916,71 @@ watch(charts, saveChartsToStorage, { deep: true });
           v-for="(chart, index) in charts"
           :key="index"
           :class="rowColor(chart.status)"
+          class="table-row-hover"
         >
           <td>
-            <v-checkbox v-model="chart.selected" :disabled="chart.status === 'rendering'" density="compact" hide-details />
+            <v-checkbox
+              v-model="chart.selected"
+              :disabled="chart.status === 'rendering'"
+              density="compact"
+              hide-details
+              class="custom-checkbox"
+            />
           </td>
-          <td :title="chart.name" class="text-truncate" style="max-width: 200px">{{ chart.name }}</td>
+          <td :title="chart.name" class="text-truncate table-name-cell">{{ chart.name }}</td>
           <td>{{ chart.level }}</td>
           <td>{{ chart.charter }}</td>
           <td>
-            <v-chip :color="statusColor(chart.status)" size="small">
+            <!-- 状态标签添加语义化类名 -->
+            <v-chip
+              :class="`status-chip status-${chart.status}`"
+              size="small"
+              class="status-chip-custom"
+            >
               {{ t(chart.status) }}
             </v-chip>
-            <div v-if="chart.error" class="text-caption text-red mt-1">{{ chart.error }}</div>
+            <div v-if="chart.error" class="text-caption text-red mt-1 error-message">{{ chart.error }}</div>
           </td>
-          <td>
+          <td class="action-buttons">
             <v-btn
               @click="openEditDialog(index)"
               color="primary"
               icon="mdi-pencil"
               size="small"
-              variant="tonal"
-              class="mr-1"
+              variant="flat"
+              class="action-btn"
               :disabled="!chart.chartInfo"
+              :title="t('edit')"
             ></v-btn>
             <v-btn
               @click="previewChart(index)"
               color="primary"
               icon="mdi-play"
               size="small"
-              variant="tonal"
-              class="mr-1"
+              variant="flat"
+              class="action-btn"
               :disabled="!chart.chartInfo"
+              :title="t('preview')"
             ></v-btn>
             <v-btn
               :disabled="chart.status === 'rendering'"
               color="error"
               icon="mdi-delete"
               size="small"
-              variant="tonal"
+              variant="flat"
+              class="action-btn"
               @click="charts.splice(index, 1)"
+              :title="t('delete')"
             />
           </td>
         </tr>
+        <!-- 优化的空状态显示 -->
         <tr v-if="charts.length === 0">
-          <td class="text-center py-8 text-disabled" colspan="6">
-            {{ t('no-charts') }}
+          <td class="empty-state" colspan="6">
+            <div class="empty-state-icon">
+              <v-icon size="48" color="rgba(255,255,255,0.3)">mdi-file-chart-outline</v-icon>
+            </div>
+            <div class="empty-state-text">{{ t('no-charts') }}</div>
           </td>
         </tr>
         </tbody>
@@ -995,11 +1019,176 @@ watch(charts, saveChartsToStorage, { deep: true });
 }
 
 tr:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: rgba(37, 77, 161, 0.08) !important;
   transition: background-color 0.3s ease;
 }
 
 tr {
   transition: background-color 0.5s ease;
+}
+
+.dialog-blur {
+  backdrop-filter: blur(16px);
+}
+
+.transparent-blur-card {
+  background: rgba(7, 5, 45, 0.67) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+
+  /* 强制加大圆角（数值可自定义，如 20px） */
+  border-radius: 20px !important;
+
+  border: none !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 容器样式 - 毛玻璃效果 + 深色背景 */
+.batch-table-container {
+  background: rgba(23, 23, 28, 0.85) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* 表格整体样式穿透 */
+::v-deep .custom-table {
+  background: transparent !important;
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+/* 表头样式 */
+::v-deep .custom-table thead tr {
+  background: linear-gradient(180deg, #2d2d34, #24242b) !important;
+  border-radius: 8px 8px 0 0;
+}
+
+::v-deep .custom-table thead th {
+  color: #e0e0e0;
+  font-weight: 500;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+}
+
+/* 表格行样式 */
+::v-deep .custom-table tbody tr {
+  transition: all 0.2s ease;
+  background: transparent !important;
+}
+
+::v-deep .custom-table tbody tr.table-row-hover:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+::v-deep .custom-table tbody td {
+  color: #f0f0f0;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  vertical-align: middle;
+}
+
+/* 名称单元格样式 */
+.table-name-cell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 复选框样式优化 */
+::v-deep .custom-checkbox .v-icon {
+  color: #8a8a94 !important;
+  transition: color 0.2s ease;
+}
+
+::v-deep .custom-checkbox .v-icon.checked {
+  color: #42a5f5 !important;
+}
+
+::v-deep .custom-checkbox:disabled .v-icon {
+  color: #505058 !important;
+  opacity: 0.6;
+}
+
+/* 状态标签样式 */
+::v-deep .status-chip-custom {
+  border: none !important;
+  font-weight: 500;
+  text-transform: capitalize;
+  padding: 2px 8px;
+}
+
+/* 不同状态的标签颜色 */
+::v-deep .status-chip.status-ready {
+  background: rgba(76, 175, 80, 0.15) !important;
+  color: #4caf50 !important;
+}
+
+::v-deep .status-chip.status-rendering {
+  background: rgba(255, 152, 0, 0.15) !important;
+  color: #ff9800 !important;
+}
+
+::v-deep .status-chip.status-error {
+  background: rgba(244, 67, 54, 0.15) !important;
+  color: #f44336 !important;
+}
+
+/* 错误消息样式 */
+.error-message {
+  font-size: 12px;
+  color: #ff5252 !important;
+  margin-top: 4px;
+}
+
+/* 操作按钮样式 */
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+::v-deep .action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px !important;
+  transition: all 0.2s ease !important;
+  opacity: 0.8;
+}
+
+::v-deep .action-btn:hover {
+  opacity: 1;
+  transform: scale(1.08);
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+::v-deep .action-btn:disabled {
+  opacity: 0.4 !important;
+  transform: none !important;
+  background: transparent !important;
+}
+
+/* 空状态样式 */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px !important;
+  color: #a0a0a0;
+}
+
+.empty-state-icon {
+  margin-bottom: 16px;
+}
+
+.empty-state-text {
+  font-size: 14px;
+  color: #8a8a94;
 }
 </style>
