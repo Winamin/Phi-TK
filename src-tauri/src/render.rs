@@ -766,35 +766,62 @@ pub async fn main() -> Result<()> {
 
     for (name, detected, availability_flag) in cuvid_to_test {
         if detected {
-            let mut cmd = Command::new(&ffmpeg);
-            cmd.args(&[
-                "-hwaccel", "cuvid",
-                "-c:v", name,
+            // 1. 生成测试用的编码视频（内存中）
+            let mut encode_cmd = Command::new(&ffmpeg);
+            encode_cmd.args(&[
                 "-f", "lavfi",
-                "-i", "color=c=black:s=320x240:d=0",
-                "-f", "null", "-"
+                "-i", "testsrc=duration=1:size=320x240:rate=30",
+                "-c:v", if name == "h264_cuvid" { "libx264" } else { "libx265" },
+                "-t", "0.5",  // 只编码0.5秒
+                "-f", "mpegts",  // 使用TS容器
+                "-"  // 输出到stdout
             ])
-                .arg("-loglevel")
-                .arg("warning")
-                .arg("-hide_banner")
                 .stdout(Stdio::piped())
+                .stderr(Stdio::null());
+
+            // 2. 解码测试
+            let mut decode_cmd = Command::new(&ffmpeg);
+            decode_cmd.args(&[
+                "-hwaccel", "cuvid",
+                "-hwaccel_device", "0",
+                "-c:v", name,
+                "-f", "mpegts",
+                "-i", "-",  // 从stdin读取
+                "-f", "null",
+                "-"  // 输出到null
+            ])
+                .stdin(Stdio::piped())  // 接收编码后的视频
+                .stdout(Stdio::null())
                 .stderr(Stdio::piped());
 
-            match cmd.output() {
+            // 执行管道操作
+            let encoded = match encode_cmd.spawn() {
+                Ok(child) => child,
+                Err(e) => {
+                    *availability_flag = false;
+                    hw_errors.push(format!("{} test encode setup failed: {}", name, e));
+                    continue;
+                }
+            };
+
+            decode_cmd.stdin(encoded.stdout.unwrap());  // 连接管道
+
+            match decode_cmd.output() {
                 Ok(output) => {
                     *availability_flag = output.status.success();
                     if !output.status.success() {
-                        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+                        let stderr = String::from_utf8_lossy(&output.stderr);
                         hw_errors.push(format!(
-                            "{} test failed:\n{}",
+                            "{} decode test failed (code {}):\n{}",
                             name,
+                            output.status.code().unwrap_or(-1),
                             stderr.trim()
                         ));
                     }
                 }
                 Err(e) => {
                     *availability_flag = false;
-                    hw_errors.push(format!("{} test error: {}", name, e));
+                    hw_errors.push(format!("{} decode test execution failed: {}", name, e));
                 }
             }
         }

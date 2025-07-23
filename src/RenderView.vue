@@ -412,8 +412,20 @@ const folderStyle = computed(() => ({
             }}</v-btn>
           </div>
         </div>
-        <v-overlay v-model="parsingChart" contained class="align-center justify-center" persistent :close-on-content-click="false">
-          <v-progress-circular indeterminate> </v-progress-circular>
+        <v-overlay v-model="parsingChart" contained class="align-center justify-center custom-loading-overlay" persistent :close-on-content-click="false">
+          <div class="loading-content text-center p-8">
+            <v-progress-circular
+              indeterminate
+              color="primary"
+              size="80"
+              width="6"
+              class="mb-4 animate-pulse"
+            ></v-progress-circular>
+
+            <!-- 添加状态文本 -->
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-2"></h3>
+            <p class="text-gray-600 dark:text-gray-400 text-sm"></p>
+          </div>
         </v-overlay>
       </template>
 
@@ -621,5 +633,25 @@ const folderStyle = computed(() => ({
 .info-value {
   color: white;
   flex-grow: 1;
+}
+
+.custom-loading-overlay {
+  backdrop-filter: blur(16px);
+  background-color: rgba(17, 32, 89, 0.7);
+
+  /* 圆角和阴影 */
+  border-radius: 1.5rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+
+  margin: auto;
+}
+
+/* 为暗色模式添加单独的样式 */
+:deep(.dark .custom-loading-overlay) {
+  background-color: rgba(30, 41, 59, 0.7);
+}
+
+.loading-content {
+  overflow: hidden;
 }
 </style>

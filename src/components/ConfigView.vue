@@ -40,6 +40,7 @@ en:
   respack-open: Open Folder
 
   note-scale: Note Scale
+  render: UI Display
 
   double-hint: Double Hit Hint
 
@@ -123,6 +124,7 @@ zh-CN:
   respack-open: 打开文件夹
 
   note-scale: 音符缩放
+  render: UI显示
 
   double-hint: 双押提示
 
@@ -179,6 +181,48 @@ import type { RenderConfig } from '../model';
 
 import TipSwitch from './TipSwitch.vue';
 import TipTextField from './TipTextField.vue';
+import { gsap } from 'gsap';
+
+import type { TransitionProps } from 'vue';
+
+type TransitionElement = Element & HTMLElement;
+
+const beforeEnter: TransitionProps['onBeforeEnter'] = (el) => {
+  const element = el as TransitionElement;
+  gsap.set(element, {
+    y: -4,  // 初始位置更高
+    opacity: 0,
+    scale: 0.8,
+    skewX: 10,
+    transformOrigin: "top center"
+  });
+};
+
+const enter: TransitionProps['onEnter'] = (el, done) => {
+  const element = el as TransitionElement;
+  gsap.to(element, {
+    y: 0,
+    opacity: 1,
+    scale: 1,
+    skewX: 0,
+    duration: 0.4,  // 延长持续时间
+    ease: "elastic.out(18.4, 8.3)",  // 增强弹性效果
+    onComplete: done
+  });
+};
+
+const leave: TransitionProps['onLeave'] = (el, done) => {
+  const element = el as TransitionElement;
+  gsap.to(element, {
+    y: -5,  // 向上弹走
+    opacity: 0,
+    scale: 0.95,
+    skewX: 0,  // 增加倾斜度
+    duration: 0.6,
+    ease: "elastic.inOut(0.8, 0.5)",  // 弹性效果
+    onComplete: done
+  });
+};
 
 const props = defineProps<{ initAspectRatio?: number }>();
 
@@ -540,6 +584,14 @@ async function replacePreset() {
         density="compact"
         variant="outlined"
         class="preset-select"
+        :menu-props="{
+        transition: {
+          name: 'custom-menu',
+          onBeforeEnter: beforeEnter,
+          onEnter: enter,
+          onLeave: leave
+          }
+        }"
       />
       <div class="preset-actions">
         <v-btn
@@ -584,6 +636,14 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="resolution"
+            :menu-props="{
+        transition: {
+          name: 'custom-menu',
+          onBeforeEnter: beforeEnter,
+          onEnter: enter,
+          onLeave: leave
+          }
+        }"
           />
 
           <v-combobox
@@ -592,6 +652,14 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="ffmpegPreset"
+            :menu-props="{
+        transition: {
+          name: 'custom-menu',
+          onBeforeEnter: beforeEnter,
+          onEnter: enter,
+          onLeave: leave
+          }
+        }"
           />
 
           <v-text-field
@@ -603,11 +671,19 @@ async function replacePreset() {
           />
 
           <v-combobox
-            :label="t('bitrateControl')"
+            :label="t('bitrate-control')"
             :items="['CRF', 'CBR']"
             density="compact"
             variant="outlined"
             v-model="bitrateControl"
+            :menu-props="{
+        transition: {
+          name: 'custom-menu',
+          onBeforeEnter: beforeEnter,
+          onEnter: enter,
+          onLeave: leave
+          }
+        }"
           />
 
           <v-text-field
@@ -692,6 +768,14 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="challengeColor"
+            :menu-props="{
+        transition: {
+          name: 'custom-menu',
+          onBeforeEnter: beforeEnter,
+          onEnter: enter,
+          onLeave: leave
+          }
+        }"
           />
         </div>
       </div>
@@ -708,6 +792,14 @@ async function replacePreset() {
             variant="outlined"
             v-model="respack"
             class="respack-select"
+            :menu-props="{
+        transition: {
+          name: 'custom-menu',
+          onBeforeEnter: beforeEnter,
+          onEnter: enter,
+          onLeave: leave
+          }
+        }"
           />
           <div class="respack-actions">
             <v-btn icon="mdi-refresh" variant="text" size="small" @click="updateRespacks"/>
@@ -763,6 +855,14 @@ async function replacePreset() {
           density="compact"
           variant="outlined"
           class="mt-4"
+          :menu-props="{
+        transition: {
+          name: 'custom-menu',
+          onBeforeEnter: beforeEnter,
+          onEnter: enter,
+          onLeave: leave
+          }
+        }"
         />
       </div>
     </v-expand-transition>
@@ -811,6 +911,14 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="targetAudio"
+            :menu-props="{
+        transition: {
+          name: 'custom-menu',
+          onBeforeEnter: beforeEnter,
+          onEnter: enter,
+          onLeave: leave
+          }
+        }"
           />
         </div>
       </div>
