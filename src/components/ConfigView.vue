@@ -58,7 +58,7 @@ en:
   disable-loading-tips: It's a bit problematic and not recommended
   chart_debug: Debug Mode
   chart_ratio: Chart Zoom
-  buffer_size: Adjust Buffer Size
+  buffer_size: Hit Sound Buffer Size
   buffer_size-tips: Not very useful
   target_audio: Target sample rate / Hz
   combo: Customize COMBO Text
@@ -142,7 +142,7 @@ zh-CN:
   disable-loading-tips: 有点问题，不建议使用
   chart_debug: 调试模式
   chart_ratio: 谱面缩放
-  buffer_size: 音频Buffer Size
+  buffer_size: 打击音缓冲区
   buffer_size-tips: 用处不大
   target_audio: 目标采样率 / Hz
   combo: 自定义COMBO名称

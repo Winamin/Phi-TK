@@ -680,7 +680,7 @@ pub async fn main() -> Result<()> {
             "-f", "null", "-",
         ])
             .arg("-loglevel")
-            .arg("warning")  // 提高日志级别以获取更多信息
+            .arg("warning")
             .arg("-hide_banner")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());  // 捕获标准错误
@@ -722,7 +722,7 @@ pub async fn main() -> Result<()> {
         hevc_qsv: false,
         h264_amf: false,
         hevc_amf: false,
-        h264_cuvid: false,  // 初始化 cuvid 状态
+        h264_cuvid: false,
         hevc_cuvid: false,
     };
 
