@@ -1106,7 +1106,7 @@ pub async fn main() -> Result<()> {
 
         unsafe {
             use miniquad::gl::*;
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(mst.output()));
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(&mst.output()));
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[pbo_index]);  // 使用动态索引
             glReadPixels(
                 0, 0,

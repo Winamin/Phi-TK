@@ -285,7 +285,7 @@ async function addFiles() {
   try {
     const files = await open({
       multiple: true,
-      filters: [{ name: t('chart-file'), extensions: ['zip', 'json', 'pek'] }],
+      filters: [{ name: t('chart-file'), extensions: ['zip', 'json', 'pez'] }],
     });
 
     if (!files) return;
@@ -335,7 +335,7 @@ async function addFolder() {
     }
 
     // 只处理谱面文件扩展名
-    const validExtensions = ['.json', '.zip', '.pek'];
+    const validExtensions = ['.json', '.zip', '.pez'];
     const filteredFiles = files.filter((file) => {
       const ext = file.toLowerCase().slice(file.lastIndexOf('.'));
       return validExtensions.includes(ext);
