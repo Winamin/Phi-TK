@@ -360,7 +360,7 @@ async fn list_chart_files(path: PathBuf) -> Result<Vec<String>, InvokeError> {
                 if path.is_dir() {
                     dirs.push(path);
                 } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                    if ["zip", "json", "pek"].contains(&ext) {
+                    if ["zip", "json", "pez"].contains(&ext) {
                         files.push(path.to_str().context("Invalid path")?.to_owned());
                     }
                 }
