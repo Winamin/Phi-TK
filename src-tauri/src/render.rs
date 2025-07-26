@@ -999,7 +999,7 @@ pub async fn main() -> Result<()> {
     write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
     let args2 = format!(
-        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
+        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 -thread_queue_size 1024 {} -vf vflip -f mov",
         ffmpeg_encoder,
         bitrate_control,
         params.config.bitrate,
