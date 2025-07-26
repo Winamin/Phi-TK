@@ -1055,7 +1055,7 @@ tr {
 }
 
 /* 表格整体样式穿透 */
-::v-deep .custom-table {
+.custom-table {
   background: transparent !important;
   border-collapse: separate;
   border-spacing: 0;
@@ -1063,12 +1063,12 @@ tr {
 }
 
 /* 表头样式 */
-::v-deep .custom-table thead tr {
+.custom-table thead tr {
   background: linear-gradient(180deg, #2d2d34, #24242b) !important;
   border-radius: 8px 8px 0 0;
 }
 
-::v-deep .custom-table thead th {
+.custom-table thead th {
   color: #e0e0e0;
   font-weight: 500;
   padding: 12px 16px;
@@ -1077,18 +1077,18 @@ tr {
 }
 
 /* 表格行样式 */
-::v-deep .custom-table tbody tr {
+.custom-table tbody tr {
   transition: all 0.2s ease;
   background: transparent !important;
 }
 
-::v-deep .custom-table tbody tr.table-row-hover:hover {
+.custom-table tbody tr.table-row-hover:hover {
   background: rgba(255, 255, 255, 0.06) !important;
   transform: translateY(-1px);
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
 }
 
-::v-deep .custom-table tbody td {
+.custom-table tbody td {
   color: #f0f0f0;
   padding: 14px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -1104,22 +1104,22 @@ tr {
 }
 
 /* 复选框样式优化 */
-::v-deep .custom-checkbox .v-icon {
+.custom-checkbox .v-icon {
   color: #8a8a94 !important;
   transition: color 0.2s ease;
 }
 
-::v-deep .custom-checkbox .v-icon.checked {
+.custom-checkbox .v-icon.checked {
   color: #42a5f5 !important;
 }
 
-::v-deep .custom-checkbox:disabled .v-icon {
+.custom-checkbox:disabled .v-icon {
   color: #505058 !important;
   opacity: 0.6;
 }
 
 /* 状态标签样式 */
-::v-deep .status-chip-custom {
+.status-chip-custom {
   border: none !important;
   font-weight: 500;
   text-transform: capitalize;
@@ -1127,36 +1127,34 @@ tr {
 }
 
 /* 不同状态的标签颜色 */
-::v-deep .status-chip.status-ready {
+.status-chip.status-ready {
   background: rgba(76, 175, 80, 0.15) !important;
   color: #4caf50 !important;
 }
 
-::v-deep .status-chip.status-rendering {
+.status-chip.status-rendering {
   background: rgba(255, 152, 0, 0.15) !important;
   color: #ff9800 !important;
 }
 
-::v-deep .status-chip.status-error {
+.status-chip.status-error {
   background: rgba(244, 67, 54, 0.15) !important;
   color: #f44336 !important;
 }
 
-/* 错误消息样式 */
 .error-message {
   font-size: 12px;
   color: #ff5252 !important;
   margin-top: 4px;
 }
 
-/* 操作按钮样式 */
 .action-buttons {
   display: flex;
   gap: 4px;
   justify-content: center;
 }
 
-::v-deep .action-btn {
+.action-btn {
   width: 32px;
   height: 32px;
   border-radius: 6px !important;
@@ -1164,13 +1162,13 @@ tr {
   opacity: 0.8;
 }
 
-::v-deep .action-btn:hover {
+.action-btn:hover {
   opacity: 1;
   transform: scale(1.08);
   background: rgba(255, 255, 255, 0.1) !important;
 }
 
-::v-deep .action-btn:disabled {
+.action-btn:disabled {
   opacity: 0.4 !important;
   transform: none !important;
   background: transparent !important;
