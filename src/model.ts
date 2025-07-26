@@ -95,6 +95,8 @@ export interface RenderConfig {
   uiCombo: boolean;
   uiPb: boolean;
   uiPause: boolean;
+
+  ffmpegThread: boolean;
 }
 
 export interface RPEChart {

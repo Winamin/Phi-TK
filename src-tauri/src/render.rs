@@ -77,6 +77,10 @@ pub struct RenderConfig {
     pub ui_line: bool,
     pub ui_pb: bool,
     pub ui_pause: bool,
+
+    //ffmpeg
+    #[serde(default)]
+    pub ffmpeg_thread: bool,
 }
 
 impl Default for RenderConfig {
@@ -125,6 +129,9 @@ impl Default for RenderConfig {
             ui_line: true,
             ui_pb: true,
             ui_pause: true,
+
+            //ffmpeg
+            ffmpeg_thread: false,
         }
     }
 }
@@ -998,8 +1005,12 @@ pub async fn main() -> Result<()> {
 
     write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
+    if params.config.ffmpeg_thread {
+        args.push_str(" --thread_queue_size 1024 ");
+    }
+
     let args2 = format!(
-        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 -thread_queue_size 1024 {} -vf vflip -f mov",
+        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
         ffmpeg_encoder,
         bitrate_control,
         params.config.bitrate,

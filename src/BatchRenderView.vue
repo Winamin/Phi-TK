@@ -243,6 +243,7 @@ function loadDefaultConfig(): RenderConfig {
     volumeSfx: 1,
     combo: 'AUTOPLAY',
     watermark: '',
+    ffmpegThread: false,
     showProgressText: false,
     showTimeText: false,
     uiLine: true,

@@ -22,6 +22,8 @@ en:
   bitrate-control: Bitrate Control
   bitrate: Quantization parameters/Bitrate
   bitrate-tips: CRF-This is the CRF level. CBR-This is the bitrate
+  ffmpeg-thread: FFmpeg Thread Optimization
+  ffmpeg-thread-tips: Optimize FFmpeg thread usage for better performance
 
   player-avatar: Player Avatar
   player-name: Player Name
@@ -106,6 +108,8 @@ zh-CN:
   bitrate-control: 码率控制
   bitrate: 量化参数/码率
   bitrate-tips: CRF-该项为CRF级别 CBR-该项为码率
+  ffmpeg-thread: FFmpeg线程优化
+  ffmpeg-thread-tips: 优化 FFmpeg 线程使用，提升性能
 
   player-avatar: 玩家头像
   player-name: 玩家名
@@ -316,6 +320,7 @@ const showProgressText = ref(false);
 const showTimeText = ref(false);
 const background = ref(false);
 
+const ffmpegThread = ref(false);
 //prpr [ui]
 const renderList = ref(t('render-list').split(','))
 const render = ref<string[]>([])
@@ -367,6 +372,8 @@ async function buildConfig(): Promise<RenderConfig | null> {
     combo: combo.value,
     watermark: watermark.value,
 
+    ffmpegThread: ffmpegThread.value,
+
     //ui [prpr]
     uiLine: render.value.includes(renderList.value[0]),
     uiScore: render.value.includes(renderList.value[1]),
@@ -414,6 +421,8 @@ function applyConfig(config: RenderConfig) {
   volumeSfx.value = config.volumeSfx;
   combo.value = config.combo;
   watermark.value = config.watermark;
+
+  ffmpegThread.value = config.ffmpegThread ?? false;
 
   //ui [prpr]
   render.value = []
@@ -476,6 +485,7 @@ const DEFAULT_PRESET: Preset = {
     volumeSfx: 1,
     combo: 'AUTOPLAY',
     watermark: '',
+    ffmpegThread: false,
     showProgressText: false,
     showTimeText: false,
     uiLine: true,
@@ -502,9 +512,13 @@ async function getPresets() {
 }
 const presets = ref([DEFAULT_PRESET]);
 const preset = ref(DEFAULT_PRESET);
+
 async function updatePresets() {
-  presets.value = await getPresets();
-  preset.value = presets.value.find((x) => x.key === preset.value.key) || presets.value[0];
+  const currentKey = preset.value.key; // 保存当前选中的 key
+  presets.value = await getPresets(); // 获取预设列表
+  // 使用 key 查找预设
+  const foundPreset = presets.value.find((x) => x.key === currentKey);
+  preset.value = foundPreset || presets.value[0];
 }
 updatePresets();
 
@@ -584,14 +598,15 @@ async function replacePreset() {
         density="compact"
         variant="outlined"
         class="preset-select"
+        return-object
         :menu-props="{
-        transition: {
-          name: 'custom-menu',
-          onBeforeEnter: beforeEnter,
-          onEnter: enter,
-          onLeave: leave
-          }
-        }"
+      transition: {
+        name: 'custom-menu',
+        onBeforeEnter: beforeEnter,
+        onEnter: enter,
+        onLeave: leave
+      }
+    }"
       />
       <div class="preset-actions">
         <v-btn
@@ -725,6 +740,13 @@ async function replacePreset() {
             v-model="hevc"
             density="compact"
           />
+          <TipSwitch
+            :label="t('ffmpeg-thread')"
+            :tooltip="t('ffmpeg-thread-tips')"
+            color="primary"
+            v-model="ffmpegThread"
+            density="compact"
+            />
         </div>
       </div>
     </v-expand-transition>
