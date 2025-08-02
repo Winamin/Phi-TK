@@ -13,6 +13,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getVersion } from '@tauri-apps/api/app'
 import { open } from '@tauri-apps/plugin-shell'
+import TextType from "./TextType.vue"; // 引入打字机组件
 
 const { t } = useI18n()
 
@@ -34,59 +35,20 @@ const openGitHub = () => {
 onMounted(() => {
   fetchVersion()
 })
-
-const letters = ref<string[]>([])
-const containerRef = ref<HTMLElement | null>(null)
-
-onMounted(() => {
-  fetchVersion()
-  letters.value = t('app').split('')
-
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!containerRef.value) return
-
-    const { left, top, width, height } = containerRef.value.getBoundingClientRect()
-    const centerX = left + width / 2
-    const centerY = top + height / 2
-    const offsetX = (e.clientX - centerX) / 20
-    const offsetY = (e.clientY - centerY) / 20
-
-    containerRef.value.style.setProperty('--offset-x', `${offsetX}px`)
-    containerRef.value.style.setProperty('--offset-y', `${offsetY}px`)
-  }
-
-  window.addEventListener('mousemove', handleMouseMove)
-})
-
-const throttle = (fn: Function, delay: number) => {
-  let lastTime = 0
-  return (...args: any[]) => {
-    const now = Date.now()
-    if (now - lastTime >= delay) {
-      fn(...args)
-      lastTime = now
-    }
-  }
-}
 </script>
 
 <template>
   <div class="about-container">
-    <h1 
-      ref="containerRef"
+    <TextType
+      :text="[t('app')]"
+      :typingSpeed="75"
+      :pauseDuration="1500"
+      :showCursor="true"
+      cursorCharacter="|"
       class="app-title"
       aria-label="Phi TK"
-    >
-      <span 
-        v-for="(char, index) in letters"
-        :key="index"
-        class="letter"
-        :style="{ '--i': index }"
-      >
-        {{ char === ' ' ? '&nbsp;' : char }}
-      </span>
-    </h1>
-    
+    />
+
     <v-scale-transition>
       <h4 class="version-label text-glow">v{{ appVersion }}</h4>
     </v-scale-transition>
@@ -118,31 +80,12 @@ const throttle = (fn: Function, delay: number) => {
 }
 
 .app-title {
-  display: inline-block;
   font-size: 3rem;
   font-weight: 700;
   letter-spacing: -0.05em;
-  position: relative;
-  overflow: hidden;
   height: 1.2em;
-  transform: translate(var(--offset-x, 0), var(--offset-y, 0));
-  transition: transform 0.2s ease-out;
-}
-
-.letter {
-  display: inline-block;
-  opacity: 0;
-  transform: translateY(1em);
-  animation: appear 0.6s forwards cubic-bezier(0.5, 1, 0.5, 1.2);
-  animation-delay: calc(var(--i) * 0.1s);
-  will-change: transform, opacity;
-}
-
-@keyframes appear {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  display: flex;
+  justify-content: center;
 }
 
 .version-label {
@@ -161,13 +104,6 @@ const throttle = (fn: Function, delay: number) => {
 .license-text {
   font-size: 0.9rem;
   opacity: 0.7;
-}
-
-.gradient-text {
-  background: linear-gradient(45deg, #2196f3, #e91e63);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 
 .text-glow {
