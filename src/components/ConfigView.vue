@@ -67,6 +67,7 @@ en:
   watermark: Watermark Text
   flid_x: Mirror Mode
   background: Remove background rendering
+  hand-split: Hand Split
 
   render-list: Judgment line,Score,Combo,Level,Name,Progress bar,Percentage display,Time display,Pause
 
@@ -153,6 +154,7 @@ zh-CN:
   watermark: 水印
   flid_x: 镜像模式
   background: 只显示背景
+  hand-split: 手序拆解
 
   render-list: 判定线,分数,连击,等级,名字,进度条,百分比时间显示,时间显示,暂停
 
@@ -320,6 +322,7 @@ const showProgressText = ref(false);
 const showTimeText = ref(false);
 const background = ref(false);
 
+const handSplit = ref(false);
 const ffmpegThread = ref(false);
 //prpr [ui]
 const renderList = ref(t('render-list').split(','))
@@ -352,6 +355,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
     bitrate: bitrate.value,
     targetAudio: targetAudio.value,
     background: background.value,
+    handSplit: handSplit.value,
 
     aggressive: aggressive.value,
     challengeColor: STD_CHALLENGE_COLORS[t('challenge-colors').split(',').indexOf(challengeColor.value)],
@@ -403,6 +407,7 @@ function applyConfig(config: RenderConfig) {
   bitrate.value = config.bitrate;
   targetAudio.value = config.targetAudio;
   background.value = config.background;
+  handSplit.value = config.handSplit
 
   aggressive.value = config.aggressive;
   challengeColor.value = t('challenge-colors').split(',')[STD_CHALLENGE_COLORS.indexOf(config.challengeColor)];
@@ -488,6 +493,7 @@ const DEFAULT_PRESET: Preset = {
     ffmpegThread: false,
     showProgressText: false,
     showTimeText: false,
+    handSplit: false,
     uiLine: true,
     uiScore: true,
     uiCombo: true,
@@ -1038,6 +1044,14 @@ async function replacePreset() {
             hide-details
             class="compact-switch"
           />
+          <v-switch
+            :label="t('hand-split')"
+            density="compact"
+            color="primary"
+            v-model="handSplit"
+            hide-details
+            class="compact-switch"
+            />
         </div>
       </div>
     </v-expand-transition>
