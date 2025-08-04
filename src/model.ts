@@ -87,6 +87,7 @@ export interface RenderConfig {
   speed: number;
   volumeMusic: number;
   volumeSfx: number;
+  handSplit: boolean;
 
   uiScore: boolean;
   uiName: boolean;

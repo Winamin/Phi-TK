@@ -17,11 +17,13 @@ zh-CN:
 
 <script lang="ts">
 import { onMounted, onUnmounted } from 'vue'
+
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
 import { useI18n } from 'vue-i18n';
+
 import { VSonner } from 'vuetify-sonner';
-import Dock from './Dock.vue'; // 导入Dock组件
 
 const onLoaded = ref<() => void>();
 const component = ref();
@@ -44,7 +46,6 @@ export default {
   data() {
     return {
       drawer: true,
-      navItems: [] as any[] // 存储导航项数据
     };
   },
   methods: {
@@ -52,18 +53,16 @@ export default {
       this.drawer = !this.drawer;
     },
   },
+
 };
 </script>
 
 <script setup lang="ts">
-import { h, ref, computed, onMounted } from 'vue';
-
 const { t } = useI18n();
 
 const route = useRoute(),
   router = useRouter();
 
-// 定义图标映射
 const icons = {
   render: 'mdi-auto-fix',
   rpe: 'mdi-bookshelf',
@@ -72,34 +71,24 @@ const icons = {
   'batch-render': 'mdi-playlist-play',
 };
 
-// 创建Dock所需items
-const dockItems = computed(() => {
-  return [
-    'render',
-    'rpe',
-    'tasks',
-    'batch-render',
-    'about'
-  ].map(key => ({
-    icon: () => h('v-icon', { size: '20px' }, icons[key as keyof typeof icons]),
-    label: t(key),
-    onClick: () => router.push({ name: key }),
-    className: route.name === key ? 'active-dock-item' : '',
-  }));
-});
-
 window.goto = (name: string) => {
   router.push({ name });
 };
 
+const drawer = ref(true);
 const handleResize = () => {
-  // 可以在这里添加响应式处理
+  drawer.value = window.innerWidth >= 768;
 };
 
 onMounted(() => {
   window.addEventListener('resize', handleResize);
   handleResize();
 });
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize);
+});
+
 </script>
 
 <template>
@@ -108,6 +97,26 @@ onMounted(() => {
     <v-app-bar :elevation="0" class="app-bar-shadow blur-background">
       <v-app-bar-title class="mx-5 text-gradient glow-title">Phi TK</v-app-bar-title>
     </v-app-bar>
+
+    <v-navigation-drawer
+      v-model="drawer"
+      expand-on-hover
+      rail
+      permanent
+      class="nav-drawer-glass blur-background"
+    >
+      <v-list density="compact" nav>
+        <v-list-item
+          v-for="key in ['render', 'rpe', 'tasks', 'batch-render', 'about']"
+          :active="route.name === key"
+          :key="key"
+          :prepend-icon="icons[key as keyof typeof icons]"
+          :title="t(key)"
+          @click="router.push({ name: key })"
+          class="list-item-hover glow-item"
+        ></v-list-item>
+      </v-list>
+    </v-navigation-drawer>
 
     <v-main class="d-flex justify-center animated-background">
       <router-view v-slot="{ Component }">
@@ -131,20 +140,6 @@ onMounted(() => {
         </Suspense>
       </router-view>
     </v-main>
-
-    <!-- 添加横向Dock组件到页面底部 -->
-    <div class="dock-container">
-      <Dock
-        :items="dockItems"
-        :panel-height="68"
-        :base-item-size="50"
-        :magnification="70"
-        :distance="200"
-        :dock-height="80"
-        :spring="{ mass: 0.1, stiffness: 150, damping: 12 }"
-        class="dock-glass blur-background"
-      />
-    </div>
   </v-app>
 </template>
 
@@ -161,6 +156,49 @@ onMounted(() => {
     rgba(186, 104, 200, 0.1) 100%
   ) !important;
   border: 1px solid rgba(255,255,255,0.1) !important;
+}
+
+.nav-drawer-glass {
+  border-right: 1px solid rgba(255,255,255,0.15) !important;
+  box-shadow: 4px 0 20px rgba(0,0,0,0.3);
+}
+
+.list-item-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin: 8px 0;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: -100%;
+    top: 0;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255,255,255,0.1),
+      transparent
+    );
+    transition: 0.5s;
+  }
+
+  &:hover {
+    transform: translateX(12px) scale(1.02);
+    background: linear-gradient(
+      to right,
+      rgba(96, 67, 140, 0.2) 30%,
+      transparent
+    ) !important;
+    box-shadow: 2px 0 12px rgba(118, 64, 193, 0.3);
+
+    &::before {
+      left: 140%;
+    }
+  }
 }
 
 .route-transition {
@@ -209,6 +247,10 @@ onMounted(() => {
   .blur-background {
     backdrop-filter: blur(20px);
   }
+
+  .nav-drawer-glass {
+    border-right-width: 0.5px;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -219,71 +261,5 @@ onMounted(() => {
 html {
   -ms-overflow-style: none;
   scrollbar-width: none;
-}
-
-/* 横向Dock样式 */
-.dock-container {
-  position: fixed;
-  bottom: 20px;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.dock-glass {
-  backdrop-filter: blur(40px) saturate(200%);
-  background: linear-gradient(
-    135deg,
-    rgba(88, 59, 126, 0.15) 0%,
-    rgba(186, 104, 200, 0.1) 100%
-  ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  border-radius: 24px !important;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3) !important;
-  padding: 8px 24px !important;
-  transition: all 0.3s ease;
-}
-
-/* 激活状态样式 */
-.active-dock-item {
-  box-shadow: 0 0 15px #8a4fff, inset 0 0 10px rgba(138, 79, 255, 0.3) !important;
-  border-color: #8a4fff !important;
-  transform: translateY(-10px) !important;
-}
-
-/* 响应式调整 */
-@media (max-width: 768px) {
-  .dock-glass {
-    padding: 6px 12px !important;
-    border-radius: 20px !important;
-    max-width: 95%;
-  }
-
-  .dock-container {
-    bottom: 10px;
-  }
-}
-
-/* 添加悬停动画效果 */
-.v-enter-active {
-  transition: all 0.3s ease;
-}
-.v-leave-active {
-  transition: all 0.3s cubic-bezier(1, 0.5, 0.8, 1);
-}
-.v-enter-from,
-.v-leave-to {
-  transform: translateY(20px);
-  opacity: 0;
-}
-
-/* 图标悬停放大效果 */
-.dock-item {
-  transition: transform 0.2s ease-in-out;
-}
-.dock-item:hover {
-  transform: scale(1.2) translateY(-10px);
 }
 </style>
