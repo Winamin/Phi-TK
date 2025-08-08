@@ -1010,17 +1010,20 @@ pub async fn main() -> Result<()> {
 
     write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
-    if params.config.ffmpeg_thread {
-        args.push_str(" --thread_queue_size 1024 ");
-    }
+    let ffmpeg_thread = if params.config.ffmpeg_thread {
+        "-thread_queue_size 2048 "
+    } else {
+        ""
+    };
 
     let args2 = format!(
-        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
+        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} {} -vf vflip -f mov",
         ffmpeg_encoder,
         bitrate_control,
         params.config.bitrate,
         ffmpeg_preset,
         ffmpeg_preset_name,
+        ffmpeg_thread,
         if params.config.disable_loading {
             format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
         } else {
