@@ -6,6 +6,7 @@ import RenderView from '../RenderView.vue';
 import RPEView from '../RPEView.vue';
 import TasksView from '../TasksView.vue';
 import BatchRenderView from '../BatchRenderView.vue';
+import Setting from '../Setting.vue';
 
 import { useOnLoaded } from '../App.vue';
 
@@ -26,6 +27,11 @@ const router = createRouter({
       name: 'batch-render',
       component: BatchRenderView,
       meta: { title: 'Batch Render' }
+    },
+    {
+      path: '/setting',
+      name: 'setting',
+      component: Setting,
     },
     {
       path: '/about',

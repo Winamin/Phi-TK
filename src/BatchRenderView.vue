@@ -67,7 +67,7 @@ zh-CN:
   level: 难度
   charter: 谱师
   status: 状态
-  pending: 已准备
+  pending: 已就绪
   rendering: 提交中
   done: 已完成
   failed: 失败

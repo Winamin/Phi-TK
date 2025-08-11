@@ -226,7 +226,8 @@ async function postRender() {
     }
     let params = await buildParams();
     if (!params) return false;
-    await invoke('post_render', { params });
+    const outputPath = localStorage.getItem('outputPath');
+    await invoke('post_render', { params, outputPath: outputPath || null });
     return true;
   } catch (e) {
     toastError(e);
