@@ -60,7 +60,7 @@ pub struct Task {
 }
 
 impl Task {
-    async fn new(id: u32, params: RenderParams) -> Result<Self> {
+    async fn new(id: u32, params: RenderParams, output_path: Option<PathBuf>) -> Result<Self> {
         let mut fs = fs::fs_from_file(&params.path)?;
         let info = fs::load_info(fs.deref_mut()).await?;
         let mut cover = NamedTempFile::new()?;
@@ -77,10 +77,16 @@ impl Task {
             .chars()
             .filter(|&it| it == '-' || it == '_' || it == ' ' || it.is_alphanumeric())
             .collect();
-        let output = output_dir()?.join(format!(
+        let file_name = format!(
             "{} {safe_name}_{level}.mov",
             Local::now().format("%Y-%m-%d %H-%M-%S")
-        ));
+        );
+
+        let output = if let Some(path) = output_path {
+            path.join(file_name)
+        } else {
+            output_dir()?.join(file_name)
+        };
 
         Ok(Self {
             id,
@@ -268,10 +274,10 @@ impl TaskQueue {
         }
     }
 
-    pub async fn post(&self, params: RenderParams) -> Result<u32> {
+    pub async fn post(&self, params: RenderParams, output_path: Option<PathBuf>) -> Result<u32> {
         let mut guard = self.tasks.lock().await;
         let id = guard.len() as u32;
-        let task = Arc::new(Task::new(id, params).await?);
+        let task = Arc::new(Task::new(id, params, output_path).await?);
         guard.push(Arc::clone(&task));
         self.sender.send(task)?;
 

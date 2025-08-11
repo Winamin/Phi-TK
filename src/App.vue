@@ -5,6 +5,7 @@ en:
   tasks: Tasks
   about: About
   batch-render: Batch Render
+  setting: Setting
 
 zh-CN:
   render: 渲染
@@ -12,6 +13,7 @@ zh-CN:
   tasks: 任务列表
   about: 关于
   batch-render: 批量渲染
+  setting: 设置
 
 </i18n>
 
@@ -69,6 +71,7 @@ const icons = {
   tasks: 'mdi-server',
   about: 'mdi-information-outline',
   'batch-render': 'mdi-playlist-play',
+  setting: 'mdi-cog-outline',
 };
 
 window.goto = (name: string) => {
@@ -107,7 +110,7 @@ onUnmounted(() => {
     >
       <v-list density="compact" nav>
         <v-list-item
-          v-for="key in ['render', 'rpe', 'tasks', 'batch-render', 'about']"
+          v-for="key in ['render', 'rpe', 'tasks', 'batch-render', 'setting', 'about']"
           :active="route.name === key"
           :key="key"
           :prepend-icon="icons[key as keyof typeof icons]"

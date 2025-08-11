@@ -274,9 +274,10 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
     .await
 }
 #[tauri::command]
-async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
+async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams, output_path: Option<String>) -> Result<(), InvokeError> {
     wrap_async(async move {
-        queue.post(params).await?;
+        let output_path = output_path.map(PathBuf::from);
+        queue.post(params, output_path).await?;
         Ok(())
     })
     .await
@@ -322,27 +323,21 @@ fn get_respacks() -> Result<Vec<RespackInfo>, InvokeError> {
 #[tauri::command]
 async fn batch_add_tasks(
     queue: State<'_, TaskQueue>,
-    tasks: Vec<(String, String)> // (path, preset_name)
+    tasks: Vec<(String, String, Option<String>)> // (path, preset_name, output_path)
 ) -> Result<(), InvokeError> {
     wrap_async(async move {
-        for (path, preset_name) in tasks {
-            // 获取预设配置
+        for (path, preset_name, output_path) in tasks {
             let mut presets = get_presets().await.map_err(|e| anyhow::anyhow!("Failed to get presets: {:?}", e))?;
-
-            // 使用 unwrap_or_else 提供默认值
             let config = presets.remove(&preset_name).unwrap_or_else(|| {
                 create_default_render_config()
             });
-
-            // 创建渲染参数
             let params = RenderParams {
                 path: PathBuf::from(path),
                 config,
-                info: ChartInfo::default(),// 或者根据实际需要设置
+                info: ChartInfo::default(),
             };
-
-            // 添加到队列
-            queue.post(params).await.map_err(|e| anyhow::anyhow!("Failed to post task: {:?}", e))?;
+            let output_path = output_path.map(PathBuf::from);
+            queue.post(params, output_path).await.map_err(|e| anyhow::anyhow!("Failed to post task: {:?}", e))?;
         }
         Ok(())
     }).await
