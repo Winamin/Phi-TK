@@ -66,11 +66,11 @@ const route = useRoute(),
   router = useRouter();
 
 const icons = {
-  render: 'mdi-auto-fix',
-  rpe: 'mdi-bookshelf',
+  render: 'mdi-play-circle',
+  rpe: 'mdi-book-open-page-variant',
   tasks: 'mdi-server',
   about: 'mdi-information-outline',
-  'batch-render': 'mdi-playlist-play',
+  'batch-render': 'mdi-timeline',
   setting: 'mdi-cog-outline',
 };
 
