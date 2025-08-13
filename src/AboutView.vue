@@ -41,10 +41,10 @@ onMounted(() => {
   <div class="about-container">
     <TextType
       :text="[t('app')]"
-      :typingSpeed="75"
+      :typingSpeed="45"
       :pauseDuration="1500"
       :showCursor="true"
-      cursorCharacter="|"
+      cursorCharacter=""
       class="app-title"
       aria-label="Phi TK"
     />
