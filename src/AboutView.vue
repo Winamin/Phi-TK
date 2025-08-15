@@ -13,7 +13,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getVersion } from '@tauri-apps/api/app'
 import { open } from '@tauri-apps/plugin-shell'
-import TextType from "./TextType.vue"; // 引入打字机组件
+import TextType from "./TextType.vue";
 
 const { t } = useI18n()
 
@@ -41,7 +41,7 @@ onMounted(() => {
   <div class="about-container">
     <TextType
       :text="[t('app')]"
-      :typingSpeed="45"
+      :typingSpeed="200"
       :pauseDuration="1500"
       :showCursor="true"
       cursorCharacter=""

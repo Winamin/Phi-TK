@@ -72,6 +72,8 @@ pub struct RenderConfig {
 
     #[serde(default)]
     pub hand_split: bool,
+    #[serde(default)]
+    pub note_speed_factor: f32,
 
     pub ui_score: bool,
     pub ui_combo: bool,
@@ -126,6 +128,7 @@ impl Default for RenderConfig {
             volume_music: 1.0,
             volume_sfx: 1.0,
             hand_split: false,
+            note_speed_factor: 1.0,
             ui_score: true,
             ui_combo: true,
             ui_name: true,
@@ -170,6 +173,7 @@ impl RenderConfig {
             background: self.background.clone(),
             disable_loading: self.disable_loading,
             hand_split: self.hand_split,
+            note_speed_factor: self.note_speed_factor,
 
             ui_score: self.ui_score,
             ui_combo: self.ui_combo,

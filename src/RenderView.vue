@@ -383,13 +383,19 @@ const folderStyle = computed(() => ({
 
 <template>
   <div class="pa-8 w-100 h-100" style="max-width: 960px">
-    <v-stepper alt-labels v-model="stepIndex" hide-actions :items="steps.map((x) => t('steps.' + x))" class="elevated-stepper">
+    <v-stepper 
+      alt-labels 
+      v-model="stepIndex" 
+      hide-actions 
+      :items="steps.map((x) => t('steps.' + x))" 
+      class="glass-stepper"
+    >
       <div v-if="step === 'config' || step === 'options'" class="d-flex flex-row pa-6 pb-4 pt-0">
         <v-btn variant="text" @click="stepIndex && stepIndex--" v-t="'prev-step'"></v-btn>
         <div class="flex-grow-1"></div>
-        <v-btn v-if="step === 'options'" variant="tonal" @click="playChart" class="mr-2" v-t="'play'"></v-btn>
-        <v-btn v-if="step === 'options'" variant="tonal" @click="previewChart" class="mr-2" v-t="'preview'"></v-btn>
-        <v-btn variant="tonal" @click="moveNext" class="gradient-primary">
+        <v-btn v-if="step === 'options'" variant="tonal" @click="playChart" class="mr-2 glass-btn" v-t="'play'"></v-btn>
+        <v-btn v-if="step === 'options'" variant="tonal" @click="previewChart" class="mr-2 glass-btn" v-t="'preview'"></v-btn>
+        <v-btn variant="tonal" @click="moveNext" class="gradient-primary glass-btn">
           {{ step === 'options' ? t('render') : t('next-step') }}
         </v-btn>
       </div>
@@ -422,53 +428,114 @@ const folderStyle = computed(() => ({
               width="6"
               class="mb-4 animate-pulse"
             ></v-progress-circular>
-
-            <!-- 添加状态文本 -->
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-2"></h3>
-            <p class="text-gray-600 dark:text-gray-400 text-sm"></p>
           </div>
         </v-overlay>
       </template>
 
       <template v-slot:[`item.2`]>
-        <v-form ref="form" v-if="chartInfo">
+        <v-form ref="form" v-if="chartInfo" class="glass-form">
           <v-row no-gutters class="mx-n2">
             <v-col cols="8">
-              <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="chartInfo.name"></v-text-field>
+              <v-text-field 
+                class="mx-2 glass-input" 
+                :label="t('chart-name')" 
+                :rules="[RULES.non_empty]" 
+                v-model="chartInfo.name"
+                variant="solo-filled"
+                density="compact"
+              ></v-text-field>
             </v-col>
             <v-col cols="4">
-              <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]" v-model="chartInfo.level"></v-text-field>
+              <v-text-field 
+                class="mx-2 glass-input" 
+                :label="t('level')" 
+                :rules="[RULES.non_empty]" 
+                v-model="chartInfo.level"
+                variant="solo-filled"
+                density="compact"
+              ></v-text-field>
             </v-col>
           </v-row>
 
           <v-row no-gutters class="mx-n2 mt-1">
             <v-col cols="12" sm="4">
-              <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]" v-model="chartInfo.charter"></v-text-field>
+              <v-text-field 
+                class="mx-2 glass-input" 
+                :label="t('charter')" 
+                :rules="[RULES.non_empty]" 
+                v-model="chartInfo.charter"
+                variant="solo-filled"
+                density="compact"
+              ></v-text-field>
             </v-col>
             <v-col cols="12" sm="4">
-              <v-text-field class="mx-2" :label="t('composer')" v-model="chartInfo.composer"></v-text-field>
+              <v-text-field 
+                class="mx-2 glass-input" 
+                :label="t('composer')" 
+                v-model="chartInfo.composer"
+                variant="solo-filled"
+                density="compact"
+              ></v-text-field>
             </v-col>
             <v-col cols="12" sm="4">
-              <v-text-field class="mx-2" :label="t('illustrator')" v-model="chartInfo.illustrator"></v-text-field>
+              <v-text-field 
+                class="mx-2 glass-input" 
+                :label="t('illustrator')" 
+                v-model="chartInfo.illustrator"
+                variant="solo-filled"
+                density="compact"
+              ></v-text-field>
             </v-col>
           </v-row>
 
           <v-row no-gutters class="mx-n2 mt-1 align-center">
             <v-col cols="4">
               <div class="mx-2 d-flex flex-column">
-                <p class="text-caption" v-t="'aspect'"></p>
+                <p class="text-caption text-white" v-t="'aspect'"></p>
                 <div class="d-flex flex-row align-center justify-center">
-                  <v-text-field type="number" class="mr-2" :rules="[RULES.positive]" :label="t('width')" v-model="aspectWidth"></v-text-field>
-                  <p>:</p>
-                  <v-text-field type="number" class="ml-2" :rules="[RULES.positive]" :label="t('height')" v-model="aspectHeight"></v-text-field>
+                  <v-text-field 
+                    type="number" 
+                    class="mr-2 glass-input" 
+                    :rules="[RULES.positive]" 
+                    :label="t('width')" 
+                    v-model="aspectWidth"
+                    variant="solo-filled"
+                    density="compact"
+                  ></v-text-field>
+                  <p class="text-white">:</p>
+                  <v-text-field 
+                    type="number" 
+                    class="ml-2 glass-input" 
+                    :rules="[RULES.positive]" 
+                    :label="t('height')" 
+                    v-model="aspectHeight"
+                    variant="solo-filled"
+                    density="compact"
+                  ></v-text-field>
                 </div>
               </div>
             </v-col>
             <v-col cols="8" class="px-6">
-              <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01" v-model="chartInfo.backgroundDim"> </v-slider>
+              <v-slider 
+                :label="t('dim')" 
+                thumb-label="always" 
+                :min="0" 
+                :max="1" 
+                :step="0.01" 
+                v-model="chartInfo.backgroundDim"
+                color="#b19dff"
+                thumb-color="#8a6cff"
+              ></v-slider>
               <v-row no-gutters class="mx-n2 mt-1 align-center">
                 <v-col cols="12" class="px-6">
-                  <v-switch :label="t('hold_cover')" v-model="chartInfo.HoldPartialCover" :true-value="1" :false-value="0" color="primary" persistent-hint></v-switch>
+                  <v-switch 
+                    :label="t('hold_cover')" 
+                    v-model="chartInfo.HoldPartialCover" 
+                    :true-value="1" 
+                    :false-value="0" 
+                    color="#8a6cff" 
+                    persistent-hint
+                  ></v-switch>
                 </v-col>
               </v-row>
             </v-col>
@@ -476,24 +543,30 @@ const folderStyle = computed(() => ({
 
           <v-row no-gutters class="mx-n2 mt-1">
             <v-col cols="12">
-              <v-text-field class="mx-2" :label="t('tip')" :placeholder="t('tip-placeholder')" v-model="chartInfo.tip"></v-text-field>
+              <v-text-field 
+                class="mx-2 glass-input" 
+                :label="t('tip')" 
+                :placeholder="t('tip-placeholder')" 
+                v-model="chartInfo.tip"
+                variant="solo-filled"
+                density="compact"
+              ></v-text-field>
             </v-col>
           </v-row>
         </v-form>
       </template>
 
       <template v-slot:[`item.3`]>
-        <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()"></ConfigView>
+        <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()" class="glass-form"></ConfigView>
       </template>
 
       <template v-slot:[`item.4`]>
         <div class="d-flex flex-column justify-center align-center mb-2" style="gap: 1rem">
-          <!-- 渲染信息卡片 -->
-          <v-card class="render-info-card" style="width: 60%">
-            <v-card-title class="text-center">
+          <v-card class="glass-card" style="width: 60%">
+            <v-card-title class="text-center text-gradient">
               {{ t('render-started') }}
             </v-card-title>
-            <v-divider></v-divider>
+            <v-divider class="divider"></v-divider>
             <v-card-text>
               <v-row>
                 <v-col cols="6">
@@ -528,12 +601,11 @@ const folderStyle = computed(() => ({
             </v-card-text>
           </v-card>
 
-          <!-- 按钮容器 -->
           <div class="d-flex justify-center mt-4" style="gap: 16px">
-            <v-btn @click="router.push({ name: 'tasks' })" color="#FF5722" style="scale: 1">
+            <v-btn @click="router.push({ name: 'tasks' })" class="glass-btn" color="#b19dff" style="scale: 1">
               {{ t('see-tasks') }}
             </v-btn>
-            <v-btn @click="stepIndex = 1" color="primary" style="scale: 1">
+            <v-btn @click="stepIndex = 1" class="glass-btn gradient-primary" style="scale: 1">
               {{ t('next-chart') }}
             </v-btn>
           </div>
@@ -550,72 +622,57 @@ const folderStyle = computed(() => ({
 
 <style scoped>
 .gradient-primary {
-  background: linear-gradient(45deg, #6366f1, #8b5cf6, #4562c4) !important;
+  background: linear-gradient(45deg, #6a5acd, #8a6cff, #5d4b9a) !important;
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
   overflow: hidden;
-}
-
-.gradient-primary::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(45deg, transparent 25%, rgba(255, 255, 255, 0.1) 50%, transparent 75%);
-  background-size: 200% 200%;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.gradient-primary:hover::after {
-  opacity: 1;
-  animation: shine 1.5s infinite;
-}
-
-@keyframes shine {
-  0% {
-    background-position: 150% 150%;
-  }
-
-  100% {
-    background-position: -50% -50%;
-  }
-}
-
-.elevated-stepper {
-  border-radius: 12px !important;
-  box-shadow:
-    0 25px 50px -12px rgba(255, 255, 255, 0.3),
-    0 0 40px -10px rgba(63, 64, 91, 0.3) !important;
-  background: rgba(70, 57, 141, 0.9) !important;
-  backdrop-filter: blur(6px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-8px);
-  }
-}
-
-.gradient-btn {
-  background: linear-gradient(45deg, #ff5722, #ff9800);
   color: white;
-  border: none;
+  font-weight: 500;
+  box-shadow: 0 4px 20px rgba(106, 90, 205, 0.3);
 }
 
-.render-info-card {
-  background: rgba(255, 255, 255, 0.05);
+.gradient-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(106, 90, 205, 0.4);
+}
+
+.glass-stepper {
+  border-radius: 16px !important;
+  background: rgba(50, 42, 90, 0.6) !important;
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+.glass-form {
+  padding: 24px;
+  background: rgba(60, 52, 100, 0.4);
+  border-radius: 16px;
+  margin: 16px;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+}
+
+.glass-input {
+  background: rgba(70, 60, 120, 0.3) !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.glass-input :deep(.v-field) {
+  background: transparent !important;
+}
+
+.glass-card {
+  background: rgba(60, 52, 100, 0.5) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.divider {
+  border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 .info-item {
@@ -625,10 +682,10 @@ const folderStyle = computed(() => ({
 }
 
 .info-label {
-  font-weight: bold;
+  font-weight: 500;
   margin-right: 8px;
   color: rgba(255, 255, 255, 0.7);
-  min-width: 80px;
+  min-width: 100px;
 }
 
 .info-value {
@@ -639,20 +696,48 @@ const folderStyle = computed(() => ({
 .custom-loading-overlay {
   backdrop-filter: blur(16px);
   background-color: rgba(17, 32, 89, 0.7);
-
-  /* 圆角和阴影 */
   border-radius: 1.5rem;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-
-  margin: auto;
 }
 
-/* 为暗色模式添加单独的样式 */
-:deep(.dark .custom-loading-overlay) {
-  background-color: rgba(30, 41, 59, 0.7);
+.drop-zone-overlay {
+  backdrop-filter: blur(10px);
+  background: rgba(70, 57, 141, 0.4);
 }
 
-.loading-content {
-  overflow: hidden;
+.drop-pulse {
+  padding: 40px 60px;
+  background: rgba(80, 70, 150, 0.6);
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 16px;
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 500;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(138, 108, 255, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 20px rgba(138, 108, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(138, 108, 255, 0);
+  }
+}
+
+.glass-btn {
+  background: rgba(70, 60, 120, 0.4) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+  color: white;
+}
+
+.glass-btn:hover {
+  background: rgba(90, 80, 150, 0.5) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(106, 90, 205, 0.3);
 }
 </style>
