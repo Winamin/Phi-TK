@@ -68,6 +68,7 @@ en:
   flid_x: Mirror Mode
   background: Remove background rendering
   hand-split: Hand Split
+  note-speed-factor: Note Speed Factor
 
   render-list: Judgment line,Score,Combo,Level,Name,Progress bar,Percentage display,Time display,Pause
 
@@ -155,6 +156,7 @@ zh-CN:
   flid_x: 镜像模式
   background: 只显示背景
   hand-split: 手序拆解
+  note-speed-factor: 谱面流速
 
   render-list: 判定线,分数,连击,等级,名字,进度条,百分比时间显示,时间显示,暂停
 
@@ -322,6 +324,8 @@ const showProgressText = ref(false);
 const showTimeText = ref(false);
 const background = ref(false);
 
+const noteSpeedFactor = ref(1.0);
+
 const handSplit = ref(false);
 const ffmpegThread = ref(false);
 //prpr [ui]
@@ -356,6 +360,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
     targetAudio: targetAudio.value,
     background: background.value,
     handSplit: handSplit.value,
+    noteSpeedFactor: noteSpeedFactor.value,
 
     aggressive: aggressive.value,
     challengeColor: STD_CHALLENGE_COLORS[t('challenge-colors').split(',').indexOf(challengeColor.value)],
@@ -408,6 +413,7 @@ function applyConfig(config: RenderConfig) {
   targetAudio.value = config.targetAudio;
   background.value = config.background;
   handSplit.value = config.handSplit
+  noteSpeedFactor.value = config.noteSpeedFactor;
 
   aggressive.value = config.aggressive;
   challengeColor.value = t('challenge-colors').split(',')[STD_CHALLENGE_COLORS.indexOf(config.challengeColor)];
@@ -494,6 +500,7 @@ const DEFAULT_PRESET: Preset = {
     showProgressText: false,
     showTimeText: false,
     handSplit: false,
+    noteSpeedFactor: 1.0,
     uiLine: true,
     uiScore: true,
     uiCombo: true,
@@ -587,11 +594,11 @@ async function replacePreset() {
       density="comfortable"
       variant="outlined"
     >
-      <v-btn value="output" variant="text" icon="mdi-export" size="small" />
-      <v-btn value="player" variant="text" icon="mdi-account" size="small" />
-      <v-btn value="graphics" variant="text" icon="mdi-palette" size="small" />
-      <v-btn value="audio" variant="text" icon="mdi-speaker" size="small" />
-      <v-btn value="unknown" variant="text" icon="mdi-information" size="small" />
+      <v-btn value="output" variant="text" icon="mdi-export" size="default" />
+      <v-btn value="player" variant="text" icon="mdi-account" size="default" />
+      <v-btn value="graphics" variant="text" icon="mdi-palette" size="default" />
+      <v-btn value="audio" variant="text" icon="mdi-speaker" size="default" />
+      <v-btn value="unknown" variant="text" icon="mdi-information" size="default" />
     </v-btn-toggle>
 
     <div class="preset-bar mb-6">
@@ -657,6 +664,7 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="resolution"
+            prepend-inner-icon="mdi-aspect-ratio"
             :menu-props="{
         transition: {
           name: 'custom-menu',
@@ -673,6 +681,7 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="ffmpegPreset"
+            prepend-inner-icon="mdi-tune"
             :menu-props="{
         transition: {
           name: 'custom-menu',
@@ -689,6 +698,7 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="fps"
+            prepend-inner-icon="mdi-camera-iris"
           />
 
           <v-combobox
@@ -697,6 +707,7 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="bitrateControl"
+            prepend-inner-icon="mdi-quality-high"
             :menu-props="{
         transition: {
           name: 'custom-menu',
@@ -713,6 +724,7 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="bitrate"
+            prepend-inner-icon="mdi-speedometer"
           />
 
           <v-text-field
@@ -721,6 +733,7 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="sampleCount"
+            prepend-inner-icon="mdi-texture-box"
           />
         </div>
 
@@ -775,6 +788,7 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="playerName"
+            prepend-inner-icon="mdi-account-circle"
           />
           <v-text-field
             :label="t('player-rks')"
@@ -782,6 +796,7 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="playerRks"
+            prepend-inner-icon="mdi-star-four-points"
           />
           <v-text-field
             :label="t('challenge-rank')"
@@ -789,6 +804,7 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="challengeRank"
+            prepend-inner-icon="mdi-trophy-variant"
           />
           <v-combobox
             :label="t('challenge-color')"
@@ -796,6 +812,7 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="challengeColor"
+            prepend-inner-icon="mdi-palette"
             :menu-props="{
         transition: {
           name: 'custom-menu',
@@ -820,6 +837,7 @@ async function replacePreset() {
             variant="outlined"
             v-model="respack"
             class="respack-select"
+            prepend-inner-icon="mdi-package-variant-closed"
             :menu-props="{
         transition: {
           name: 'custom-menu',
@@ -939,6 +957,7 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="targetAudio"
+            prepend-inner-icon="mdi-target-audio"
             :menu-props="{
         transition: {
           name: 'custom-menu',
@@ -964,6 +983,7 @@ async function replacePreset() {
             v-model="endingLength"
             hide-details
             class="compact-item"
+            prepend-inner-icon="mdi-timer-sand"
           />
           <v-text-field
             :label="t('watermark')"
@@ -972,6 +992,7 @@ async function replacePreset() {
             v-model="watermark"
             hide-details
             class="compact-item"
+            prepend-inner-icon="mdi-watermark"
           />
           <v-text-field
             :label="t('combo')"
@@ -980,6 +1001,7 @@ async function replacePreset() {
             v-model="combo"
             hide-details
             class="compact-item"
+            prepend-inner-icon="mdi-star-box-multiple"
           />
         </div>
 
@@ -1004,6 +1026,18 @@ async function replacePreset() {
               :max="1"
               :step="0.01"
               v-model="chartRatio"
+              hide-details
+              class="pt-0"
+            />
+          </div>
+          <div class="compact-item">
+            <v-slider
+              :label="t('note-speed-factor')"
+              thumb-label="always"
+              :min="0.1"
+              :max="2.0"
+              :step="0.01"
+              v-model="noteSpeedFactor"
               hide-details
               class="pt-0"
             />

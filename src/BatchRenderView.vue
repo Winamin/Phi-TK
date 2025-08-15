@@ -75,7 +75,7 @@ zh-CN:
   total-selected: "已选择: {count}"
   all: 全选
   none: 取消全选
-  configure: 配置
+  configure: 渲染配置
   close: 关闭
   total-charts: "总谱面: {count}"
   select-all: 全选
@@ -92,7 +92,7 @@ zh-CN:
   batch-completed: "提交完成: {count} 个谱面"
   ffmpeg-not-found: 未找到 FFmpeg
   chart-info-missing: 谱面信息缺失
-  adding-charts: 正在添加谱面...
+  adding-charts: -正在添加谱面-
   invalid-chart-file: 无效的谱面文件
   file-type-error: "文件类型错误: {message}"
   config-saved: "配置已保存"
@@ -244,6 +244,7 @@ function loadDefaultConfig(): RenderConfig {
     combo: 'AUTOPLAY',
     watermark: '',
     handSplit: false,
+    noteSpeedFactor: 1.0,
     ffmpegThread: false,
     showProgressText: false,
     showTimeText: false,
@@ -762,26 +763,26 @@ watch(charts, saveChartsToStorage, { deep: true });
             <v-row no-gutters class="mx-n2">
               <v-col cols="8">
                 <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]"
-                              v-model="charts[editingChartIndex].chartInfo!.name"></v-text-field>
+                              v-model="charts[editingChartIndex].chartInfo!.name" prepend-inner-icon="mdi-format-title"></v-text-field>
               </v-col>
               <v-col cols="4">
                 <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]"
-                              v-model="charts[editingChartIndex].chartInfo!.level"></v-text-field>
+                              v-model="charts[editingChartIndex].chartInfo!.level" prepend-inner-icon="mdi-star-outline"></v-text-field>
               </v-col>
             </v-row>
 
             <v-row no-gutters class="mx-n2 mt-1">
               <v-col cols="12" sm="4">
                 <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]"
-                              v-model="charts[editingChartIndex].chartInfo!.charter"></v-text-field>
+                              v-model="charts[editingChartIndex].chartInfo!.charter" prepend-inner-icon="mdi-account-edit"></v-text-field>
               </v-col>
               <v-col cols="12" sm="4">
                 <v-text-field class="mx-2" :label="t('composer')"
-                              v-model="charts[editingChartIndex].chartInfo!.composer"></v-text-field>
+                              v-model="charts[editingChartIndex].chartInfo!.composer" prepend-inner-icon="mdi-music-note"></v-text-field>
               </v-col>
               <v-col cols="12" sm="4">
                 <v-text-field class="mx-2" :label="t('illustrator')"
-                              v-model="charts[editingChartIndex].chartInfo!.illustrator"></v-text-field>
+                              v-model="charts[editingChartIndex].chartInfo!.illustrator" prepend-inner-icon="mdi-palette"></v-text-field>
               </v-col>
             </v-row>
 
@@ -791,10 +792,10 @@ watch(charts, saveChartsToStorage, { deep: true });
                   <p class="text-caption" v-t="'aspect'"></p>
                   <div class="d-flex flex-row align-center justify-center">
                     <v-text-field type="number" class="mr-2" :rules="[RULES.positive]" :label="t('width')"
-                                  v-model="charts[editingChartIndex].aspectWidth"></v-text-field>
+                                  v-model="charts[editingChartIndex].aspectWidth" prepend-inner-icon="mdi-arrow-expand-horizontal"></v-text-field>
                     <p>:</p>
                     <v-text-field type="number" class="ml-2" :rules="[RULES.positive]" :label="t('height')"
-                                  v-model="charts[editingChartIndex].aspectHeight"></v-text-field>
+                                  v-model="charts[editingChartIndex].aspectHeight" prepend-inner-icon="mdi-arrow-expand-vertical"></v-text-field>
                   </div>
                 </div>
               </v-col>
@@ -820,7 +821,7 @@ watch(charts, saveChartsToStorage, { deep: true });
             <v-row no-gutters class="mx-n2 mt-1">
               <v-col cols="12">
                 <v-text-field class="mx-2" :label="t('tip')" :placeholder="t('tip-placeholder')"
-                              v-model="charts[editingChartIndex].chartInfo!.tip"></v-text-field>
+                              v-model="charts[editingChartIndex].chartInfo!.tip" prepend-inner-icon="mdi-lightbulb-on-outline"></v-text-field>
               </v-col>
             </v-row>
           </v-form>
@@ -832,53 +833,57 @@ watch(charts, saveChartsToStorage, { deep: true });
     </v-dialog>
 
     <div class="batch-controls">
-      <!-- 顶部控制栏 -->
-      <div class="d-flex align-center gap-2 mb-4 flex-wrap">
-        <v-btn :disabled="isAddingFolder" :loading="isAddingFiles" color="primary" prepend-icon="mdi-file-plus" size="small" @click="addFiles">
-          {{ t('add-files') }}
-        </v-btn>
+      <v-row align="center" justify="space-between" class="mx-n2">
+        <!-- 文件操作 -->
+        <v-col cols="12" sm="auto" class="pa-2">
+          <div class="d-flex align-center gap-2 flex-wrap">
+            <v-btn :disabled="isAddingFolder" :loading="isAddingFiles" color="primary" prepend-icon="mdi-file-plus" size="small" @click="addFiles">
+              {{ t('add-files') }}
+            </v-btn>
+            <v-btn :disabled="isAddingFiles" :loading="isAddingFolder" color="primary" prepend-icon="mdi-folder-plus" size="small" @click="addFolder">
+              {{ t('add-folder') }}
+            </v-btn>
+            <v-btn color="error" @click="clearList" prepend-icon="mdi-delete" size="small">
+              {{ t('clear-list') }}
+            </v-btn>
+          </div>
+        </v-col>
 
-        <v-btn :disabled="isAddingFiles" :loading="isAddingFolder" color="primary" prepend-icon="mdi-folder-plus" size="small" @click="addFolder">
-          {{ t('add-folder') }}
-        </v-btn>
+        <!-- 渲染操作 -->
+        <v-col cols="12" sm="auto" class="pa-2">
+          <div class="d-flex align-center gap-2 flex-wrap justify-sm-end">
+            <v-btn color="secondary" @click="configDialog = true" prepend-icon="mdi-cog" size="small">
+              {{ t('configure') }}
+            </v-btn>
+            <v-combobox
+              v-model="selectedPreset"
+              :label="t('select-preset')"
+              :items="presets"
+              item-title="name"
+              density="compact"
+              variant="outlined"
+              hide-details
+              class="mr-2"
+              style="min-width: 180px; max-width: 220px;"
+              :menu-props="{ transition: 'slide-y-transition' }"
+            />
+            <v-btn
+              color="primary"
+              @click="startRender"
+              prepend-icon="mdi-play"
+              :disabled="selectedCount === 0 || currentRenderingIndex >= 0"
+              :loading="currentRenderingIndex >= 0"
+              size="small">
+              {{ t('start-render') }}
+            </v-btn>
+          </div>
+        </v-col>
+      </v-row>
 
-        <v-btn color="error" @click="clearList" prepend-icon="mdi-delete" size="small">
-          {{ t('clear-list') }}
-        </v-btn>
-
-        <v-btn color="secondary" @click="configDialog = true" prepend-icon="mdi-cog" size="small">
-          {{ t('configure') }}
-        </v-btn>
-
-        <v-spacer></v-spacer>
-
-        <v-combobox
-          v-model="selectedPreset"
-          :label="t('select-preset')"
-          :items="presets"
-          item-title="name"
-          density="compact"
-          variant="outlined"
-          class="mr-2"
-          style="min-width: 180px"
-          :menu-props="{
-          transition: 'slide-y-transition'
-          }"
-        />
-
-        <v-btn
-          color="primary"
-          @click="startRender"
-          prepend-icon="mdi-play"
-          :disabled="selectedCount === 0 || currentRenderingIndex >= 0"
-          :loading="currentRenderingIndex >= 0"
-          size="small">
-          {{ t('start-render') }}
-        </v-btn>
-      </div>
+      <v-divider class="my-3"></v-divider>
 
       <!-- 信息统计栏 -->
-      <div class="d-flex align-center justify-space-between mt-2 text-caption">
+      <div class="d-flex align-center justify-space-between text-caption">
         <span>{{ t('total-charts', { count: charts.length }) }}</span>
         <span>{{ t('total-selected', { count: selectedCount }) }}</span>
         <v-btn @click="toggleSelectAll" variant="text" size="x-small" density="compact">

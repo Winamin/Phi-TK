@@ -97,7 +97,7 @@ onUnmounted(() => {
 <template>
   <v-app id="phi-tk" class="dark-theme">
     <v-sonner position="top-center" />
-    <v-app-bar :elevation="0" class="app-bar-shadow blur-background">
+    <v-app-bar :elevation="0" class="app-bar-glass blur-background">
       <v-app-bar-title class="mx-5 text-gradient glow-title">Phi TK</v-app-bar-title>
     </v-app-bar>
 
@@ -148,7 +148,14 @@ onUnmounted(() => {
 
 <style>
 .dark-theme {
-  background: linear-gradient(45deg, #312c5c, #554f83, #8a8ab6);
+  background: linear-gradient(135deg, #1f1b3d, #3c2d6d, #5b4a9a);
+}
+
+.app-bar-glass {
+  backdrop-filter: blur(40px) saturate(200%);
+  background: rgba(40, 32, 72, 0.7) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
 }
 
 .blur-background {
@@ -162,16 +169,16 @@ onUnmounted(() => {
 }
 
 .nav-drawer-glass {
-  border-right: 1px solid rgba(255,255,255,0.15) !important;
-  box-shadow: 4px 0 20px rgba(0,0,0,0.3);
+  border-right: none !important;
 }
 
 .list-item-hover {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  margin: 8px 0;
+  margin: 8px 12px;
   border-radius: 12px;
   position: relative;
   overflow: hidden;
+  background: rgba(50, 42, 90, 0.3);
 
   &::before {
     content: '';
@@ -183,7 +190,7 @@ onUnmounted(() => {
     background: linear-gradient(
       90deg,
       transparent,
-      rgba(255,255,255,0.1),
+      rgba(255,255,255,0.15),
       transparent
     );
     transition: 0.5s;
@@ -193,10 +200,10 @@ onUnmounted(() => {
     transform: translateX(12px) scale(1.02);
     background: linear-gradient(
       to right,
-      rgba(96, 67, 140, 0.2) 30%,
+      rgba(96, 67, 140, 0.4) 30%,
       transparent
     ) !important;
-    box-shadow: 2px 0 12px rgba(118, 64, 193, 0.3);
+    box-shadow: 0 0 20px rgba(118, 64, 193, 0.4);
 
     &::before {
       left: 140%;
@@ -208,6 +215,21 @@ onUnmounted(() => {
   transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
 }
 
+.v-navigation-drawer--rail .v-list-item {
+  margin-left: 4px;
+  margin-right: 4px;
+}
+
+.nav-drawer-glass::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 1px;
+  background: rgba(255,255,255,0.15);
+}
+
 .fade-blur-enter-from,
 .fade-blur-leave-to {
   opacity: 0;
@@ -216,16 +238,22 @@ onUnmounted(() => {
 }
 
 .text-gradient {
-  background: linear-gradient(45deg, #c5c3ca, #d1cace);
+  background: linear-gradient(45deg, #c5b8ff, #d1c4e9);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px rgba(193, 176, 255, 0.3);
+  animation: glow-pulse 3s ease-in-out infinite;
+}
 
-  text-shadow:0 0 12px rgb(242 237 255 / 44%), 0 0 24px rgb(0 0 0 / 22%);
-  animation: glow-pulse 2s ease-in-out infinite;
+@keyframes glow-pulse {
+  0%, 100% { text-shadow: 0 0 8px rgba(193, 176, 255, 0.3); }
+  50% { text-shadow: 0 0 20px rgba(193, 176, 255, 0.6); }
 }
 
 .glow-spinner {
-  filter: drop-shadow(0 0 8px #9552f3);
+  filter: drop-shadow(0 0 12px #b19dff);
 }
 
 .animated-background::after {
@@ -236,7 +264,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 1000 1000' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-  opacity: 0.03;
+  opacity: 0.05;
   pointer-events: none;
   animation: particleFlow 20s linear infinite;
 }
