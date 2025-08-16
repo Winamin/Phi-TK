@@ -52,6 +52,7 @@ pub struct RenderConfig {
     pub bitrate: String,
     pub watermark: String,
     pub background: bool,
+    pub video: bool,
 
     pub aggressive: bool,
     pub challenge_color: ChallengeModeColor,
@@ -129,6 +130,7 @@ impl Default for RenderConfig {
             volume_sfx: 1.0,
             hand_split: false,
             note_speed_factor: 1.0,
+            video: false,
             ui_score: true,
             ui_combo: true,
             ui_name: true,
@@ -687,7 +689,6 @@ pub async fn main() -> Result<()> {
     */
 
     fn test_encoder(ffmpeg: &Path, encoder: &str) -> Result<(bool, String)> {
-        // 创建FFmpeg命令
         let mut cmd = Command::new(ffmpeg);
         cmd.args(&[
             "-f", "lavfi",
@@ -699,19 +700,16 @@ pub async fn main() -> Result<()> {
             .arg("warning")
             .arg("-hide_banner")
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());  // 捕获标准错误
+            .stderr(Stdio::piped());
 
-        // 执行命令并捕获输出
         let output = cmd
             .output()
             .with_context(|| format!("Failed to start encoder test for {}", encoder))?;
 
-        // 提取错误信息
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
         Ok((output.status.success(), stderr))
     }
 
-    // 在函数主体中修改硬件检测部分
     let hw_detected = EncoderAvailability {
         h264_nvenc: params.config.hardware_accel && hw_detect::detect_nvidia(),
         hevc_nvenc: params.config.hardware_accel
@@ -727,7 +725,6 @@ pub async fn main() -> Result<()> {
         hevc_cuvid: params.config.hardware_accel && params.config.hevc && hw_detect::detect_nvidia(),
     };
 
-    // 错误收集器
     let mut hw_errors = Vec::new();
 
     // 创建编码器可用性结构
@@ -911,7 +908,6 @@ pub async fn main() -> Result<()> {
         "-b:v"
     };
 
-    // 硬件加速检查（包含详细错误报告）
     if params.config.hardware_accel {
         let h264_supported = encoder_availability.h264_nvenc
             || encoder_availability.h264_qsv
@@ -921,13 +917,9 @@ pub async fn main() -> Result<()> {
             || encoder_availability.hevc_amf;
 
         if (params.config.hevc && !hevc_supported) || (!params.config.hevc && !h264_supported) {
-            // 构建详细的错误报告
             let mut detailed_error = String::new();
-
-            // 主错误信息
             detailed_error += &format!("{}\n", tl!("no-hwacc"));
 
-            // 硬件检测摘要
             detailed_error += &format!(
                 "Hardware detection summary:\n\
          - NVIDIA: {}\n\
@@ -938,7 +930,6 @@ pub async fn main() -> Result<()> {
                 hw_detected.h264_amf
             );
 
-            // 编码器测试结果
             detailed_error += "Encoder test results:\n";
             detailed_error += &format!(
                 "- h264_nvenc: {}\n",
@@ -1020,8 +1011,13 @@ pub async fn main() -> Result<()> {
         ""
     };
 
+    let video = match params.config.video {
+        true => "mov",
+        false => "mp4",
+    };
+
     let args2 = format!(
-        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} {} -vf vflip -f mov",
+        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} {} -vf vflip -f {}",
         ffmpeg_encoder,
         bitrate_control,
         params.config.bitrate,
@@ -1033,6 +1029,7 @@ pub async fn main() -> Result<()> {
         } else {
             "-ss 0.1".to_string()
         },
+        video,
     );
 
     let mut proc = cmd_hidden(&ffmpeg)

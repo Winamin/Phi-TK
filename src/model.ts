@@ -70,6 +70,7 @@ export interface RenderConfig {
   bitrateControl: string;
   bitrate: string;
   targetAudio: number;
+  video: boolean;
 
   aggressive: boolean;
   challengeColor: string;

@@ -64,6 +64,10 @@ impl Task {
         let mut fs = fs::fs_from_file(&params.path)?;
         let info = fs::load_info(fs.deref_mut()).await?;
         let mut cover = NamedTempFile::new()?;
+        let video = match params.config.video {
+            true => "mov",
+            false => "mp4",
+        };
         cover.write_all(&fs.load_file(&info.illustration).await?)?;
 
         let level: String = info
@@ -78,7 +82,7 @@ impl Task {
             .filter(|&it| it == '-' || it == '_' || it == ' ' || it.is_alphanumeric())
             .collect();
         let file_name = format!(
-            "{} {safe_name}_{level}.mov",
+            "{} {safe_name}_{level}.{video}",
             Local::now().format("%Y-%m-%d %H-%M-%S")
         );
 
