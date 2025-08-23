@@ -31,6 +31,7 @@ use tempfile::NamedTempFile;
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct RenderConfig {
     pub resolution: (u32, u32),
     pub ffmpeg_preset: String,
@@ -43,7 +44,7 @@ pub struct RenderConfig {
     pub combo: String,
     pub fps: u32,
     pub hardware_accel: bool,
-    pub hevc: bool,
+    pub video_codec: String,
     pub show_progress_text: bool,
     pub show_time_text: bool,
     pub target_audio: u32,
@@ -53,6 +54,8 @@ pub struct RenderConfig {
     pub watermark: String,
     pub background: bool,
     pub video: bool,
+    pub audio_bit: Option<u32>,
+    pub audio_format: String,
 
     pub aggressive: bool,
     pub challenge_color: ChallengeModeColor,
@@ -71,9 +74,7 @@ pub struct RenderConfig {
     pub volume_music: f32,
     pub volume_sfx: f32,
 
-    #[serde(default)]
     pub hand_split: bool,
-    #[serde(default)]
     pub note_speed_factor: f32,
 
     pub ui_score: bool,
@@ -85,7 +86,6 @@ pub struct RenderConfig {
     pub ui_pause: bool,
 
     //ffmpeg
-    #[serde(default)]
     pub ffmpeg_thread: bool,
 }
 
@@ -103,7 +103,7 @@ impl Default for RenderConfig {
             combo: "AUTOPLAY".to_string(),
             fps: 60,
             hardware_accel: true,
-            hevc: false,
+            video_codec: "h264".to_string(),
             show_progress_text: false,
             show_time_text: false,
             target_audio: 96000,
@@ -131,6 +131,8 @@ impl Default for RenderConfig {
             hand_split: false,
             note_speed_factor: 1.0,
             video: false,
+            audio_bit: None,
+            audio_format: "flac".to_string(),
             ui_score: true,
             ui_combo: true,
             ui_name: true,
@@ -212,8 +214,12 @@ struct EncoderAvailability {
     hevc_qsv: bool,
     h264_amf: bool,
     hevc_amf: bool,
+    av1_nvenc: bool,
+    av1_amf: bool,
+    av1_qsv: bool,
     h264_cuvid: bool,
     hevc_cuvid: bool,
+    av1_cuvid: bool,
 }
 
 #[cfg(target_os = "windows")]
@@ -541,16 +547,63 @@ pub async fn main() -> Result<()> {
     while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
     }
+    let audio_bit = params.config.audio_bit;
+    let audio_format = params.config.audio_format.to_lowercase();
+
+    // 验证输入
+    let supported_formats = ["flac", "mp3", "aac", "opus", "wav"];
+    if !supported_formats.contains(&audio_format.as_str()) {
+        bail!(
+            "Unsupported audio format: {}. Supported formats are: {}",
+            audio_format,
+            supported_formats.join(", ")
+        );
+    }
+
+    if let Some(bit) = audio_bit {
+        if ![16, 24, 32].contains(&bit) {
+            bail!("Invalid audio bit depth: {}. Supported values are 16, 24, 32.", bit);
+        }
+        // PCM 格式强制使用 WAV 容器
+        if audio_format != "wav" {
+            return Err(anyhow::anyhow!("PCM audio bit depth requires WAV format, but {} was specified", audio_format));
+        }
+    }
+
+    // 构建编码器和格式
+    let (audio_codec, output_format) = if let Some(bit) = audio_bit {
+        (format!("pcm_f{}le", bit), "wav".to_string())
+    } else {
+        match audio_format.as_str() {
+            "flac" => ("flac".to_string(), "flac".to_string()),
+            "mp3" => ("libmp3lame".to_string(), "mp3".to_string()),
+            "aac" => ("aac".to_string(), "mp4".to_string()),
+            "opus" => ("libopus".to_string(), "opus".to_string()),
+            "wav" => ("pcm_f16le".to_string(), "wav".to_string()),
+            // 修正默认值
+            _ => {
+                warn!("Unknown audio format '{}', using AAC/MP4 as default", audio_format);
+                ("aac".to_string(), "mp4".to_string())
+            }
+        }
+    };
+
+    // 构建参数字符串
     let args_str = if target_sample_rate != sample_rate {
-        let resample_filter = format!("aresample=resampler=soxr:osr={}", target_sample_rate);
+        let resample_filter = format!("aresample=resampler=soxr:precision=33:osr={}:dither_method=triangular", target_sample_rate);
         format!(
-            "-y -f f32le -ar {} -ac 2 -i - -af {} -c:a pcm_f32le -f wav",
-            sample_rate, resample_filter
+            "-y -f f32le -ar {} -ac 2 -i - -af {} -c:a {} -f {}",
+            sample_rate,
+            resample_filter,
+            audio_codec,
+            output_format
         )
     } else {
         format!(
-            "-y -f f32le -ar {} -ac 2 -i - -c:a pcm_f32le -f wav",
-            sample_rate
+            "-y -f f32le -ar {} -ac 2 -i - -c:a {} -f {}",
+            sample_rate,
+            audio_codec,
+            output_format
         )
     };
 
@@ -713,16 +766,27 @@ pub async fn main() -> Result<()> {
     let hw_detected = EncoderAvailability {
         h264_nvenc: params.config.hardware_accel && hw_detect::detect_nvidia(),
         hevc_nvenc: params.config.hardware_accel
-            && params.config.hevc
+            && params.config.video_codec == "hevc"
             && hw_detect::detect_nvidia(),
         h264_qsv: params.config.hardware_accel && hw_detect::detect_intel_qsv(),
         hevc_qsv: params.config.hardware_accel
-            && params.config.hevc
+            && params.config.video_codec == "hevc"
             && hw_detect::detect_intel_qsv(),
         h264_amf: params.config.hardware_accel && hw_detect::detect_amd(),
-        hevc_amf: params.config.hardware_accel && params.config.hevc && hw_detect::detect_amd(),
+        hevc_amf: params.config.hardware_accel && params.config.video_codec == "hevc" && hw_detect::detect_amd(),
         h264_cuvid: params.config.hardware_accel && hw_detect::detect_nvidia(),
-        hevc_cuvid: params.config.hardware_accel && params.config.hevc && hw_detect::detect_nvidia(),
+        hevc_cuvid: params.config.hardware_accel && params.config.video_codec == "hevc" && hw_detect::detect_nvidia(),
+        av1_cuvid: params.config.hardware_accel && params.config.video_codec == "av1" && hw_detect::detect_nvidia(),
+        av1_nvenc: params.config.hardware_accel
+            && params.config.video_codec == "av1"
+            && hw_detect::detect_nvidia(),
+        av1_qsv: params.config.hardware_accel
+            && params.config.video_codec == "av1"
+            && hw_detect::detect_intel_qsv(),
+        av1_amf: params.config.hardware_accel
+            && params.config.video_codec == "av1"
+            && hw_detect::detect_amd(),
+
     };
 
     let mut hw_errors = Vec::new();
@@ -731,22 +795,29 @@ pub async fn main() -> Result<()> {
     let mut encoder_availability = EncoderAvailability {
         h264_nvenc: false,
         hevc_nvenc: false,
+        av1_nvenc: false,
         h264_qsv: false,
         hevc_qsv: false,
+        av1_qsv: false,
         h264_amf: false,
         hevc_amf: false,
+        av1_amf: false,
         h264_cuvid: false,
         hevc_cuvid: false,
+        av1_cuvid: false,
     };
 
     // 测试每个硬件编码器并收集错误
     let encoders_to_test = [
         ("h264_nvenc", hw_detected.h264_nvenc, &mut encoder_availability.h264_nvenc),
         ("hevc_nvenc", hw_detected.hevc_nvenc, &mut encoder_availability.hevc_nvenc),
+        ("av1_nvenc", hw_detected.av1_nvenc, &mut encoder_availability.av1_nvenc),
         ("h264_qsv", hw_detected.h264_qsv, &mut encoder_availability.h264_qsv),
         ("hevc_qsv", hw_detected.hevc_qsv, &mut encoder_availability.hevc_qsv),
+        ("av1_qsv", hw_detected.av1_qsv, &mut encoder_availability.av1_qsv),
         ("h264_amf", hw_detected.h264_amf, &mut encoder_availability.h264_amf),
         ("hevc_amf", hw_detected.hevc_amf, &mut encoder_availability.hevc_amf),
+        ("av1_amf", hw_detected.av1_amf, &mut encoder_availability.av1_amf),
     ];
 
     for (name, detected, availability_flag) in encoders_to_test {
@@ -775,6 +846,7 @@ pub async fn main() -> Result<()> {
     let cuvid_to_test = [
         ("h264_cuvid", hw_detected.h264_cuvid, &mut encoder_availability.h264_cuvid),
         ("hevc_cuvid", hw_detected.hevc_cuvid, &mut encoder_availability.hevc_cuvid),
+        ("av1_cuvid", hw_detected.av1_cuvid, &mut encoder_availability.av1_cuvid),
     ];
 
     for (name, detected, availability_flag) in cuvid_to_test {
@@ -839,28 +911,35 @@ pub async fn main() -> Result<()> {
             }
         }
     }
+    let mut dummy_flag = false;
 
     // 构建候选编码器列表
-    let candidates = if params.config.hevc {
-        vec![
-            ("hevc_nvenc", encoder_availability.hevc_nvenc),
-            ("hevc_qsv", encoder_availability.hevc_qsv),
-            ("hevc_amf", encoder_availability.hevc_amf),
-            ("libx265", true),
-        ]
-    } else {
-        vec![
-            ("h264_nvenc", encoder_availability.h264_nvenc),
-            ("h264_qsv", encoder_availability.h264_qsv),
-            ("h264_amf", encoder_availability.h264_amf),
-            ("libx264", true),
-        ]
+    let candidates = match params.config.video_codec.as_str() {
+        "hevc" => vec![
+            ("hevc_nvenc", encoder_availability.hevc_nvenc, &mut encoder_availability.hevc_nvenc),
+            ("hevc_qsv", encoder_availability.hevc_qsv, &mut encoder_availability.hevc_qsv),
+            ("hevc_amf", encoder_availability.hevc_amf, &mut encoder_availability.hevc_amf),
+            ("libx265", true, &mut dummy_flag), // 需要定义一个 dummy_flag 变量
+        ],
+        "av1" => vec![
+            ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
+            ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
+            ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
+            ("libaom-av1", true, &mut dummy_flag), // 需要定义一个 dummy_flag 变量
+        ],
+        _ => vec![
+            ("h264_nvenc", encoder_availability.h264_nvenc, &mut encoder_availability.h264_nvenc),
+            ("h264_qsv", encoder_availability.h264_qsv, &mut encoder_availability.h264_qsv),
+            ("h264_amf", encoder_availability.h264_amf, &mut encoder_availability.h264_amf),
+            ("libx264", true, &mut dummy_flag), // 需要定义一个 dummy_flag 变量
+        ],
     };
+
 
     let ffmpeg_encoder = candidates
         .iter()
-        .find(|&&(_name, available)| available)
-        .map(|&(name, _)| name)
+        .find(|&&(_name, available, _)| available)
+        .map(|&(name, _, _)| name)
         .expect("At least one software encoder is available.");
 
     println!("Selected encoder: {}", ffmpeg_encoder);
@@ -871,19 +950,19 @@ pub async fn main() -> Result<()> {
     };
 
     let ffmpeg_preset_name = match ffmpeg_encoder {
-        "h264_nvenc" | "hevc_nvenc" => params
+        "h264_nvenc" | "hevc_nvenc" | "av1_nvenc" => params
             .config
             .ffmpeg_preset
             .split_whitespace()
             .nth(1)
             .unwrap_or("p4"),
-        "h264_qsv" | "hevc_qsv" => params
+        "h264_qsv" | "hevc_qsv" | "av1_qsv" => params
             .config
             .ffmpeg_preset
             .split_whitespace()
             .next()
             .unwrap_or("medium"),
-        "h264_amf" | "hevc_amf" => params
+        "h264_amf" | "hevc_amf" | "av1_amf" => params
             .config
             .ffmpeg_preset
             .split_whitespace()
@@ -899,9 +978,9 @@ pub async fn main() -> Result<()> {
 
     let bitrate_control = if params.config.bitrate_control == "CRF" {
         match ffmpeg_encoder {
-            "h264_nvenc" | "hevc_nvenc" => "-cq",
-            "h264_qsv" | "hevc_qsv" => "-q",
-            "h264_amf" | "hevc_amf" => "-qp_p",
+            "h264_nvenc" | "hevc_nvenc" | "av1_nvenc" => "-cq",
+            "h264_qsv" | "hevc_qsv" | "av1_qsv" => "-q",
+            "h264_amf" | "hevc_amf" | "av1_amf" => "-qp_p",
             _ => "-crf",
         }
     } else {
@@ -915,8 +994,13 @@ pub async fn main() -> Result<()> {
         let hevc_supported = encoder_availability.hevc_nvenc
             || encoder_availability.hevc_qsv
             || encoder_availability.hevc_amf;
+        let av1_supported = encoder_availability.av1_nvenc
+            || encoder_availability.av1_qsv
+            || encoder_availability.av1_amf;
 
-        if (params.config.hevc && !hevc_supported) || (!params.config.hevc && !h264_supported) {
+        if (params.config.video_codec == "h264" && !h264_supported)
+            || (params.config.video_codec == "hevc" && !hevc_supported)
+            || (params.config.video_codec == "av1" && !av1_supported) {
             let mut detailed_error = String::new();
             detailed_error += &format!("{}\n", tl!("no-hwacc"));
 
@@ -940,12 +1024,20 @@ pub async fn main() -> Result<()> {
                 if encoder_availability.hevc_nvenc { "SUCCESS" } else { "FAILED" }
             );
             detailed_error += &format!(
+                "- av1_nvenc: {}\n",
+                if encoder_availability.av1_nvenc { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
                 "- h264_qsv: {}\n",
                 if encoder_availability.h264_qsv { "SUCCESS" } else { "FAILED" }
             );
             detailed_error += &format!(
                 "- hevc_qsv: {}\n",
                 if encoder_availability.hevc_qsv { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
+                "av1_qsv: {}\n",
+                if encoder_availability.av1_qsv { "SUCCESS" } else { "FAILED" }
             );
             detailed_error += &format!(
                 "- h264_amf: {}\n",
@@ -956,12 +1048,20 @@ pub async fn main() -> Result<()> {
                 if encoder_availability.hevc_amf { "SUCCESS" } else { "FAILED" }
             );
             detailed_error += &format!(
+                "- av1_amf: {}\n",
+                if encoder_availability.av1_amf { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
                 "- h264_cuvid: {}\n",
                 if encoder_availability.h264_cuvid { "SUCCESS" } else { "FAILED" }
             );
             detailed_error += &format!(
                 "- hevc_cuvid: {}\n\n",
                 if encoder_availability.hevc_cuvid { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
+                "av1_cuvid: {}\n\n",
+                if encoder_availability.av1_cuvid { "SUCCESS" } else { "FAILED" }
             );
 
             // 详细的错误日志
@@ -985,9 +1085,9 @@ pub async fn main() -> Result<()> {
     // 添加硬件加速选项（如果启用）
     if params.config.hardware_accel {
         // 优先使用 cuvid 进行硬件加速解码
-        if params.config.hevc && encoder_availability.hevc_cuvid {
+        if params.config.video_codec == "hevc" && encoder_availability.hevc_cuvid {
             args.push_str("-hwaccel cuvid -c:v hevc_cuvid ");
-        } else if !params.config.hevc && encoder_availability.h264_cuvid {
+        } else if params.config.video_codec != "hevc" && encoder_availability.h264_cuvid {
             args.push_str("-hwaccel cuvid -c:v h264_cuvid ");
         }
         // 设置硬件加速输出格式
@@ -1016,13 +1116,21 @@ pub async fn main() -> Result<()> {
         false => "mp4",
     };
 
+    let strict_flag = if params.config.audio_format == "flac" && video == "mp4" {
+        "-strict -2 "
+    } else {
+        ""
+    };
+
     let args2 = format!(
-        "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} {} -vf vflip -f {}",
+        "-c:a {} -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} {} {} -vf vflip -f {}",
+        audio_codec,
         ffmpeg_encoder,
         bitrate_control,
         params.config.bitrate,
         ffmpeg_preset,
         ffmpeg_preset_name,
+        strict_flag,
         ffmpeg_thread,
         if params.config.disable_loading {
             format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)

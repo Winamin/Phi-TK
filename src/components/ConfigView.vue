@@ -8,6 +8,7 @@ en:
 
   resolution: Resolution
   ffmpeg-preset: Preset
+  video-codes: FFmpeg Encoder
   fps: FPS
 
   hw-accel: Hardware Acceleration
@@ -24,6 +25,8 @@ en:
   bitrate-tips: CRF-This is the CRF level. CBR-This is the bitrate
   ffmpeg-thread: FFmpeg Thread Optimization
   ffmpeg-thread-tips: Optimize FFmpeg thread usage for better performance
+  video-format: Video Output Format
+  video-format-flac-error: Video Output Format is not available when audio format is FLAC. Please change the audio format in audio settings
 
   player-avatar: Player Avatar
   player-name: Player Name
@@ -54,6 +57,9 @@ en:
 
   volume-music: Music Volume
   volume-sfx: SFX Volume
+  audio-format: Audio Format
+  audio-bit-depth: Bit Depth
+  audio-bit-depth-tips: Only available for WAV format
 
   ending-length: Result Screen Duration
   disable-loading: Loading disabled
@@ -92,7 +98,8 @@ zh-CN:
     audio: 音频
 
   resolution: 分辨率
-  ffmpeg-preset: 预设
+  ffmpeg-preset: FFmpeg编码器预设
+  video-codec: FFmpeg编码器
   fps: FPS
 
   hw-accel: 硬件加速
@@ -112,6 +119,8 @@ zh-CN:
   bitrate-tips: CRF-该项为CRF级别 CBR-该项为码率
   ffmpeg-thread: FFmpeg线程优化
   ffmpeg-thread-tips: 优化 FFmpeg 线程使用，提升性能
+  video-format: 视频输出格式
+  video-format-flac-error: 高质量输出在音频格式为FLAC时不可用,请在音频设置 -> 更改音频格式
 
   player-avatar: 玩家头像
   player-name: 玩家名
@@ -142,6 +151,9 @@ zh-CN:
 
   volume-music: 音乐音量
   volume-sfx: 音效音量
+  audio-format: 音频格式
+  audio-bit-depth: 位深度
+  audio-bit-depth-tips: 仅WAV格式可用
 
   ending-length: 结算画面时长
   disable-loading: 禁用加载
@@ -175,7 +187,7 @@ zh-CN:
 </i18n>
 
 <script setup lang="ts">
-import { ref, h, computed } from 'vue';
+import { ref, h, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
@@ -198,7 +210,7 @@ type TransitionElement = Element & HTMLElement;
 const beforeEnter: TransitionProps['onBeforeEnter'] = (el) => {
   const element = el as TransitionElement;
   gsap.set(element, {
-    y: -4,  // 初始位置更高
+    y: -4,
     opacity: 0,
     scale: 0.8,
     skewX: 10,
@@ -213,8 +225,8 @@ const enter: TransitionProps['onEnter'] = (el, done) => {
     opacity: 1,
     scale: 1,
     skewX: 0,
-    duration: 0.4,  // 延长持续时间
-    ease: "elastic.out(18.4, 8.3)",  // 增强弹性效果
+    duration: 0.4,
+    ease: "elastic.out(18.4, 8.3)",
     onComplete: done
   });
 };
@@ -222,12 +234,12 @@ const enter: TransitionProps['onEnter'] = (el, done) => {
 const leave: TransitionProps['onLeave'] = (el, done) => {
   const element = el as TransitionElement;
   gsap.to(element, {
-    y: -5,  // 向上弹走
+    y: -5,
     opacity: 0,
     scale: 0.95,
-    skewX: 0,  // 增加倾斜度
+    skewX: 0,
     duration: 0.6,
-    ease: "elastic.inOut(0.8, 0.5)",  // 弹性效果
+    ease: "elastic.inOut(0.8, 0.5)",
     onComplete: done
   });
 };
@@ -245,8 +257,11 @@ const form = ref<VForm>();
 const resolution = ref('1920x1080'),
   ffmpegPreset = ref('medium p4 balanced'),
   fps = ref('60'),
-  hwAccel = ref(true),
-  hevc = ref(false);
+  hwAccel = ref(true);
+  //hevc = ref(false);
+
+const videoCodecOptions = ['h264', 'hevc', 'av1'];
+const videoCodec = ref('h264');
 
 const fxaa = ref(false),
   sampleCount = ref('1'),
@@ -324,16 +339,78 @@ const showProgressText = ref(false);
 const showTimeText = ref(false);
 const background = ref(false);
 
+const video = ref(false);
 const noteSpeedFactor = ref(1.0);
 
 const handSplit = ref(false);
 const ffmpegThread = ref(false);
+
+const audioFormatOptions = ['flac', 'mp3', 'aac', 'opus', 'wav'];
+const audioBitOptions = [16, 24, 32];
+const audioFormat = ref('flac');
+const audioBit = ref<number | undefined>(undefined);
 //prpr [ui]
 const renderList = ref(t('render-list').split(','))
 const render = ref<string[]>([])
 render.value.push(...renderList.value.slice(0, 8));
 
 const STD_CHALLENGE_COLORS = ['white', 'green', 'blue', 'red', 'golden', 'rainbow'];
+
+watch(audioFormat, (newVal) => {
+  if (newVal === 'flac' && video.value) {
+    video.value = false;
+    toast(t('video-format-flac-error'), 'error');
+  }
+});
+
+// 添加video更新处理函数
+const videoFormat = ref<string>(video.value ? 'mov' : 'mp4');
+
+/**
+ * 统一更新函数：兼容 boolean（旧 switch）和 string（combobox）
+ * - mp4 -> video = false
+ * - mov -> video = true
+ * 额外逻辑：当 audioFormat === 'flac' 时，禁止 mov（即禁止 video=true）
+ */
+function onVideoUpdate(newVal: boolean | string) {
+  // combobox 传 string（'mp4'|'mov'）
+  if (typeof newVal === 'string') {
+    if (audioFormat.value === 'flac' && newVal === 'mov') {
+      toast(t('video-format-flac-error'), 'error');
+      // 强制回退到 mp4，并关闭 video
+      videoFormat.value = 'mp4';
+      video.value = false;
+      return;
+    }
+    video.value = (newVal === 'mov');
+    // 保持 videoFormat 与选择一致（防止外部直接改 video）
+    videoFormat.value = newVal;
+    return;
+  }
+
+  // 旧 switch 传 boolean
+  if (audioFormat.value === 'flac' && newVal) {
+    toast(t('video-format-flac-error'), 'error');
+    video.value = false;
+    // 将 combobox 的显示也回滚到 mp4，保证两者一致
+    videoFormat.value = 'mp4';
+  } else {
+    video.value = newVal;
+    // 同步格式字符串
+    videoFormat.value = newVal ? 'mov' : 'mp4';
+  }
+}
+
+// 再加一个 watcher，保证当 videoFormat 被其它代码改动时同步布尔 video
+watch(videoFormat, (val) => {
+  if (audioFormat.value === 'flac' && val === 'mov') {
+    toast(t('video-format-flac-error'), 'error');
+    videoFormat.value = 'mp4';
+    video.value = false;
+    return;
+  }
+  video.value = (val === 'mov');
+});
 
 async function buildConfig(): Promise<RenderConfig | null> {
   if (!(await form.value!.validate()).valid) {
@@ -354,13 +431,16 @@ async function buildConfig(): Promise<RenderConfig | null> {
     bufferSize: bufferSize.value,
     fps: parseInt(fps.value),
     hardwareAccel: hwAccel.value,
-    hevc: hevc.value,
+    videoCodec: videoCodec.value,
     bitrateControl: bitrateControl.value,
     bitrate: bitrate.value,
     targetAudio: targetAudio.value,
     background: background.value,
     handSplit: handSplit.value,
     noteSpeedFactor: noteSpeedFactor.value,
+    video: video.value,
+    audioBit: audioFormat.value === 'wav' ? audioBit.value : undefined,
+    audioFormat: audioFormat.value,
 
     aggressive: aggressive.value,
     challengeColor: STD_CHALLENGE_COLORS[t('challenge-colors').split(',').indexOf(challengeColor.value)],
@@ -407,13 +487,16 @@ function applyConfig(config: RenderConfig) {
   bufferSize.value = config.bufferSize;
   fps.value = String(config.fps);
   hwAccel.value = config.hardwareAccel;
-  hevc.value = config.hevc;
+  videoCodec.value = config.videoCodec;
   bitrateControl.value = config.bitrateControl;
   bitrate.value = config.bitrate;
   targetAudio.value = config.targetAudio;
   background.value = config.background;
   handSplit.value = config.handSplit
   noteSpeedFactor.value = config.noteSpeedFactor;
+  videoCodec.value = config.videoCodec;
+  audioFormat.value = config.audioFormat || 'flac';
+  audioBit.value = config.audioBit;
 
   aggressive.value = config.aggressive;
   challengeColor.value = t('challenge-colors').split(',')[STD_CHALLENGE_COLORS.indexOf(config.challengeColor)];
@@ -473,10 +556,13 @@ const DEFAULT_PRESET: Preset = {
     bufferSize: 256,
     fps: 60,
     hardwareAccel: true,
-    hevc: false,
+    videoCodec: 'h264',
     bitrateControl: 'CRF',
     bitrate: '28',
     targetAudio: 96000,
+    video: false,
+    audioBit: undefined,
+    audioFormat: 'flac',
     background: false,
     aggressive: false,
     challengeColor: 'golden',
@@ -527,9 +613,8 @@ const presets = ref([DEFAULT_PRESET]);
 const preset = ref(DEFAULT_PRESET);
 
 async function updatePresets() {
-  const currentKey = preset.value.key; // 保存当前选中的 key
-  presets.value = await getPresets(); // 获取预设列表
-  // 使用 key 查找预设
+  const currentKey = preset.value.key;
+  presets.value = await getPresets();
   const foundPreset = presets.value.find((x) => x.key === currentKey);
   preset.value = foundPreset || presets.value[0];
 }
@@ -570,6 +655,20 @@ async function deletePreset() {
     toastError(e);
   }
 }
+/*
+function onVideoUpdate(newVal: string) {
+  // mp4 -> false, mov -> true
+  if (audioFormat.value === 'flac' && newVal === 'mov') {
+    toast(t('video-format-flac-error'), 'error');
+    video.value = false;
+    videoFormat.value = 'mp4';
+  } else {
+    video.value = (newVal === 'mov');
+  }
+}
+
+
+ */
 async function replacePreset() {
   let config = await buildConfig();
   if (!config) return;
@@ -582,24 +681,153 @@ async function replacePreset() {
     toastError(e);
   }
 }
+
+const sliderPosition = ref(0);
+const sliderWidth = ref(0);
+const sliderHeight = ref(0);
+const sliderColor = ref('#FF8A00');
+
+const sliderStyle = computed(() => ({
+  transform: `translateX(${sliderPosition.value}px)`,
+  width: `${sliderWidth.value}px`,
+  height: `${sliderHeight.value}px`,
+  background: sliderColor.value,
+}));
+
+watch(activeSection, (newVal) => {
+  const buttons = document.querySelectorAll('.section-switcher .v-btn');
+  const activeIndex = ['output', 'player', 'graphics', 'audio', 'unknown'].indexOf(newVal);
+
+  if (buttons[activeIndex]) {
+    const button = buttons[activeIndex] as HTMLElement;
+    const buttonRect = button.getBoundingClientRect();
+    const containerRect = document.querySelector('.section-switcher-container')!.getBoundingClientRect();
+
+    const position = buttonRect.left - containerRect.left;
+    const width = buttonRect.width;
+
+
+    const colors = ['#FF8A00', '#4CAF50', '#2196F3', '#9C27B0', '#673AB7'];
+    sliderColor.value = colors[activeIndex];
+
+    gsap.to(sliderPosition, {
+      value: position,
+      duration: 0.4,
+      ease: "elastic.out(1, 0.5)"
+    });
+
+    gsap.to(sliderWidth, {
+      value: width,
+      duration: 0.3,
+      ease: "power2.out"
+    });
+
+    gsap.to(button, {
+      scale: 1.15,
+      duration: 0.3,
+      yoyo: true,
+      repeat: 1,
+      ease: "power2.out"
+    });
+
+    buttons.forEach((btn, index) => {
+      const btnEl = btn as HTMLElement;
+      if (index === activeIndex) {
+        gsap.to(btnEl, {
+          color: colors[index],
+          duration: 0.3
+        });
+      } else {
+        gsap.to(btnEl, {
+          color: '#7f7f7f',
+          duration: 0.3
+        });
+      }
+    });
+  }
+}, { immediate: true });
+
+function setupButtonHoverEffects() {
+  const buttons = document.querySelectorAll('.section-switcher .v-btn');
+  buttons.forEach(button => {
+    button.addEventListener('mouseenter', () => {
+      if (!button.classList.contains('active-btn')) {
+        gsap.to(button, {
+          scale: 1.1,
+          duration: 0.2
+        });
+      }
+    });
+
+    button.addEventListener('mouseleave', () => {
+      if (!button.classList.contains('active-btn')) {
+        gsap.to(button, {
+          scale: 1,
+          duration: 0.2
+        });
+      }
+    });
+  });
+}
+
+onMounted(() => {
+  sliderHeight.value = document.querySelector('.section-switcher .v-btn')?.clientHeight || 40;
+  setTimeout(setupButtonHoverEffects, 100);
+});
 </script>
 
 <template>
   <v-form ref="form" class="settings-form">
-    <v-btn-toggle
-      v-model="activeSection"
-      mandatory
-      class="section-switcher mb-4"
-      color="primary"
-      density="comfortable"
-      variant="outlined"
-    >
-      <v-btn value="output" variant="text" icon="mdi-export" size="default" />
-      <v-btn value="player" variant="text" icon="mdi-account" size="default" />
-      <v-btn value="graphics" variant="text" icon="mdi-palette" size="default" />
-      <v-btn value="audio" variant="text" icon="mdi-speaker" size="default" />
-      <v-btn value="unknown" variant="text" icon="mdi-information" size="default" />
-    </v-btn-toggle>
+    <div class="section-switcher-container mb-4">
+      <v-btn-toggle
+        v-model="activeSection"
+        mandatory
+        class="section-switcher"
+        density="comfortable"
+        variant="text"
+      >
+        <v-btn
+          value="output"
+          variant="text"
+          icon="mdi-export"
+          size="default"
+          :class="{'active-btn': activeSection === 'output'}"
+        />
+        <v-btn
+          value="player"
+          variant="text"
+          icon="mdi-account"
+          size="default"
+          :class="{'active-btn': activeSection === 'player'}"
+        />
+        <v-btn
+          value="graphics"
+          variant="text"
+          icon="mdi-palette"
+          size="default"
+          :class="{'active-btn': activeSection === 'graphics'}"
+        />
+        <v-btn
+          value="audio"
+          variant="text"
+          icon="mdi-speaker"
+          size="default"
+          :class="{'active-btn': activeSection === 'audio'}"
+        />
+        <v-btn
+          value="unknown"
+          variant="text"
+          icon="mdi-information"
+          size="default"
+          :class="{'active-btn': activeSection === 'unknown'}"
+        />
+      </v-btn-toggle>
+
+      <div
+        class="custom-slider"
+        :style="sliderStyle"
+      ></div>
+    </div>
 
     <div class="preset-bar mb-6">
       <v-combobox
@@ -659,6 +887,7 @@ async function replacePreset() {
       <div v-if="activeSection === 'output'" class="section-content">
         <div class="setting-grid mb-2">
           <v-combobox
+            class="span-2"
             :label="t('resolution')"
             :items="RESOLUTIONS"
             density="compact"
@@ -674,7 +903,6 @@ async function replacePreset() {
           }
         }"
           />
-
           <v-combobox
             :label="t('ffmpeg-preset')"
             :items="ffmpegPresetPresetList"
@@ -682,6 +910,38 @@ async function replacePreset() {
             variant="outlined"
             v-model="ffmpegPreset"
             prepend-inner-icon="mdi-tune"
+            :menu-props="{
+        transition: {
+          name: 'custom-menu',
+          onBeforeEnter: beforeEnter,
+          onEnter: enter,
+          onLeave: leave
+          }
+        }"
+          />
+          <v-combobox
+            :label="t('video-codec')"
+            :items="videoCodecOptions"
+            density="compact"
+            variant="outlined"
+            v-model="videoCodec"
+            prepend-inner-icon="mdi-quality-high"
+            :menu-props="{
+        transition: {
+          name: 'custom-menu',
+          onBeforeEnter: beforeEnter,
+          onEnter: enter,
+          onLeave: leave
+          }
+        }"
+            />
+          <v-combobox
+            v-model="videoFormat"
+            :items="['mp4', 'mov']"
+            :label="t('video-format')"
+            density="compact"
+            variant="outlined"
+            prepend-inner-icon="mdi-video"
             :menu-props="{
         transition: {
           name: 'custom-menu',
@@ -700,7 +960,6 @@ async function replacePreset() {
             v-model="fps"
             prepend-inner-icon="mdi-camera-iris"
           />
-
           <v-combobox
             :label="t('bitrate-control')"
             :items="['CRF', 'CBR']"
@@ -717,7 +976,6 @@ async function replacePreset() {
           }
         }"
           />
-
           <v-text-field
             :label="t('bitrate')"
             type="number"
@@ -753,19 +1011,12 @@ async function replacePreset() {
             density="compact"
           />
           <TipSwitch
-            :label="t('hevc')"
-            :tooltip="t('hevc-tips')"
-            color="primary"
-            v-model="hevc"
-            density="compact"
-          />
-          <TipSwitch
             :label="t('ffmpeg-thread')"
             :tooltip="t('ffmpeg-thread-tips')"
             color="primary"
             v-model="ffmpegThread"
             density="compact"
-            />
+          />
         </div>
       </div>
     </v-expand-transition>
@@ -957,7 +1208,7 @@ async function replacePreset() {
             density="compact"
             variant="outlined"
             v-model="targetAudio"
-            prepend-inner-icon="mdi-target-audio"
+            prepend-inner-icon="mdi-headphones"
             :menu-props="{
         transition: {
           name: 'custom-menu',
@@ -966,6 +1217,42 @@ async function replacePreset() {
           onLeave: leave
           }
         }"
+          />
+        </div>
+        <div class="setting-grid mb-4">
+          <v-combobox
+            :label="t('audio-format')"
+            :items="audioFormatOptions"
+            density="compact"
+            variant="outlined"
+            v-model="audioFormat"
+            prepend-inner-icon="mdi-file-music"
+            :menu-props="{
+            transition: {
+              name: 'custom-menu',
+              onBeforeEnter: beforeEnter,
+              onEnter: enter,
+              onLeave: leave
+            }
+          }"
+          />
+
+          <v-combobox
+            :label="t('audio-bit-depth')"
+            :items="audioBitOptions"
+            density="compact"
+            variant="outlined"
+            v-model="audioBit"
+            :disabled="audioFormat !== 'wav'"
+            prepend-inner-icon="mdi-waveform"
+            :menu-props="{
+            transition: {
+              name: 'custom-menu',
+              onBeforeEnter: beforeEnter,
+              onEnter: enter,
+              onLeave: leave
+            }
+          }"
           />
         </div>
       </div>
@@ -1005,7 +1292,7 @@ async function replacePreset() {
           />
         </div>
 
-        <!-- 第二行：缓冲区和谱面比例 -->
+        <!-- 第二行：缓冲区，谱面比例，谱面流速 -->
         <div class="compact-grid mb-4">
           <div class="compact-item">
             <v-slider
@@ -1085,7 +1372,7 @@ async function replacePreset() {
             v-model="handSplit"
             hide-details
             class="compact-switch"
-            />
+          />
         </div>
       </div>
     </v-expand-transition>
@@ -1121,8 +1408,75 @@ async function replacePreset() {
   padding: 16px;
 }
 
+.section-switcher-container {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.03);
+  padding: 4px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.custom-slider {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  border-radius: 4px;
+  transition: transform 0.3s ease, width 0.3s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  z-index: 1;
+  background: linear-gradient(90deg, #FF8A00, #FFC400);
+  opacity: 0.7;
+}
+
 .section-switcher {
+  background: transparent;
+  border: none;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+}
+
+.section-switcher .v-btn {
+  transition: all 0.3s ease;
   border-radius: 8px;
+  padding: 8px 12px;
+  opacity: 0.7;
+  position: relative;
+  z-index: 2;
+  background: transparent !important;
+}
+
+.section-switcher .v-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+.section-switcher .v-btn:not(.active-btn):hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+.section-switcher .active-btn {
+  opacity: 1;
+  transform: translateY(-2px);
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.section-switcher .v-btn:before {
+  display: none;
+}
+
+.section-switcher .v-btn .v-icon {
+  transition: transform 0.3s ease;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+}
+
+.section-switcher .active-btn .v-icon {
+  transform: scale(1.2);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
 }
 
 .preset-bar {
@@ -1203,5 +1557,11 @@ async function replacePreset() {
 
 .section-content {
   padding: 8px 4px;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 138, 0, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 138, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 138, 0, 0); }
 }
 </style>
