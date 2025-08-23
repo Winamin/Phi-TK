@@ -23,7 +23,7 @@ zh-CN:
     outputPath:
       label: "自定义输出路径"
       placeholder: "点击选择文件夹或手动输入"
-      hint: "优先使用浏览器文件系统访问 API; 若需绝对路径请在 Electron 环境下运行"
+      hint: "请输入正确路径"
       aria: "自定义输出路径"
     selectFolder: "选择文件夹"
     save: "保存路径"
@@ -31,7 +31,7 @@ zh-CN:
     clear: "清除"
     saved: "保存成功！"
     selected:
-      picked: "已选择文件夹：{name}（浏览器不暴露绝对路径）"
+      picked: "已选择文件夹：{name}"
       fallback: "回退选择：{count} 个文件（根：{root})"
     warning:
       empty: "路径不能为空"
@@ -65,6 +65,7 @@ async function selectFolder() {
     const selected = await open({
       directory: true,
       multiple: false,
+      // 使用 appConfigDir 作为默认起始目录
       defaultPath: await appConfigDir(),
     });
 
@@ -124,6 +125,14 @@ function clearPath() {
         :aria-label="t('settings.outputPath.aria')"
       />
 
+      <!-- 新增的文件夹选择按钮，放在文本框右侧 -->
+      <div class="select-button">
+        <v-btn small @click="selectFolder" :title="t('settings.selectFolder')" class="select-btn">
+          <v-icon left>mdi-folder</v-icon>
+          {{ t('settings.selectFolder') }}
+        </v-btn>
+      </div>
+
       <div v-if="selectedInfo" class="mt-2 caption" role="status" aria-live="polite">
         {{ selectedInfo }}
       </div>
@@ -167,6 +176,15 @@ function clearPath() {
   grid-template-columns: minmax(260px, 1fr) auto;
   gap: 12px;
   align-items: center;
+}
+
+.select-button {
+  display: flex;
+  align-items: center;
+}
+
+.select-btn {
+  white-space: nowrap;
 }
 
 .path-area .path-field {
