@@ -40,11 +40,15 @@ zh-CN:
 </i18n>
 
 <script setup lang="ts">
-defineOptions({ name: 'SettingsPanel' });
-
 import { ref } from 'vue';
-import { RULES as rules } from './common';
 import { useI18n } from 'vue-i18n';
+import { open } from '@tauri-apps/plugin-dialog';
+import { appConfigDir } from '@tauri-apps/api/path';
+//import type { BaseDirectory } from '@tauri-apps/plugin-fs';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+
+defineOptions({ name: 'SettingsPanel' });
+import { RULES as rules } from './common';
 
 const { t } = useI18n();
 
@@ -53,58 +57,31 @@ const saved = ref(false);
 const warning = ref('');
 const selectedInfo = ref<string | null>(null);
 
-const dirInput = ref<HTMLInputElement | null>(null);
-const pathField = ref<HTMLElement | null>(null);
-
-let dirHandle: any = null;
-const pickerAvailable = 'showDirectoryPicker' in window;
-
-function selectFolder() {
+async function selectFolder() {
   warning.value = '';
   selectedInfo.value = null;
 
-  if (pickerAvailable) {
-    (window as any).showDirectoryPicker()
-      .then((handle: any) => {
-        if (!handle) return;
-        dirHandle = handle;
-        outputPath.value = handle.name || '已选择文件夹';
-        selectedInfo.value = `已选择文件夹：${handle.name}（浏览器不暴露绝对路径）`;
-      })
-      .catch((err: any) => {
-        if (err && err.name !== 'AbortError') {
-          warning.value = '选择文件夹时出错：' + (err.message || err);
-        }
-      });
-  } else {
-    // 回退 -> 触发隐藏的 input[file webkitdirectory]
-    dirInput.value?.click();
+  try {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      defaultPath: await appConfigDir(),
+    });
+
+    if (selected === null) return; // 用户取消
+
+    const path = Array.isArray(selected) ? selected[0] : selected;
+    outputPath.value = path;
+    const rootName = path.split(/[\\/]/).pop() || path;
+    selectedInfo.value = t('settings.selected.picked', { name: rootName });
+  } catch (err: any) {
+    warning.value = t('settings.outputPath.warning.select_error', { msg: err.message || String(err) });
   }
-}
-
-function onDirInputChange(e: Event) {
-  const input = e.target as HTMLInputElement;
-  const files = input.files;
-  if (!files || files.length === 0) return;
-
-  const first = files[0] as any;
-  const rel = first?.webkitRelativePath as string | undefined;
-
-  let root = '';
-  if (rel) {
-    root = rel.split('/')[0] || first.name;
-  } else {
-    root = files[0].name;
-  }
-
-  outputPath.value = root;
-  selectedInfo.value = `回退选择：${files.length} 个文件（根：${root}）`;
-  input.value = '';
 }
 
 function saveOutputPath() {
   if (!rules.non_empty(outputPath.value)) {
-    warning.value = '路径不能为空';
+    warning.value = t('settings.outputPath.warning.empty');
     return;
   }
   localStorage.setItem('outputPath', outputPath.value);
@@ -112,80 +89,56 @@ function saveOutputPath() {
   setTimeout(() => (saved.value = false), 1500);
 }
 
-function clearPath() {
-  outputPath.value = '';
-  selectedInfo.value = null;
-  dirHandle = null;
-  localStorage.removeItem('outputPath');
-}
-
 async function copyPath() {
   if (!outputPath.value) return;
   try {
-    await navigator.clipboard.writeText(outputPath.value);
+    await writeText(outputPath.value);
     saved.value = true;
     setTimeout(() => (saved.value = false), 1500);
-  } catch (err) {
-    warning.value = '复制失败：请手动复制';
+  } catch {
+    warning.value = t('settings.outputPath.warning.copy_error');
   }
+}
+
+function clearPath() {
+  outputPath.value = '';
+  selectedInfo.value = null;
+  localStorage.removeItem('outputPath');
 }
 </script>
 
 <template>
   <v-card class="pa-6 app-card">
     <div class="controls-grid">
-      <div class="path-area">
-        <v-text-field
-          v-model="outputPath"
-          :label="t('settings.outputPath.label')"
-          :placeholder="t('settings.outputPath.placeholder')"
-          :rules="[rules.non_empty]"
-          clearable
-          ref="pathField"
-          dense
-          :hint="t('settings.outputPath.hint')"
-          persistent-hint
-          class="path-field"
-          append-outer-icon="mdi-folder-open"
-          @click:append-outer="selectFolder"
-          :aria-label="t('settings.outputPath.aria')"
-        />
+      <v-text-field
+        v-model="outputPath"
+        :label="t('settings.outputPath.label')"
+        :placeholder="t('settings.outputPath.placeholder')"
+        :rules="[rules.non_empty]"
+        clearable
+        dense
+        :hint="t('settings.outputPath.hint')"
+        persistent-hint
+        append-outer-icon="mdi-folder-open"
+        @click:append-outer="selectFolder"
+        :aria-label="t('settings.outputPath.aria')"
+      />
 
-        <div v-if="selectedInfo" class="mt-2 caption" role="status" aria-live="polite">
-          {{ selectedInfo }}
-        </div>
-
-        <input
-          ref="dirInput"
-          type="file"
-          webkitdirectory
-          directory
-          multiple
-          style="display: none"
-          @change="onDirInputChange"
-          aria-hidden="true"
-        />
+      <div v-if="selectedInfo" class="mt-2 caption" role="status" aria-live="polite">
+        {{ selectedInfo }}
       </div>
+    </div>
 
-      <div class="button-area" role="group" :aria-label="t('settings.selectFolder')">
-        <div class="button-wrapper">
-          <v-btn small color="secondary" class="mr-2" @click="selectFolder">
-            {{ t('settings.selectFolder') }}
-          </v-btn>
-
-          <v-btn small color="primary" class="mr-2" @click="saveOutputPath">
-            {{ t('settings.save') }}
-          </v-btn>
-
-          <v-btn small icon class="mr-2" @click="copyPath" :disabled="!outputPath" :title="t('settings.copy')">
-            <v-icon>mdi-content-copy</v-icon>
-          </v-btn>
-
-          <v-btn small icon @click="clearPath" :disabled="!outputPath" :title="t('settings.clear')">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
-        </div>
-      </div>
+    <div class="button-area" role="group" :aria-label="t('settings.selectFolder')">
+      <v-btn small color="primary" @click="saveOutputPath">
+        {{ t('settings.save') }}
+      </v-btn>
+      <v-btn small icon @click="copyPath" :disabled="!outputPath" :title="t('settings.copy')">
+        <v-icon>mdi-content-copy</v-icon>
+      </v-btn>
+      <v-btn small icon @click="clearPath" :disabled="!outputPath" :title="t('settings.clear')">
+        <v-icon>mdi-close</v-icon>
+      </v-btn>
     </div>
 
     <v-snackbar v-model="saved" :timeout="1500" color="success" top right>
