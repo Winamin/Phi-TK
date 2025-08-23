@@ -47,7 +47,7 @@ tauri-plugin-os = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-http = "2"
-
+tauri-plugin-clipboard-manager = "2"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
