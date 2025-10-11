@@ -6,6 +6,7 @@ en:
   about: About
   batch-render: Batch Render
   setting: Setting
+  more: More
 
 zh-CN:
   render: 渲染
@@ -14,17 +15,14 @@ zh-CN:
   about: 关于
   batch-render: 批量渲染
   setting: 设置
+  more: 更多
 
 </i18n>
 
 <script lang="ts">
-import { onMounted, onUnmounted } from 'vue'
-
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-
 import { useI18n } from 'vue-i18n';
-
 import { VSonner } from 'vuetify-sonner';
 
 const onLoaded = ref<() => void>();
@@ -43,84 +41,97 @@ declare global {
     goto: (name: string) => void;
   }
 }
-
-export default {
-  data() {
-    return {
-      drawer: true,
-    };
-  },
-  methods: {
-    toggleNav() {
-      this.drawer = !this.drawer;
-    },
-  },
-
-};
 </script>
 
 <script setup lang="ts">
 const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
 
-const route = useRoute(),
-  router = useRouter();
+// 导航项配置
+const navItems = [
+  { key: 'render', icon: 'mdi-play-circle' },
+  { key: 'rpe', icon: 'mdi-book-open-page-variant' },
+  { key: 'tasks', icon: 'mdi-server' },
+  { key: 'setting', icon: 'mdi-cog-outline' },
+];
 
-const icons = {
-  render: 'mdi-play-circle',
-  rpe: 'mdi-book-open-page-variant',
-  tasks: 'mdi-server',
-  about: 'mdi-information-outline',
-  'batch-render': 'mdi-timeline',
-  setting: 'mdi-cog-outline',
-};
+// 下拉菜单项配置
+const dropdownItems = [
+  { key: 'batch-render', icon: 'mdi-timeline' },
+  { key: 'about', icon: 'mdi-information-outline' },
+];
 
-window.goto = (name: string) => {
+// 导航处理函数
+const navigateTo = (name: string) => {
   router.push({ name });
 };
 
-const drawer = ref(true);
-const handleResize = () => {
-  drawer.value = window.innerWidth >= 768;
-};
+window.goto = navigateTo;
 
-onMounted(() => {
-  window.addEventListener('resize', handleResize);
-  handleResize();
-});
-
-onUnmounted(() => {
-  window.removeEventListener('resize', handleResize);
-});
-
+// 下拉菜单状态
+const showDropdown = ref(false);
 </script>
 
 <template>
   <v-app id="phi-tk" class="dark-theme">
     <v-sonner position="top-center" />
+    
+    <!-- 顶部导航栏 -->
     <v-app-bar :elevation="0" class="app-bar-glass blur-background">
-      <v-app-bar-title class="mx-5 text-gradient glow-title">Phi TK</v-app-bar-title>
+      <!-- 左侧标题 -->
+      <v-app-bar-title class="text-gradient glow-title">Phi TK</v-app-bar-title>
+      
+      <v-spacer></v-spacer>
+      
+      <!-- 右侧导航图标 -->
+      <div class="nav-icons-container">
+        <v-btn
+          v-for="item in navItems"
+          :key="item.key"
+          :icon="item.icon"
+          :active="route.name === item.key"
+          variant="text"
+          size="large"
+          class="nav-icon-btn"
+          @click="navigateTo(item.key)"
+          v-tooltip:bottom="t(item.key)"
+        />
+        
+        <!-- 更多选项下拉菜单 -->
+        <v-menu
+          v-model="showDropdown"
+          :close-on-content-click="false"
+          location="bottom end"
+          transition="slide-y-transition"
+        >
+          <template v-slot:activator="{ props }">
+            <v-btn
+              icon="mdi-chevron-down"
+              variant="text"
+              size="large"
+              class="nav-icon-btn"
+              v-bind="props"
+              v-tooltip:bottom="t('more')"
+            />
+          </template>
+          
+          <v-list class="dropdown-menu-glass">
+            <v-list-item
+              v-for="item in dropdownItems"
+              :key="item.key"
+              :active="route.name === item.key"
+              :prepend-icon="item.icon"
+              :title="t(item.key)"
+              @click="navigateTo(item.key)"
+              class="dropdown-item"
+            />
+          </v-list>
+        </v-menu>
+      </div>
     </v-app-bar>
 
-    <v-navigation-drawer
-      v-model="drawer"
-      expand-on-hover
-      rail
-      permanent
-      class="nav-drawer-glass blur-background"
-    >
-      <v-list density="compact" nav>
-        <v-list-item
-          v-for="key in ['render', 'rpe', 'tasks', 'batch-render', 'setting', 'about']"
-          :active="route.name === key"
-          :key="key"
-          :prepend-icon="icons[key as keyof typeof icons]"
-          :title="t(key)"
-          @click="router.push({ name: key })"
-          class="list-item-hover glow-item"
-        ></v-list-item>
-      </v-list>
-    </v-navigation-drawer>
-
+    <!-- 主内容区域 -->
     <v-main class="d-flex justify-center animated-background">
       <router-view v-slot="{ Component }">
         <Suspense timeout="0">
@@ -149,6 +160,7 @@ onUnmounted(() => {
 <style>
 .dark-theme {
   background: linear-gradient(135deg, #1f1b3d, #3c2d6d, #5b4a9a);
+  min-height: 100vh;
 }
 
 .app-bar-glass {
@@ -168,73 +180,90 @@ onUnmounted(() => {
   border: 1px solid rgba(255,255,255,0.1) !important;
 }
 
-.nav-drawer-glass {
-  border-right: none !important;
+.nav-icons-container {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-right: 16px;
 }
 
-.list-item-hover {
+.nav-icon-btn {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  margin: 8px 12px;
   border-radius: 12px;
   position: relative;
   overflow: hidden;
   background: rgba(50, 42, 90, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+}
 
-  &::before {
-    content: '';
-    position: absolute;
-    left: -100%;
-    top: 0;
-    width: 60%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255,255,255,0.15),
-      transparent
-    );
-    transition: 0.5s;
-  }
+.nav-icon-btn::before {
+  content: '';
+  position: absolute;
+  left: -100%;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,0.15),
+    transparent
+  );
+  transition: 0.5s;
+}
 
-  &:hover {
-    transform: translateX(12px) scale(1.02);
-    background: linear-gradient(
-      to right,
-      rgba(96, 67, 140, 0.4) 30%,
-      transparent
-    ) !important;
-    box-shadow: 0 0 20px rgba(118, 64, 193, 0.4);
+.nav-icon-btn:hover {
+  transform: translateY(-2px) scale(1.05);
+  background: linear-gradient(
+    135deg,
+    rgba(96, 67, 140, 0.4) 0%,
+    rgba(118, 64, 193, 0.4) 100%
+  ) !important;
+  box-shadow: 0 4px 20px rgba(118, 64, 193, 0.4);
+  color: #fff;
+}
 
-    &::before {
-      left: 140%;
-    }
-  }
+.nav-icon-btn:hover::before {
+  left: 100%;
+}
+
+.nav-icon-btn.v-btn--active {
+  background: linear-gradient(
+    135deg,
+    rgba(118, 64, 193, 0.6) 0%,
+    rgba(156, 105, 217, 0.6) 100%
+  ) !important;
+  color: #fff;
+  box-shadow: 0 0 20px rgba(118, 64, 193, 0.6);
+}
+
+.dropdown-menu-glass {
+  backdrop-filter: blur(40px) saturate(200%);
+  background: rgba(40, 32, 72, 0.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.dropdown-item {
+  transition: all 0.2s ease;
+  margin: 4px 8px;
+  border-radius: 8px;
+}
+
+.dropdown-item:hover {
+  background: rgba(118, 64, 193, 0.3) !important;
+  transform: translateX(4px);
+}
+
+.dropdown-item.v-list-item--active {
+  background: rgba(118, 64, 193, 0.5) !important;
+  color: #fff;
 }
 
 .route-transition {
   transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-}
-
-.v-navigation-drawer--rail .v-list-item {
-  margin-left: 4px;
-  margin-right: 4px;
-}
-
-.nav-drawer-glass::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  height: 100%;
-  width: 1px;
-  background: rgba(255,255,255,0.15);
-}
-
-.fade-blur-enter-from,
-.fade-blur-leave-to {
-  opacity: 0;
-  transform: rotateY(10deg) translateZ(50px);
-  filter: blur(5px);
 }
 
 .text-gradient {
@@ -275,12 +304,16 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
+  .nav-icon-btn {
+    size: medium;
+  }
+  
+  .text-gradient {
+    font-size: 1.2rem;
+  }
+  
   .blur-background {
     backdrop-filter: blur(20px);
-  }
-
-  .nav-drawer-glass {
-    border-right-width: 0.5px;
   }
 }
 

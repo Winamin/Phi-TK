@@ -1001,17 +1001,25 @@ watch(charts, saveChartsToStorage, { deep: true });
 
 <style scoped>
 .batch-table-container {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
+  background: rgba(30, 30, 30, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 16px !important;
   overflow: hidden;
   flex: 1;
   min-height: 300px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
 }
 
 .batch-controls {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  padding: 16px;
+  background: rgba(30, 30, 30, 0.7) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 16px !important;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
 }
 
 .text-truncate {
@@ -1029,7 +1037,7 @@ watch(charts, saveChartsToStorage, { deep: true });
 }
 
 tr:hover {
-  background-color: rgba(37, 77, 161, 0.08) !important;
+  background-color: rgba(118, 64, 193, 0.1) !important;
   transition: background-color 0.3s ease;
 }
 
@@ -1042,26 +1050,12 @@ tr {
 }
 
 .transparent-blur-card {
-  background: rgba(7, 5, 45, 0.67) !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
-
-  /* 强制加大圆角（数值可自定义，如 20px） */
+  background: rgba(30, 30, 30, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
   border-radius: 20px !important;
-
-  border: none !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
-}
-
-/* 容器样式 - 毛玻璃效果 + 深色背景 */
-.batch-table-container {
-  background: rgba(23, 23, 28, 0.85) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  padding: 8px;
-  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
 }
 
 /* 表格整体样式穿透 */
@@ -1074,14 +1068,14 @@ tr {
 
 /* 表头样式 */
 .custom-table thead tr {
-  background: linear-gradient(180deg, #2d2d34, #24242b) !important;
-  border-radius: 8px 8px 0 0;
+  background: linear-gradient(180deg, rgba(118, 64, 193, 0.3), rgba(156, 105, 217, 0.2)) !important;
+  border-radius: 16px 16px 0 0;
 }
 
 .custom-table thead th {
   color: #e0e0e0;
   font-weight: 500;
-  padding: 12px 16px;
+  padding: 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   position: relative;
 }
@@ -1093,14 +1087,14 @@ tr {
 }
 
 .custom-table tbody tr.table-row-hover:hover {
-  background: rgba(255, 255, 255, 0.06) !important;
+  background: rgba(118, 64, 193, 0.08) !important;
   transform: translateY(-1px);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(118, 64, 193, 0.15);
 }
 
 .custom-table tbody td {
   color: #f0f0f0;
-  padding: 14px 16px;
+  padding: 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   vertical-align: middle;
 }
@@ -1120,7 +1114,7 @@ tr {
 }
 
 .custom-checkbox .v-icon.checked {
-  color: #42a5f5 !important;
+  color: #7640c1 !important;
 }
 
 .custom-checkbox:disabled .v-icon {
@@ -1133,49 +1127,50 @@ tr {
   border: none !important;
   font-weight: 500;
   text-transform: capitalize;
-  padding: 2px 8px;
+  padding: 4px 12px;
+  border-radius: 12px !important;
 }
 
 /* 不同状态的标签颜色 */
 .status-chip.status-ready {
-  background: rgba(76, 175, 80, 0.15) !important;
-  color: #4caf50 !important;
+  background: rgba(76, 175, 80, 0.2) !important;
+  color: #81c784 !important;
 }
 
 .status-chip.status-rendering {
-  background: rgba(255, 152, 0, 0.15) !important;
-  color: #ff9800 !important;
+  background: rgba(255, 152, 0, 0.2) !important;
+  color: #ffb74d !important;
 }
 
 .status-chip.status-error {
-  background: rgba(244, 67, 54, 0.15) !important;
-  color: #f44336 !important;
+  background: rgba(244, 67, 54, 0.2) !important;
+  color: #e57373 !important;
 }
 
 .error-message {
   font-size: 12px;
-  color: #ff5252 !important;
+  color: #ff8a80 !important;
   margin-top: 4px;
 }
 
 .action-buttons {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   justify-content: center;
 }
 
 .action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px !important;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px !important;
   transition: all 0.2s ease !important;
-  opacity: 0.8;
+  opacity: 0.9;
 }
 
 .action-btn:hover {
   opacity: 1;
-  transform: scale(1.08);
-  background: rgba(255, 255, 255, 0.1) !important;
+  transform: scale(1.05);
+  background: rgba(118, 64, 193, 0.2) !important;
 }
 
 .action-btn:disabled {
@@ -1187,7 +1182,7 @@ tr {
 /* 空状态样式 */
 .empty-state {
   text-align: center;
-  padding: 40px 20px !important;
+  padding: 60px 20px !important;
   color: #a0a0a0;
 }
 
@@ -1196,7 +1191,78 @@ tr {
 }
 
 .empty-state-text {
-  font-size: 14px;
-  color: #8a8a94;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* 按钮样式优化 */
+:deep(.v-btn) {
+  border-radius: 8px !important;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  text-transform: none;
+}
+
+:deep(.v-btn[color="primary"]) {
+  background: linear-gradient(135deg, rgba(118, 64, 193, 0.8), rgba(156, 105, 217, 0.8)) !important;
+  box-shadow: 0 4px 12px rgba(118, 64, 193, 0.3);
+}
+
+:deep(.v-btn[color="primary"]:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(118, 64, 193, 0.4);
+}
+
+:deep(.v-btn[color="secondary"]) {
+  background: linear-gradient(135deg, rgba(63, 81, 181, 0.8), rgba(92, 107, 192, 0.8)) !important;
+  box-shadow: 0 4px 12px rgba(63, 81, 181, 0.3);
+}
+
+:deep(.v-btn[color="error"]) {
+  background: linear-gradient(135deg, rgba(244, 67, 54, 0.8), rgba(229, 115, 115, 0.8)) !important;
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+}
+
+/* 组合框样式优化 */
+:deep(.v-combobox .v-field) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+:deep(.v-combobox .v-field__input) {
+  color: #fff !important;
+}
+
+:deep(.v-combobox .v-label) {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* 进度卡片样式优化 */
+:deep(.v-card) {
+  background: rgba(30, 30, 30, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
+:deep(.v-card-title) {
+  color: #e0e0e0 !important;
+}
+
+:deep(.v-card-text) {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* 工具栏样式优化 */
+:deep(.v-toolbar) {
+  background: linear-gradient(135deg, rgba(118, 64, 193, 0.8), rgba(156, 105, 217, 0.8)) !important;
+  border-radius: 20px 20px 0 0 !important;
+}
+
+:deep(.v-toolbar-title) {
+  color: #fff !important;
 }
 </style>

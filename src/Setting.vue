@@ -125,7 +125,6 @@ function clearPath() {
         :aria-label="t('settings.outputPath.aria')"
       />
 
-      <!-- 新增的文件夹选择按钮，放在文本框右侧 -->
       <div class="select-button">
         <v-btn small @click="selectFolder" :title="t('settings.selectFolder')" class="select-btn">
           <v-icon left>mdi-folder</v-icon>
@@ -165,17 +164,21 @@ function clearPath() {
   max-width: 980px;
   margin: 18px auto;
   width: 95%;
-  background-color: #003366;
+  background: rgba(30, 30, 30, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
   color: #ffffff;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
-  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 .controls-grid {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) auto;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
+  margin-bottom: 20px;
 }
 
 .select-button {
@@ -185,6 +188,17 @@ function clearPath() {
 
 .select-btn {
   white-space: nowrap;
+  background: linear-gradient(135deg, rgba(118, 64, 193, 0.7) 0%, rgba(156, 105, 217, 0.7) 100%) !important;
+  color: #fff !important;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(118, 64, 193, 0.3);
+}
+
+.select-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(118, 64, 193, 0.4);
 }
 
 .path-area .path-field {
@@ -196,6 +210,8 @@ function clearPath() {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  gap: 12px;
+  margin-top: 8px;
 }
 
 .button-wrapper {
@@ -207,13 +223,85 @@ function clearPath() {
   padding-bottom: 2px;
 }
 
+/* 自定义按钮样式 */
+.button-area .v-btn {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  text-transform: none;
+}
+
+.button-area .v-btn[color="primary"] {
+  background: linear-gradient(135deg, #3f51b5, #5c6bc0) !important;
+  box-shadow: 0 4px 12px rgba(63, 81, 181, 0.3);
+}
+
+.button-area .v-btn[color="primary"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(63, 81, 181, 0.4);
+}
+
+.button-area .v-btn.v-btn--icon {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.button-area .v-btn.v-btn--icon:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #fff !important;
+}
+
+/* 文本框样式 */
+:deep(.v-text-field) {
+  margin-bottom: 8px;
+}
+
+:deep(.v-text-field .v-field) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #fff !important;
+}
+
+:deep(.v-text-field .v-field__input) {
+  color: #fff !important;
+}
+
+:deep(.v-text-field .v-label) {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+:deep(.v-text-field .v-field__outline) {
+  color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* 提示文本样式 */
+:deep(.v-text-field .v-messages__message) {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* 警告提示样式 */
+:deep(.v-alert) {
+  background: rgba(255, 82, 82, 0.15) !important;
+  color: #ff8a80 !important;
+  border: 1px solid rgba(255, 82, 82, 0.3) !important;
+  border-radius: 8px !important;
+}
+
+/* 成功提示样式 */
+:deep(.v-snackbar .v-snackbar__wrapper) {
+  background: rgba(76, 175, 80, 0.9) !important;
+  backdrop-filter: blur(8px) !important;
+  border-radius: 8px !important;
+}
+
 @media (max-width: 720px) {
   .controls-grid {
     grid-template-columns: 1fr;
   }
 
   .button-area {
-    margin-top: 8px;
+    margin-top: 16px;
     justify-content: flex-start;
   }
 
@@ -223,15 +311,10 @@ function clearPath() {
   }
 }
 
-.v-btn.primary {
-  background-color: #1e88e5 !important;
-}
-.v-btn.secondary {
-  background-color: #00509e !important;
-  color: #fff !important;
-}
-
 .caption {
-  color: rgba(255,255,255,0.85);
+  color: rgba(255,255,255,0.7);
+  font-size: 0.875rem;
+  margin-top: 4px;
+  display: block;
 }
 </style>

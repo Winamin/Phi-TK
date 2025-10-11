@@ -134,6 +134,16 @@ const errorDialog = ref(false),
 const outputDialog = ref(false),
   outputDialogMessage = ref('');
 
+// 详情对话框
+const detailDialog = ref(false),
+  selectedTask = ref<Task | null>(null);
+
+// 右键菜单
+const contextMenu = ref(false);
+const contextMenuX = ref(0);
+const contextMenuY = ref(0);
+const contextMenuTask = ref<Task | null>(null);
+
 async function showInFolder(path: string) {
   try {
     await invoke('show_in_folder', { path });
@@ -248,6 +258,30 @@ const progressRing = (progress: number) => {
     strokeDashoffset: offset,
   };
 };
+
+// 右键菜单处理
+const showContextMenu = (event: MouseEvent, task: Task) => {
+  event.preventDefault();
+  contextMenu.value = true;
+  contextMenuX.value = event.clientX;
+  contextMenuY.value = event.clientY;
+  contextMenuTask.value = task;
+};
+
+const closeContextMenu = () => {
+  contextMenu.value = false;
+  contextMenuTask.value = null;
+};
+
+// 显示详情
+const showDetail = (task: Task) => {
+  selectedTask.value = task;
+  detailDialog.value = true;
+  closeContextMenu();
+};
+
+// 点击其他地方关闭右键菜单
+document.addEventListener('click', closeContextMenu);
 </script>
 
 <template>
@@ -286,155 +320,118 @@ const progressRing = (progress: number) => {
             transform: cardTransforms[task.id.toString()]?.transform,
             transition: cardTransforms[task.id.toString()]?.transition,
           }"
+          @contextmenu="showContextMenu($event, task)"
         >
-          <div class="d-flex flex-column">
-            <!-- 顶部信息区 -->
-            <div class="d-flex align-center pa-4 pb-2">
-              <div class="task-cover-container">
-                <div
-                  class="task-cover"
-                  :style="{ 'background-image': 'url(' + convertFileSrc(task.cover) + ')' }"
-                ></div>
-              </div>
-
-              <div class="ml-4 flex-grow-1">
-                <v-card-title class="text-truncate pa-0">{{ task.name }}</v-card-title>
-                <v-card-subtitle class="mt-1 text-truncate pa-0">{{ task.path }}</v-card-subtitle>
-              </div>
-
-              <v-chip
-                class="ml-2 status-badge"
-                :color="statusColor(task.status.type)"
-                label
-                size="small"
-              >
-                {{ task.status.type.toUpperCase() }}
-              </v-chip>
+          <div class="d-flex flex-row align-stretch">
+            <!-- 封面 -->
+            <div class="task-cover-section">
+              <div
+                class="task-cover"
+                :style="{ 'background-image': 'url(' + convertFileSrc(task.cover) + ')' }"
+              ></div>
             </div>
 
-            <!-- 进度与状态区 -->
-            <div class="status-section pa-4 pt-0">
-              <div class="d-flex align-center">
-                <!-- 动态进度指示器 -->
-                <template v-if="['loading', 'mixing', 'pending'].includes(task.status.type)">
-                  <div class="progress-ring mr-4">
-                    <svg class="progress-ring__circle" width="80" height="80">
-                      <circle
-                        class="progress-ring__circle-bg"
-                        stroke-width="4"
-                        fill="transparent"
-                        r="36"
-                        cx="40"
-                        cy="40"
-                      />
-                      <circle
-                        class="progress-ring__circle-fg"
-                        :class="`glow-${statusColor(task.status.type)}`"
-                        stroke-width="4"
-                        stroke-linecap="round"
-                        fill="transparent"
-                        r="36"
-                        cx="40"
-                        cy="40"
-                        :style="progressRing(0.75)"
-                      />
-                    </svg>
-                    <v-progress-circular
-                      class="progress-ring__indicator"
-                      indeterminate
-                      :color="statusColor(task.status.type)"
-                      size="24"
-                      width="2"
-                    ></v-progress-circular>
-                  </div>
-                </template>
+            <!-- 内容 -->
+            <div class="task-content">
+              <div class="d-flex justify-space-between align-start pa-4 pb-2">
+                <div>
+                  <v-card-title class="task-name pa-0">{{ task.name }}</v-card-title>
+                  <v-card-subtitle class="task-id pa-0">{{ task.path }}</v-card-subtitle>
+                </div>
+                <v-chip
+                  class="status-badge"
+                  :color="statusColor(task.status.type)"
+                  label
+                  size="small"
+                >
+                  {{ task.status.type.toUpperCase() }}
+                </v-chip>
+              </div>
 
-                <template v-else-if="task.status.type === 'rendering'">
-                  <div class="progress-ring mr-4">
-                    <svg class="progress-ring__circle" width="80" height="80">
-                      <circle
-                        class="progress-ring__circle-bg"
-                        stroke-width="4"
-                        fill="transparent"
-                        r="36"
-                        cx="40"
-                        cy="40"
-                      />
-                      <circle
-                        class="progress-ring__circle-fg glow-primary"
-                        stroke-width="4"
-                        stroke-linecap="round"
-                        fill="transparent"
-                        r="36"
-                        cx="40"
-                        cy="40"
-                        :style="progressRing(task.status.progress)"
-                      />
-                    </svg>
-                    <span class="progress-ring__text">
-                      {{ Math.round(task.status.progress * 100) }}%
-                    </span>
-                  </div>
-                </template>
-
-                <div class="flex-grow-1">
-                  <p class="status-text mb-1">{{ describeStatus(task.status) }}</p>
-
-                  <template v-if="task.status.type === 'rendering'">
-                    <v-progress-linear
-                      :model-value="task.status.progress * 100"
-                      :color="statusColor(task.status.type)"
-                      height="10"
-                      rounded
-                      class="glow-bar"
-                    ></v-progress-linear>
+              <!-- 状态区域 -->
+              <div class="status-section">
+                <div class="d-flex align-center">
+                  <!-- 动态进度指示器 -->
+                  <template v-if="['loading', 'mixing', 'pending'].includes(task.status.type)">
+                    <div class="progress-indicator mr-4">
+                      <v-progress-circular
+                        indeterminate
+                        :color="statusColor(task.status.type)"
+                        size="40"
+                        width="3"
+                      ></v-progress-circular>
+                    </div>
                   </template>
+
+                  <template v-else-if="task.status.type === 'rendering'">
+                    <div class="progress-indicator mr-4">
+                      <v-progress-circular
+                        :model-value="task.status.progress * 100"
+                        :color="statusColor(task.status.type)"
+                        size="40"
+                        width="3"
+                      >{{ Math.round(task.status.progress * 100) }}%</v-progress-circular>
+                    </div>
+                  </template>
+
+                  <div class="flex-grow-1">
+                    <p class="status-text mb-1">{{ describeStatus(task.status) }}</p>
+
+                    <template v-if="task.status.type === 'rendering'">
+                      <v-progress-linear
+                        :model-value="task.status.progress * 100"
+                        :color="statusColor(task.status.type)"
+                        height="6"
+                        rounded
+                      ></v-progress-linear>
+                    </template>
+                  </div>
                 </div>
               </div>
 
-              <!-- 操作按钮区 -->
-              <div class="d-flex justify-end mt-4">
+              <!-- 操作按钮 -->
+              <div class="d-flex justify-end pa-4 pt-2">
                 <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
                   <v-btn
-                    variant="flat"
                     color="error"
+                    variant="flat"
                     prepend-icon="mdi-cancel"
                     @click="invoke('cancel_task', { id: task.id })"
                     v-t="'cancel'"
-                    class="hover-scale action-btn"
+                    class="action-btn"
                   ></v-btn>
                 </template>
 
                 <template v-else-if="task.status.type === 'failed'">
                   <v-btn
-                    variant="flat"
                     color="error"
+                    variant="flat"
                     prepend-icon="mdi-alert-circle-outline"
                     @click="
                       errorDialogMessage = task.status.error;
                       errorDialog = true;
                     "
                     v-t="'details'"
-                    class="hover-scale action-btn"
+                    class="action-btn"
                   ></v-btn>
                 </template>
 
                 <template v-else-if="task.status.type === 'done'">
                   <v-btn
-                    variant="flat"
                     color="secondary"
+                    variant="flat"
                     prepend-icon="mdi-text-box-outline"
                     @click="showOutput(task)"
                     v-t="'show-output'"
-                    class="hover-scale action-btn mr-2"
+                    class="action-btn mr-2"
                   ></v-btn>
                   <v-btn
-                    variant="flat"
                     color="accent"
+                    variant="flat"
                     prepend-icon="mdi-folder-open-outline"
                     @click="showInFolder(task.output)"
                     v-t="'show-in-folder'"
-                    class="hover-scale action-btn"
+                    class="action-btn"
                   ></v-btn>
                 </template>
               </div>
@@ -482,14 +479,82 @@ const progressRing = (progress: number) => {
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- 右键菜单 -->
+    <v-menu
+      v-model="contextMenu"
+      :position-x="contextMenuX"
+      :position-y="contextMenuY"
+      absolute
+      offset-y
+    >
+      <v-list class="context-menu">
+        <v-list-item @click="showDetail(contextMenuTask!)">
+          <template v-slot:prepend>
+            <v-icon>mdi-information</v-icon>
+          </template>
+          <v-list-item-title>详细信息</v-list-item-title>
+        </v-list-item>
+      </v-list>
+    </v-menu>
+
+    <!-- 详情对话框 -->
+    <v-dialog v-model="detailDialog" width="auto" min-width="500px">
+      <v-card class="glass-background" v-if="selectedTask">
+        <v-card-title class="text-gradient">任务详情</v-card-title>
+        <v-divider></v-divider>
+        <v-card-text>
+          <div class="detail-section">
+            <div class="detail-item">
+              <span class="detail-label">名称:</span>
+              <span class="detail-value">{{ selectedTask.name }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">路径:</span>
+              <span class="detail-value">{{ selectedTask.path }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">状态:</span>
+              <span class="detail-value">{{ describeStatus(selectedTask.status) }}</span>
+            </div>
+            <div class="detail-item" v-if="selectedTask.status.type === 'rendering'">
+              <span class="detail-label">进度:</span>
+              <span class="detail-value">{{ Math.round(selectedTask.status.progress * 100) }}%</span>
+            </div>
+            <div class="detail-item" v-if="selectedTask.status.type === 'rendering'">
+              <span class="detail-label">帧率:</span>
+              <span class="detail-value">{{ selectedTask.status.fps }} FPS</span>
+            </div>
+            <div class="detail-item" v-if="selectedTask.status.type === 'done' && selectedTask.status.duration">
+              <span class="detail-label">耗时:</span>
+              <span class="detail-value">{{ formatDuration(selectedTask.status.duration) }}</span>
+            </div>
+            <div class="detail-item" v-if="selectedTask.status.type === 'done' && selectedTask.output">
+              <span class="detail-label">输出:</span>
+              <span class="detail-value">{{ selectedTask.output }}</span>
+            </div>
+            <div class="detail-item" v-if="selectedTask.status.type === 'failed' && selectedTask.status.error">
+              <span class="detail-label">错误:</span>
+              <span class="detail-value error-text">{{ selectedTask.status.error }}</span>
+            </div>
+          </div>
+        </v-card-text>
+        <v-divider></v-divider>
+        <v-card-actions class="justify-end">
+          <v-btn color="primary" variant="flat" @click="detailDialog = false" v-t="'confirm'" class="hover-scale"></v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
 <style scoped>
 .task-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 1.5rem;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .task-card-container {
@@ -500,45 +565,65 @@ const progressRing = (progress: number) => {
 .task-card {
   will-change: transform;
   backface-visibility: hidden;
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  transition:
-    box-shadow 0.4s ease,
-    transform 0.4s ease;
-  overflow: hidden;
 }
 
 .task-card:hover {
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.25);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
 }
 
-.task-cover-container {
-  width: 60px;
-  height: 60px;
-  border-radius: 10px;
-  overflow: hidden;
-  flex-shrink: 0;
+.task-cover-section {
+  width: 35%;
+  min-height: 160px;
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .task-cover {
   width: 100%;
   height: 100%;
-  background-size: cover;
   background-position: center;
-  transition: transform 0.5s ease;
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 
-.task-card:hover .task-cover {
-  transform: scale(1.05);
+.task-content {
+  width: 65%;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.task-name {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.task-id {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
 }
 
 .status-section {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 0 0 16px 16px;
+  margin-top: auto;
+  padding: 0.5rem 0;
+}
+
+.progress-indicator {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .status-badge {
@@ -626,10 +711,9 @@ const progressRing = (progress: number) => {
 }
 
 .action-btn {
-  transition:
-    transform 0.2s ease,
-    opacity 0.2s ease;
-  transform-origin: center;
+  font-weight: 600;
+  padding: 8px 16px;
+  transition: all 0.3s ease;
 }
 
 .v-btn:active {
@@ -674,5 +758,54 @@ pre {
   border-radius: 8px;
   font-family: 'Fira Code', monospace;
   font-size: 0.9rem;
+}
+
+/* 右键菜单样式 */
+.context-menu {
+  background: rgba(30, 30, 30, 0.9) !important;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* 详情对话框样式 */
+.detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-item {
+  display: flex;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.detail-item:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  width: 80px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  flex-shrink: 0;
+}
+
+.detail-value {
+  flex-grow: 1;
+  word-break: break-all;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.error-text {
+  color: #ff5252;
+  font-family: monospace;
+  font-size: 0.9rem;
+  background: rgba(255, 82, 82, 0.1);
+  padding: 8px;
+  border-radius: 4px;
+  margin-top: 4px;
 }
 </style>
