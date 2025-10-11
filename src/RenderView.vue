@@ -382,362 +382,941 @@ const folderStyle = computed(() => ({
 </script>
 
 <template>
-  <div class="pa-8 w-100 h-100" style="max-width: 960px">
-    <v-stepper 
-      alt-labels 
-      v-model="stepIndex" 
-      hide-actions 
-      :items="steps.map((x) => t('steps.' + x))" 
-      class="glass-stepper"
-    >
-      <div v-if="step === 'config' || step === 'options'" class="d-flex flex-row pa-6 pb-4 pt-0">
-        <v-btn variant="text" @click="stepIndex && stepIndex--" v-t="'prev-step'"></v-btn>
-        <div class="flex-grow-1"></div>
-        <v-btn v-if="step === 'options'" variant="tonal" @click="playChart" class="mr-2 glass-btn" v-t="'play'"></v-btn>
-        <v-btn v-if="step === 'options'" variant="tonal" @click="previewChart" class="mr-2 glass-btn" v-t="'preview'"></v-btn>
-        <v-btn variant="tonal" @click="moveNext" class="gradient-primary glass-btn">
-          {{ step === 'options' ? t('render') : t('next-step') }}
-        </v-btn>
-      </div>
-
-      <template v-slot:[`item.1`]>
-        <div class="mt-1 d-flex" style="gap: 1rem" @mousemove="onHoverMove" @mouseleave="resetHover" ref="hoverContainer">
-          <div class="flex-grow-1 d-flex align-center justify-center w-0 py-8">
-            <v-btn
-              :style="archiveStyle"
-              class="w-75 gradient-primary hover-movable"
-              style="overflow: hidden"
-              size="large"
-              @click="chooseChart(false)"
-              prepend-icon="mdi-folder-zip"
-              >{{ t('choose.archive') }}</v-btn
-            >
-          </div>
-          <div class="flex-grow-1 d-flex align-center justify-center w-0">
-            <v-btn :style="folderStyle" class="w-75 gradient-primary hover-movable" size="large" @click="chooseChart(true)" prepend-icon="mdi-folder">{{
-              t('choose.folder')
-            }}</v-btn>
+  <div class="hmcl-container">
+    <!-- 简化的侧边栏 -->
+    <div class="hmcl-sidebar">
+      <!-- 简化的步骤导航 -->
+      <div class="step-nav">
+        <div 
+          v-for="(stepName, index) in steps" 
+          :key="index" 
+          class="step-nav-item"
+          :class="{ 'active': stepIndex === index + 1, 'completed': stepIndex > index + 1 }"
+          @click="stepIndex > index + 1 && (stepIndex = index + 1)"
+        >
+          <div class="step-icon">
+            <v-icon v-if="stepIndex > index + 1" size="20">mdi-check</v-icon>
+            <span v-else>{{ index + 1 }}</span>
           </div>
         </div>
-        <v-overlay v-model="parsingChart" contained class="align-center justify-center custom-loading-overlay" persistent :close-on-content-click="false">
-          <div class="loading-content text-center p-8">
-            <v-progress-circular
-              indeterminate
-              color="primary"
-              size="80"
-              width="6"
-              class="mb-4 animate-pulse"
-            ></v-progress-circular>
+      </div>
+    </div>
+
+    <!-- 主内容区域 -->
+    <div class="hmcl-main">
+      <!-- 顶部操作栏 -->
+      <div class="hmcl-header">
+        <div class="header-title">
+          <h3>{{ t('steps.' + step) }}</h3>
+        </div>
+        <div class="header-actions">
+          <v-btn 
+            v-if="step === 'config' || step === 'options'" 
+            variant="text" 
+            @click="stepIndex && stepIndex--" 
+            class="header-btn"
+            size="small"
+          >
+            <v-icon class="mr-1">mdi-arrow-left</v-icon>
+            {{ t('prev-step') }}
+          </v-btn>
+          <v-btn 
+            v-if="step === 'options'" 
+            variant="outlined" 
+            @click="playChart" 
+            class="header-btn ml-2"
+            size="small"
+          >
+            <v-icon class="mr-1">mdi-play</v-icon>
+            {{ t('play') }}
+          </v-btn>
+          <v-btn 
+            v-if="step === 'options'" 
+            variant="outlined" 
+            @click="previewChart" 
+            class="header-btn ml-2"
+            size="small"
+          >
+            <v-icon class="mr-1">mdi-eye</v-icon>
+            {{ t('preview') }}
+          </v-btn>
+          <v-btn 
+            v-if="step === 'config' || step === 'options'" 
+            variant="flat" 
+            @click="moveNext" 
+            class="header-btn primary-btn ml-2"
+            size="small"
+          >
+            {{ step === 'options' ? t('render') : t('next-step') }}
+            <v-icon class="ml-1">mdi-arrow-right</v-icon>
+          </v-btn>
+        </div>
+      </div>
+
+      <!-- 内容区域 -->
+      <div class="hmcl-content">
+        <!-- 步骤1: 选择谱面 -->
+        <div class="step-content" :class="{ 'active': step === 'choose' }">
+          <div class="choose-content">
+            <div class="choose-cards">
+              <div 
+                class="choose-card"
+                @click="chooseChart(false)"
+                @mousemove="onHoverMove" 
+                @mouseleave="resetHover"
+                ref="hoverContainer"
+              >
+                <div class="card-icon" :style="archiveStyle">
+                  <v-icon size="48">mdi-folder-zip</v-icon>
+                </div>
+                <h4>{{ t('choose.archive') }}</h4>
+                <p>选择 .zip 或 .pez 格式的谱面压缩包</p>
+              </div>
+              <div 
+                class="choose-card"
+                @click="chooseChart(true)"
+              >
+                <div class="card-icon" :style="folderStyle">
+                  <v-icon size="48">mdi-folder</v-icon>
+                </div>
+                <h4>{{ t('choose.folder') }}</h4>
+                <p>选择包含谱面文件的文件夹</p>
+              </div>
+            </div>
+            <v-overlay v-model="parsingChart" contained class="align-center justify-center hmcl-loading" persistent :close-on-content-click="false">
+              <v-card class="loading-card">
+                <v-card-text class="text-center pa-6">
+                  <v-progress-circular
+                    indeterminate
+                    color="primary"
+                    size="40"
+                    width="4"
+                    class="mb-4"
+                  ></v-progress-circular>
+                  <p>正在解析谱面文件...</p>
+                </v-card-text>
+              </v-card>
+            </v-overlay>
           </div>
-        </v-overlay>
-      </template>
+        </div>
 
-      <template v-slot:[`item.2`]>
-        <v-form ref="form" v-if="chartInfo" class="glass-form">
-          <v-row no-gutters class="mx-n2">
-            <v-col cols="8">
-              <v-text-field 
-                class="mx-2 glass-input" 
-                :label="t('chart-name')" 
-                :rules="[RULES.non_empty]" 
-                v-model="chartInfo.name"
-                variant="solo-filled"
-                density="compact"
-              ></v-text-field>
-            </v-col>
-            <v-col cols="4">
-              <v-text-field 
-                class="mx-2 glass-input" 
-                :label="t('level')" 
-                :rules="[RULES.non_empty]" 
-                v-model="chartInfo.level"
-                variant="solo-filled"
-                density="compact"
-              ></v-text-field>
-            </v-col>
-          </v-row>
+        <!-- 步骤2: 配置谱面 -->
+        <div class="step-content" :class="{ 'active': step === 'config' }">
+          <div class="config-content" v-if="chartInfo">
+            <v-form ref="form" class="config-form">
+              <!-- 左右两栏布局 -->
+              <div class="config-layout">
+                <!-- 左栏 - 基本信息 -->
+                <div class="config-column">
+                  <div class="field-group">
+                    <div class="field-title">基本信息</div>
+                    <div class="field-list">
+                      <div class="field-item">
+                        <label class="field-label">{{ t('chart-name') }} *</label>
+                        <v-text-field 
+                          v-model="chartInfo.name"
+                          :rules="[RULES.non_empty]"
+                          variant="outlined"
+                          density="compact"
+                          hide-details
+                          class="field-input"
+                        ></v-text-field>
+                      </div>
+                      <div class="field-item">
+                        <label class="field-label">{{ t('level') }} *</label>
+                        <v-text-field 
+                          v-model="chartInfo.level"
+                          :rules="[RULES.non_empty]"
+                          variant="outlined"
+                          density="compact"
+                          hide-details
+                          class="field-input"
+                        ></v-text-field>
+                      </div>
+                      <div class="field-item">
+                        <label class="field-label">{{ t('charter') }} *</label>
+                        <v-text-field 
+                          v-model="chartInfo.charter"
+                          :rules="[RULES.non_empty]"
+                          variant="outlined"
+                          density="compact"
+                          hide-details
+                          class="field-input"
+                        ></v-text-field>
+                      </div>
+                      <div class="field-item">
+                        <label class="field-label">{{ t('composer') }}</label>
+                        <v-text-field 
+                          v-model="chartInfo.composer"
+                          variant="outlined"
+                          density="compact"
+                          hide-details
+                          class="field-input"
+                        ></v-text-field>
+                      </div>
+                      <div class="field-item">
+                        <label class="field-label">{{ t('illustrator') }}</label>
+                        <v-text-field 
+                          v-model="chartInfo.illustrator"
+                          variant="outlined"
+                          density="compact"
+                          hide-details
+                          class="field-input"
+                        ></v-text-field>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-          <v-row no-gutters class="mx-n2 mt-1">
-            <v-col cols="12" sm="4">
-              <v-text-field 
-                class="mx-2 glass-input" 
-                :label="t('charter')" 
-                :rules="[RULES.non_empty]" 
-                v-model="chartInfo.charter"
-                variant="solo-filled"
-                density="compact"
-              ></v-text-field>
-            </v-col>
-            <v-col cols="12" sm="4">
-              <v-text-field 
-                class="mx-2 glass-input" 
-                :label="t('composer')" 
-                v-model="chartInfo.composer"
-                variant="solo-filled"
-                density="compact"
-              ></v-text-field>
-            </v-col>
-            <v-col cols="12" sm="4">
-              <v-text-field 
-                class="mx-2 glass-input" 
-                :label="t('illustrator')" 
-                v-model="chartInfo.illustrator"
-                variant="solo-filled"
-                density="compact"
-              ></v-text-field>
-            </v-col>
-          </v-row>
-
-          <v-row no-gutters class="mx-n2 mt-1 align-center">
-            <v-col cols="4">
-              <div class="mx-2 d-flex flex-column">
-                <p class="text-caption text-white" v-t="'aspect'"></p>
-                <div class="d-flex flex-row align-center justify-center">
-                  <v-text-field 
-                    type="number" 
-                    class="mr-2 glass-input" 
-                    :rules="[RULES.positive]" 
-                    :label="t('width')" 
-                    v-model="aspectWidth"
-                    variant="solo-filled"
-                    density="compact"
-                  ></v-text-field>
-                  <p class="text-white">:</p>
-                  <v-text-field 
-                    type="number" 
-                    class="ml-2 glass-input" 
-                    :rules="[RULES.positive]" 
-                    :label="t('height')" 
-                    v-model="aspectHeight"
-                    variant="solo-filled"
-                    density="compact"
-                  ></v-text-field>
+                <!-- 右栏 - 显示设置 -->
+                <div class="config-column">
+                  <div class="field-group">
+                    <div class="field-title">显示设置</div>
+                    <div class="field-list">
+                      <div class="field-item">
+                        <label class="field-label">{{ t('aspect') }}</label>
+                        <div class="aspect-inputs">
+                          <v-text-field 
+                            type="number"
+                            v-model="aspectWidth"
+                            :rules="[RULES.positive]"
+                            :label="t('width')"
+                            variant="outlined"
+                            density="compact"
+                            hide-details
+                            class="aspect-input"
+                          ></v-text-field>
+                          <span class="aspect-separator">:</span>
+                          <v-text-field 
+                            type="number"
+                            v-model="aspectHeight"
+                            :rules="[RULES.positive]"
+                            :label="t('height')"
+                            variant="outlined"
+                            density="compact"
+                            hide-details
+                            class="aspect-input"
+                          ></v-text-field>
+                        </div>
+                      </div>
+                      <div class="field-item">
+                        <label class="field-label">{{ t('dim') }}</label>
+                        <v-slider 
+                          v-model="chartInfo.backgroundDim"
+                          :min="0"
+                          :max="1"
+                          :step="0.01"
+                          color="primary"
+                          thumb-label="always"
+                          density="compact"
+                          hide-details
+                          class="field-slider"
+                        ></v-slider>
+                      </div>
+                      <div class="field-item">
+                        <v-switch 
+                          v-model="chartInfo.HoldPartialCover"
+                          :true-value="1"
+                          :false-value="0"
+                          :label="t('hold_cover')"
+                          color="primary"
+                          hide-details
+                          class="field-switch"
+                        ></v-switch>
+                      </div>
+                      <div class="field-item">
+                        <label class="field-label">{{ t('tip') }}</label>
+                        <v-text-field 
+                          v-model="chartInfo.tip"
+                          :placeholder="t('tip-placeholder')"
+                          variant="outlined"
+                          density="compact"
+                          hide-details
+                          class="field-input"
+                        ></v-text-field>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </v-col>
-            <v-col cols="8" class="px-6">
-              <v-slider 
-                :label="t('dim')" 
-                thumb-label="always" 
-                :min="0" 
-                :max="1" 
-                :step="0.01" 
-                v-model="chartInfo.backgroundDim"
-                color="#b19dff"
-                thumb-color="#8a6cff"
-              ></v-slider>
-              <v-row no-gutters class="mx-n2 mt-1 align-center">
-                <v-col cols="12" class="px-6">
-                  <v-switch 
-                    :label="t('hold_cover')" 
-                    v-model="chartInfo.HoldPartialCover" 
-                    :true-value="1" 
-                    :false-value="0" 
-                    color="#8a6cff" 
-                    persistent-hint
-                  ></v-switch>
-                </v-col>
-              </v-row>
-            </v-col>
-          </v-row>
+            </v-form>
+          </div>
+        </div>
 
-          <v-row no-gutters class="mx-n2 mt-1">
-            <v-col cols="12">
-              <v-text-field 
-                class="mx-2 glass-input" 
-                :label="t('tip')" 
-                :placeholder="t('tip-placeholder')" 
-                v-model="chartInfo.tip"
-                variant="solo-filled"
-                density="compact"
-              ></v-text-field>
-            </v-col>
-          </v-row>
-        </v-form>
-      </template>
+        <!-- 步骤3: 渲染选项 -->
+        <div class="step-content" :class="{ 'active': step === 'options' }">
+          <div class="options-content">
+            <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()" class="hmcl-config"></ConfigView>
+          </div>
+        </div>
 
-      <template v-slot:[`item.3`]>
-        <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()" class="glass-form"></ConfigView>
-      </template>
-
-      <template v-slot:[`item.4`]>
-        <div class="d-flex flex-column justify-center align-center mb-2" style="gap: 1rem">
-          <v-card class="glass-card" style="width: 60%">
-            <v-card-title class="text-center text-gradient">
-              {{ t('render-started') }}
-            </v-card-title>
-            <v-divider class="divider"></v-divider>
-            <v-card-text>
-              <v-row>
-                <v-col cols="6">
+        <!-- 步骤4: 渲染中 -->
+        <div class="step-content" :class="{ 'active': step === 'render' }">
+          <div class="render-content">
+            <v-card class="hmcl-card">
+              <v-card-title class="card-title">
+                <v-icon class="mr-2">mdi-render</v-icon>
+                {{ t('render-started') }}
+              </v-card-title>
+              <v-divider></v-divider>
+              <v-card-text>
+                <div class="info-list">
                   <div class="info-item">
-                    <span class="info-label">{{ t('chart-name') }}:</span>
+                    <span class="info-label">{{ t('chart-name') }}</span>
                     <span class="info-value">{{ chartInfo?.name }}</span>
                   </div>
                   <div class="info-item">
-                    <span class="info-label">{{ t('level') }}:</span>
+                    <span class="info-label">{{ t('level') }}</span>
                     <span class="info-value">{{ chartInfo?.level }}</span>
                   </div>
-                </v-col>
-                <v-col cols="6">
                   <div class="info-item">
-                    <span class="info-label">{{ t('charter') }}:</span>
+                    <span class="info-label">{{ t('charter') }}</span>
                     <span class="info-value">{{ chartInfo?.charter }}</span>
                   </div>
                   <div class="info-item">
-                    <span class="info-label">{{ t('composer') }}:</span>
+                    <span class="info-label">{{ t('composer') }}</span>
                     <span class="info-value">{{ chartInfo?.composer }}</span>
                   </div>
-                </v-col>
-              </v-row>
-              <div class="info-item">
-                <span class="info-label">{{ t('illustrator') }}:</span>
-                <span class="info-value">{{ chartInfo?.illustrator }}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">{{ t('aspect') }}:</span>
-                <span class="info-value">{{ aspectWidth }}:{{ aspectHeight }}</span>
-              </div>
-            </v-card-text>
-          </v-card>
-
-          <div class="d-flex justify-center mt-4" style="gap: 16px">
-            <v-btn @click="router.push({ name: 'tasks' })" class="glass-btn" color="#b19dff" style="scale: 1">
-              {{ t('see-tasks') }}
-            </v-btn>
-            <v-btn @click="stepIndex = 1" class="glass-btn gradient-primary" style="scale: 1">
-              {{ t('next-chart') }}
-            </v-btn>
+                  <div class="info-item">
+                    <span class="info-label">{{ t('illustrator') }}</span>
+                    <span class="info-value">{{ chartInfo?.illustrator }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">{{ t('aspect') }}</span>
+                    <span class="info-value">{{ aspectWidth }}:{{ aspectHeight }}</span>
+                  </div>
+                </div>
+                
+                <div v-if="renderProgress !== undefined" class="progress-area">
+                  <v-progress-linear 
+                    :model-value="renderProgress" 
+                    color="primary"
+                    height="8"
+                    rounded
+                  ></v-progress-linear>
+                  <p class="progress-text">{{ renderMsg }}</p>
+                </div>
+              </v-card-text>
+              <v-divider></v-divider>
+              <v-card-actions class="card-actions">
+                <v-btn @click="router.push({ name: 'tasks' })" variant="outlined">
+                  <v-icon class="mr-1">mdi-view-list</v-icon>
+                  {{ t('see-tasks') }}
+                </v-btn>
+                <v-btn @click="stepIndex = 1" variant="flat" color="primary">
+                  <v-icon class="mr-1">mdi-plus</v-icon>
+                  {{ t('next-chart') }}
+                </v-btn>
+              </v-card-actions>
+            </v-card>
           </div>
         </div>
-      </template>
-    </v-stepper>
-    <v-overlay v-model="fileHovering" contained class="align-center justify-center drop-zone-overlay" persistent :close-on-content-click="false">
-      <div class="drop-pulse">
-        {{ t('choose-drop') }}
+      </div>
+    </div>
+
+    <!-- 文件拖放覆盖层 -->
+    <v-overlay v-model="fileHovering" contained class="align-center justify-center hmcl-drop-overlay" persistent :close-on-content-click="false">
+      <div class="drop-zone">
+        <v-icon size="48" class="mb-2">mdi-download</v-icon>
+        <p>{{ t('choose-drop') }}</p>
       </div>
     </v-overlay>
   </div>
 </template>
 
 <style scoped>
-.gradient-primary {
-  background: linear-gradient(45deg, #6a5acd, #8a6cff, #5d4b9a) !important;
-  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+.hmcl-container {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  background-color: #1e1e1e;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  color: #e0e0e0;
+}
+
+.hmcl-sidebar {
+  width: 80px;
+  background-color: #252526;
+  color: #cccccc;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+  border-right: 1px solid #3e3e42;
+}
+
+/* 步骤导航 */
+.step-nav {
+  padding: 20px 0;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.step-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(60, 52, 100, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
   overflow: hidden;
-  color: white;
+}
+
+.step-nav-item::before {
+  content: '';
+  position: absolute;
+  left: -100%;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,0.15),
+    transparent
+  );
+  transition: 0.5s;
+}
+
+.step-nav-item:hover {
+  transform: translateY(-2px) scale(1.05);
+  background: linear-gradient(
+    135deg,
+    rgba(96, 67, 140, 0.4) 0%,
+    rgba(118, 64, 193, 0.4) 100%
+  ) !important;
+  box-shadow: 0 4px 20px rgba(118, 64, 193, 0.4);
+  color: #fff;
+}
+
+.step-nav-item:hover::before {
+  left: 100%;
+}
+
+.step-nav-item.active {
+  background: linear-gradient(
+    135deg,
+    rgba(118, 64, 193, 0.6) 0%,
+    rgba(156, 105, 217, 0.6) 100%
+  ) !important;
+  color: #fff;
+  box-shadow: 0 0 20px rgba(118, 64, 193, 0.6);
+}
+
+.step-nav-item.active::after {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 24px;
+  background-color: #007acc;
+  border-radius: 2px;
+}
+
+.step-nav-item.completed .step-icon {
+  color: #4caf50;
+}
+
+.step-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
   font-weight: 500;
-  box-shadow: 0 4px 20px rgba(106, 90, 205, 0.3);
+  position: relative;
+  z-index: 1;
 }
 
-.gradient-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(106, 90, 205, 0.4);
+/* 主内容区 */
+.hmcl-main {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #1e1e1e;
 }
 
-.glass-stepper {
-  border-radius: 16px !important;
-  background: rgba(50, 42, 90, 0.6) !important;
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+.hmcl-header {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background-color: #252526;
+  border-bottom: 1px solid #3e3e42;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.glass-form {
+.header-title h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  color: #cccccc;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.header-btn {
+  margin-left: 8px;
+  border-radius: 4px;
+  text-transform: none;
+  font-weight: 400;
+  background-color: #3c3c3c !important;
+  color: #cccccc !important;
+  border: 1px solid #3e3e42 !important;
+}
+
+.header-btn:hover {
+  background-color: #464647 !important;
+}
+
+.primary-btn {
+  background-color: #007acc !important;
+  color: white !important;
+  border-color: #007acc !important;
+}
+
+.primary-btn:hover {
+  background-color: #1e6ba8 !important;
+}
+
+/* 内容区域 */
+/* 步骤内容 */
+.hmcl-content {
+  flex-grow: 1;
   padding: 24px;
-  background: rgba(60, 52, 100, 0.4);
-  border-radius: 16px;
-  margin: 16px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow-y: auto;
+  background-color: #1e1e1e;
+  position: relative;
 }
 
-.glass-input {
-  background: rgba(70, 60, 120, 0.3) !important;
-  border-radius: 10px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+/* 步骤切换动画 */
+.step-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 24px;
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+  overflow-y: auto;
 }
 
-.glass-input :deep(.v-field) {
-  background: transparent !important;
+.step-content.active {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
 }
 
-.glass-card {
-  background: rgba(60, 52, 100, 0.5) !important;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+/* 选择内容 */
+.choose-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
 }
 
-.divider {
-  border-color: rgba(255, 255, 255, 0.1) !important;
+.choose-cards {
+  display: flex;
+  gap: 24px;
+  margin-top: 40px;
+}
+
+.choose-card {
+  width: 220px;
+  height: 260px;
+  background-color: #252526;
+  border: 1px solid #3e3e42;
+  border-radius: 8px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.choose-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  border-color: #007acc;
+  background-color: #2a2d2e;
+}
+
+.card-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: #3c3c3c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  color: #cccccc;
+}
+
+.choose-card h4 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 500;
+  color: #cccccc;
+}
+
+.choose-card p {
+  margin: 0;
+  font-size: 14px;
+  color: #9d9d9d;
+  text-align: center;
+}
+
+/* 配置内容 */
+.config-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.config-form {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 配置布局 */
+.config-layout {
+  display: flex;
+  gap: 24px;
+  flex-grow: 1;
+}
+
+.config-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.field-group {
+  background-color: #252526;
+  border-radius: 8px;
+  border: 1px solid #3e3e42;
+  padding: 16px;
+  height: 100%;
+}
+
+.field-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #cccccc;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #3e3e42;
+}
+
+.field-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.field-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #cccccc;
+  margin-bottom: 6px;
+}
+
+.field-input {
+  background-color: #3c3c3c !important;
+}
+
+.field-input :deep(.v-field) {
+  border-radius: 4px;
+  background-color: #3c3c3c !important;
+  color: #cccccc !important;
+  border-color: #3e3e42 !important;
+}
+
+.field-input :deep(.v-field-label) {
+  color: #9d9d9d !important;
+}
+
+.field-input :deep(.v-input__control) {
+  color: #cccccc !important;
+}
+
+/* 宽高比输入 */
+.aspect-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aspect-input {
+  width: 80px;
+}
+
+.aspect-input :deep(.v-field) {
+  border-radius: 4px;
+  background-color: #3c3c3c !important;
+  color: #cccccc !important;
+  border-color: #3e3e42 !important;
+}
+
+.aspect-separator {
+  font-size: 16px;
+  font-weight: 500;
+  color: #cccccc;
+  margin: 0 4px;
+}
+
+/* 滑块和开关 */
+.field-slider {
+  margin: 8px 0;
+}
+
+.field-slider :deep(.v-slider-track__background) {
+  background-color: #3c3c3c !important;
+}
+
+.field-slider :deep(.v-slider-track__fill) {
+  background-color: #007acc !important;
+}
+
+.field-slider :deep(.v-slider-thumb) {
+  background-color: #7640c1 !important;
+  border-radius: 50% !important;
+  width: 20px !important;
+  height: 20px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+  transition: all 0.2s ease !important;
+}
+
+.field-slider :deep(.v-slider-thumb:hover) {
+  transform: scale(1.2) !important;
+  box-shadow: 0 3px 6px rgba(118, 64, 193, 0.5) !important;
+}
+
+.field-switch :deep(.v-switch__track) {
+  background-color: #3c3c3c !important;
+}
+
+.field-switch :deep(.v-switch__thumb) {
+  background-color: #666 !important;
+}
+
+.field-switch--selected :deep(.v-switch__track) {
+  background-color: #007acc !important;
+}
+
+.field-switch--selected :deep(.v-switch__thumb) {
+  background-color: #fff !important;
+}
+
+/* 渲染内容 */
+.render-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.hmcl-card {
+  width: 100%;
+  max-width: 600px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  background-color: #252526;
+  border: 1px solid #3e3e42;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 500;
+  color: #cccccc;
+}
+
+.info-list {
+  margin-bottom: 16px;
 }
 
 .info-item {
   display: flex;
-  margin-bottom: 12px;
-  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #3e3e42;
+}
+
+.info-item:last-child {
+  border-bottom: none;
 }
 
 .info-label {
+  width: 120px;
   font-weight: 500;
-  margin-right: 8px;
-  color: rgba(255, 255, 255, 0.7);
-  min-width: 100px;
+  color: #9d9d9d;
 }
 
 .info-value {
-  color: white;
   flex-grow: 1;
+  color: #cccccc;
 }
 
-.custom-loading-overlay {
-  backdrop-filter: blur(16px);
-  background-color: rgba(17, 32, 89, 0.7);
-  border-radius: 1.5rem;
+.progress-area {
+  margin-top: 16px;
 }
 
-.drop-zone-overlay {
-  backdrop-filter: blur(10px);
-  background: rgba(70, 57, 141, 0.4);
+.progress-text {
+  text-align: center;
+  margin-top: 8px;
+  font-size: 14px;
+  color: #9d9d9d;
 }
 
-.drop-pulse {
-  padding: 40px 60px;
-  background: rgba(80, 70, 150, 0.6);
-  border: 2px dashed rgba(255, 255, 255, 0.3);
-  border-radius: 16px;
-  color: white;
-  font-size: 1.5rem;
+.card-actions {
+  justify-content: flex-end;
+  gap: 8px;
+  background-color: #2a2d2e;
+}
+
+.card-actions .v-btn {
+  background-color: #3c3c3c !important;
+  color: #cccccc !important;
+  border: 1px solid #3e3e42 !important;
+}
+
+.card-actions .v-btn.v-btn--flat {
+  background-color: #007acc !important;
+  color: white !important;
+  border-color: #007acc !important;
+}
+
+/* 加载和拖放覆盖层 */
+.hmcl-loading {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.loading-card {
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #252526;
+}
+
+.hmcl-drop-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.drop-zone {
+  background-color: #252526;
+  border-radius: 8px;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #cccccc;
+  border: 2px dashed #3e3e42;
+}
+
+.drop-zone p {
+  margin: 0;
+  font-size: 16px;
   font-weight: 500;
-  animation: pulse 1.5s infinite;
 }
 
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(138, 108, 255, 0.4);
+@media (max-width: 768px) {
+  .hmcl-sidebar {
+    width: 60px;
   }
-  70% {
-    box-shadow: 0 0 0 20px rgba(138, 108, 255, 0);
+  
+  .step-nav {
+    gap: 12px;
   }
-  100% {
-    box-shadow: 0 0 0 0 rgba(138, 108, 255, 0);
+  
+  .step-nav-item {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .step-icon {
+    font-size: 14px;
+  }
+  
+  .choose-cards {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .config-layout {
+    flex-direction: column;
+    gap: 16px;
   }
 }
 
-.glass-btn {
-  background: rgba(70, 60, 120, 0.4) !important;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.3s ease;
-  color: white;
-}
-
-.glass-btn:hover {
-  background: rgba(90, 80, 150, 0.5) !important;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(106, 90, 205, 0.3);
+@media (max-width: 600px) {
+  .hmcl-container {
+    flex-direction: column;
+  }
+  
+  .hmcl-sidebar {
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    border-right: none;
+    border-bottom: 1px solid #3e3e42;
+  }
+  
+  .step-nav {
+    flex-direction: row;
+    padding: 10px 0;
+    gap: 8px;
+  }
+  
+  .step-nav-item {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .step-icon {
+    font-size: 12px;
+  }
+  
+  .step-nav-item.active::after {
+    left: 50%;
+    top: -8px;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 4px;
+  }
+  
+  .config-layout {
+    flex-direction: column;
+  }
 }
 </style>
