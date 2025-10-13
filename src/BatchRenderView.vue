@@ -29,6 +29,10 @@ en:
   progress: Progress
   eta: ETA
   no-charts: No charts added
+  no-results: No results found
+  search-placeholder: Search charts...
+  selected: "Selected: {count}"
+  filtered-results: "Filtered: {count}"
   add-files-failed: Failed to add files
   no-charts-found: No charts found in folder
   charts-added: "{count} charts added"
@@ -83,6 +87,10 @@ zh-CN:
   progress: 进度
   eta: 预计
   no-charts: 未添加谱面
+  no-results: 未找到结果
+  search-placeholder: 搜索谱面...
+  selected: "已选择: {count}"
+  filtered-results: "筛选: {count}"
   save: 保存
   add-files-failed: 添加文件失败
   no-charts-found: 文件夹中未找到谱面
@@ -161,16 +169,7 @@ const isAddingFolder = ref(false);
 // 默认配置（从localStorage加载或使用默认值）
 const defaultConfig = ref<RenderConfig>(loadDefaultConfig());
 
-// 行颜色函数
-function rowColor(status: string) {
-  switch (status) {
-    case 'pending': return 'bg-blue-lighten-5';
-    case 'rendering': return 'bg-orange-lighten-5';
-    case 'done': return 'bg-green-lighten-5';
-    case 'failed': return 'bg-red-lighten-5';
-    default: return '';
-  }
-}
+
 
 // 预览单个谱面
 async function previewChart(index: number) {
@@ -585,9 +584,42 @@ function statusColor(status: string) {
   }
 }
 
+// 表格头部定义
+const tableHeaders = [
+  { title: '', key: 'selected', width: 40, sortable: false },
+  { title: t('name'), key: 'name', sortable: true },
+  { title: t('level'), key: 'level', width: 100, sortable: true },
+  { title: t('charter'), key: 'charter', width: 120, sortable: true },
+  { title: t('status'), key: 'status', width: 120, sortable: true },
+  { title: t('actions'), key: 'actions', width: 160, sortable: false },
+];
+
+// 搜索功能
+const searchQuery = ref('');
+
+// 过滤后的谱面列表
+const filteredCharts = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return charts.value;
+  }
+  
+  const query = searchQuery.value.toLowerCase();
+  return charts.value.filter(chart => 
+    chart.name.toLowerCase().includes(query) ||
+    chart.level.toLowerCase().includes(query) ||
+    chart.charter.toLowerCase().includes(query) ||
+    chart.path.toLowerCase().includes(query)
+  );
+});
+
 // 计算选中数量
 const selectedCount = computed(() => {
-  return charts.value.filter((chart) => chart.selected).length;
+  return filteredCharts.value.filter((chart) => chart.selected).length;
+});
+
+// 计算过滤后的选中数量
+const filteredSelectedCount = computed(() => {
+  return filteredCharts.value.filter((chart) => chart.selected).length;
 });
 
 // 监听渲染事件
@@ -720,12 +752,88 @@ watch(charts, saveChartsToStorage, { deep: true });
 </script>
 
 <template>
-  <div class="pa-6 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1.5rem">
-    <div class="d-flex align-center justify-space-between">
+  <div class="pa-4 w-100 h-100 d-flex flex-column">
+    <!-- 顶部导航栏 -->
+    <div class="top-bar d-flex align-center justify-space-between mb-4">
       <v-btn @click="router.go(-1)" prepend-icon="mdi-arrow-left" variant="text" size="small">
         {{ t('back') }}
       </v-btn>
+      <h2 class="text-h6 font-weight-medium">{{ t('title') }}</h2>
+      <div style="width: 80px"></div> <!-- 占位符使标题居中 -->
     </div>
+
+    <!-- 工具栏 -->
+    <div class="toolbar mb-4">
+      <div class="toolbar-section">
+        <!-- 搜索框 -->
+        <v-text-field
+          v-model="searchQuery"
+          :placeholder="t('search-placeholder')"
+          prepend-inner-icon="mdi-magnify"
+          variant="outlined"
+          density="compact"
+          hide-details
+          clearable
+          class="search-field"
+        ></v-text-field>
+      </div>
+      
+      <div class="toolbar-section">
+        <!-- 文件操作 -->
+        <v-btn :disabled="isAddingFolder" :loading="isAddingFiles" variant="text" size="small" @click="addFiles">
+          <v-icon>mdi-file-plus</v-icon>
+        </v-btn>
+        <v-btn :disabled="isAddingFiles" :loading="isAddingFolder" variant="text" size="small" @click="addFolder">
+          <v-icon>mdi-folder-plus</v-icon>
+        </v-btn>
+        <v-btn color="error" variant="text" size="small" @click="clearList">
+          <v-icon>mdi-delete</v-icon>
+        </v-btn>
+        
+        <v-divider vertical class="mx-2"></v-divider>
+        
+        <!-- 渲染控制 -->
+        <v-btn color="secondary" variant="text" size="small" @click="configDialog = true">
+          <v-icon>mdi-cog</v-icon>
+        </v-btn>
+        <v-btn
+          color="primary"
+          @click="startRender"
+          :disabled="filteredSelectedCount === 0 || currentRenderingIndex >= 0"
+          :loading="currentRenderingIndex >= 0"
+          size="small">
+          <v-icon>mdi-play</v-icon>
+        </v-btn>
+      </div>
+    </div>
+
+    <!-- 统计信息栏 -->
+    <div class="stats-bar d-flex align-center justify-space-between mb-3">
+      <div class="text-caption">
+        {{ t('total-charts', { count: charts.length }) }}
+        <span v-if="searchQuery" class="ml-2">
+          ({{ t('filtered-results', { count: filteredCharts.length }) }})
+        </span>
+      </div>
+      <div class="d-flex align-center gap-2">
+        <span class="text-caption">{{ t('selected', { count: filteredSelectedCount }) }}</span>
+        <v-btn @click="toggleSelectAll" variant="text" size="x-small" density="compact">
+          {{ t(allSelected ? 'deselect-all' : 'select-all') }}
+        </v-btn>
+      </div>
+    </div>
+
+    <!-- 渲染进度显示 -->
+    <v-card v-if="currentRenderingIndex >= 0" class="mb-3 progress-card">
+      <v-card-text class="pa-3">
+        <div class="d-flex align-center mb-2">
+          <v-progress-circular indeterminate size="16" width="2" class="mr-2" />
+          <span class="text-body-2">{{ t('rendering') }}: {{ charts[currentRenderingIndex]?.name }}</span>
+        </div>
+        <v-progress-linear :model-value="renderProgress" color="primary" height="4" rounded />
+        <p class="text-caption mt-1 mb-0">{{ renderMsg }}</p>
+      </v-card-text>
+    </v-card>
 
     <!-- 配置对话框 -->
      <v-dialog v-model="configDialog" max-width="700" scrollable @after-enter="applyDefaultConfig" class="dialog-blur">
@@ -835,66 +943,6 @@ watch(charts, saveChartsToStorage, { deep: true });
       </v-card>
     </v-dialog>
 
-    <div class="batch-controls">
-      <v-row align="center" justify="space-between" class="mx-n2">
-        <!-- 文件操作 -->
-        <v-col cols="12" sm="auto" class="pa-2">
-          <div class="d-flex align-center gap-2 flex-wrap">
-            <v-btn :disabled="isAddingFolder" :loading="isAddingFiles" color="primary" prepend-icon="mdi-file-plus" size="small" @click="addFiles">
-              {{ t('add-files') }}
-            </v-btn>
-            <v-btn :disabled="isAddingFiles" :loading="isAddingFolder" color="primary" prepend-icon="mdi-folder-plus" size="small" @click="addFolder">
-              {{ t('add-folder') }}
-            </v-btn>
-            <v-btn color="error" @click="clearList" prepend-icon="mdi-delete" size="small">
-              {{ t('clear-list') }}
-            </v-btn>
-          </div>
-        </v-col>
-
-        <!-- 渲染操作 -->
-        <v-col cols="12" sm="auto" class="pa-2">
-          <div class="d-flex align-center gap-2 flex-wrap justify-sm-end">
-            <v-btn color="secondary" @click="configDialog = true" prepend-icon="mdi-cog" size="small">
-              {{ t('configure') }}
-            </v-btn>
-            <v-combobox
-              v-model="selectedPreset"
-              :label="t('select-preset')"
-              :items="presets"
-              item-title="name"
-              density="compact"
-              variant="outlined"
-              hide-details
-              class="mr-2"
-              style="min-width: 180px; max-width: 220px;"
-              :menu-props="{ transition: 'slide-y-transition' }"
-            />
-            <v-btn
-              color="primary"
-              @click="startRender"
-              prepend-icon="mdi-play"
-              :disabled="selectedCount === 0 || currentRenderingIndex >= 0"
-              :loading="currentRenderingIndex >= 0"
-              size="small">
-              {{ t('start-render') }}
-            </v-btn>
-          </div>
-        </v-col>
-      </v-row>
-
-      <v-divider class="my-3"></v-divider>
-
-      <!-- 信息统计栏 -->
-      <div class="d-flex align-center justify-space-between text-caption">
-        <span>{{ t('total-charts', { count: charts.length }) }}</span>
-        <span>{{ t('total-selected', { count: selectedCount }) }}</span>
-        <v-btn @click="toggleSelectAll" variant="text" size="x-small" density="compact">
-          {{ t(allSelected ? 'deselect-all' : 'select-all') }}
-        </v-btn>
-      </div>
-    </div>
-
     <!-- 渲染进度显示 -->
     <v-card v-if="currentRenderingIndex >= 0" class="mb-4 dialog-blur">
       <v-card-title class="d-flex align-center text-subtitle-1">
@@ -909,49 +957,50 @@ watch(charts, saveChartsToStorage, { deep: true });
 
     <!-- 谱面表格 -->
     <div class="batch-table-container flex-grow-1">
-      <!-- 优化后的表格，添加自定义类名用于样式控制 -->
-      <v-table density="comfortable" fixed-header height="100%" class="custom-table">
-        <thead>
-        <tr>
-          <th width="40"></th>
-          <th>{{ t('name') }}</th>
-          <th width="100">{{ t('level') }}</th>
-          <th width="120">{{ t('charter') }}</th>
-          <th width="120">{{ t('status') }}</th>
-          <th width="160">{{ t('actions') }}</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr
-          v-for="(chart, index) in charts"
-          :key="index"
-          :class="rowColor(chart.status)"
-          class="table-row-hover"
-        >
-          <td>
-            <v-checkbox
-              v-model="chart.selected"
-              :disabled="chart.status === 'rendering'"
-              density="compact"
-              hide-details
-              class="custom-checkbox"
-            />
-          </td>
-          <td :title="chart.name" class="text-truncate table-name-cell">{{ chart.name }}</td>
-          <td>{{ chart.level }}</td>
-          <td>{{ chart.charter }}</td>
-          <td>
-            <!-- 状态标签添加语义化类名 -->
-            <v-chip
-              :class="`status-chip status-${chart.status}`"
-              size="small"
-              class="status-chip-custom"
-            >
-              {{ t(chart.status) }}
-            </v-chip>
-            <div v-if="chart.error" class="text-caption text-red mt-1 error-message">{{ chart.error }}</div>
-          </td>
-          <td class="action-buttons">
+      <!-- 使用虚拟滚动表格 -->
+      <v-data-table-virtual
+        :headers="tableHeaders"
+        :items="filteredCharts"
+        :item-value="(item) => item.path"
+        density="compact"
+        fixed-header
+        height="100%"
+        class="custom-table"
+        :no-data-text="searchQuery ? t('no-results') : t('no-charts')"
+        :items-per-page="-1"
+        hide-default-footer
+      >
+        <!-- 选择框列 -->
+        <template v-slot:item.selected="{ item, index }">
+          <v-checkbox
+            v-model="item.selected"
+            :disabled="item.status === 'rendering'"
+            density="compact"
+            hide-details
+            class="custom-checkbox"
+          />
+        </template>
+
+        <!-- 名称列 -->
+        <template v-slot:item.name="{ item }">
+          <div :title="item.name" class="text-truncate table-name-cell">{{ item.name }}</div>
+        </template>
+
+        <!-- 状态列 -->
+        <template v-slot:item.status="{ item }">
+          <v-chip
+            :class="`status-chip status-${item.status}`"
+            size="small"
+            class="status-chip-custom"
+          >
+            {{ t(item.status) }}
+          </v-chip>
+          <div v-if="item.error" class="text-caption text-red mt-1 error-message">{{ item.error }}</div>
+        </template>
+
+        <!-- 操作列 -->
+        <template v-slot:item.actions="{ item, index }">
+          <div class="action-buttons">
             <v-btn
               @click="openEditDialog(index)"
               color="primary"
@@ -959,7 +1008,7 @@ watch(charts, saveChartsToStorage, { deep: true });
               size="small"
               variant="flat"
               class="action-btn"
-              :disabled="!chart.chartInfo"
+              :disabled="!item.chartInfo"
               :title="t('edit')"
             ></v-btn>
             <v-btn
@@ -969,11 +1018,11 @@ watch(charts, saveChartsToStorage, { deep: true });
               size="small"
               variant="flat"
               class="action-btn"
-              :disabled="!chart.chartInfo"
+              :disabled="!item.chartInfo"
               :title="t('preview')"
             ></v-btn>
             <v-btn
-              :disabled="chart.status === 'rendering'"
+              :disabled="item.status === 'rendering'"
               color="error"
               icon="mdi-delete"
               size="small"
@@ -982,44 +1031,112 @@ watch(charts, saveChartsToStorage, { deep: true });
               @click="charts.splice(index, 1)"
               :title="t('delete')"
             />
-          </td>
-        </tr>
-        <!-- 优化的空状态显示 -->
-        <tr v-if="charts.length === 0">
-          <td class="empty-state" colspan="6">
-            <div class="empty-state-icon">
-              <v-icon size="48" color="rgba(255,255,255,0.3)">mdi-file-chart-outline</v-icon>
-            </div>
-            <div class="empty-state-text">{{ t('no-charts') }}</div>
-          </td>
-        </tr>
-        </tbody>
-      </v-table>
+          </div>
+        </template>
+      </v-data-table-virtual>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* 顶部导航栏 */
+.top-bar {
+  background: rgba(30, 30, 30, 0.8);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* 工具栏 */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: rgba(30, 30, 30, 0.8);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-field {
+  width: 250px;
+  transition: width 0.3s ease;
+}
+
+.search-field:focus-within {
+  width: 300px;
+}
+
+/* 统计信息栏 */
+.stats-bar {
+  background: rgba(30, 30, 30, 0.6);
+  border-radius: 8px;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* 进度卡片 */
+.progress-card {
+  background: rgba(30, 30, 30, 0.8) !important;
+  backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
+}
+
+/* 表格容器 */
 .batch-table-container {
-  background: rgba(30, 30, 30, 0.85) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  border-radius: 16px !important;
+  background: rgba(30, 30, 30, 0.8) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
   overflow: hidden;
   flex: 1;
   min-height: 300px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
 }
 
-.batch-controls {
-  background: rgba(30, 30, 30, 0.7) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  border-radius: 16px !important;
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+/* 美化滚动条 */
+.batch-table-container :deep(.v-data-table-virtual__scroll) {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(118, 64, 193, 0.5) rgba(30, 30, 30, 0.1);
+}
+
+/* 强制显示滚动条，覆盖全局隐藏 */
+.batch-table-container :deep(.v-data-table-virtual__scroll)::-webkit-scrollbar {
+  width: 8px;
+  display: block !important;
+}
+
+.batch-table-container :deep(.v-data-table-virtual__scroll)::-webkit-scrollbar-track {
+  background: rgba(30, 30, 30, 0.1);
+  border-radius: 4px;
+  margin: 8px;
+}
+
+.batch-table-container :deep(.v-data-table-virtual__scroll)::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, rgba(118, 64, 193, 0.6), rgba(156, 105, 217, 0.6));
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.batch-table-container :deep(.v-data-table-virtual__scroll)::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, rgba(118, 64, 193, 0.8), rgba(156, 105, 217, 0.8));
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.batch-table-container :deep(.v-data-table-virtual__scroll)::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(135deg, rgba(118, 64, 193, 0.9), rgba(156, 105, 217, 0.9));
 }
 
 .text-truncate {
@@ -1061,42 +1178,37 @@ tr {
 /* 表格整体样式穿透 */
 .custom-table {
   background: transparent !important;
-  border-collapse: separate;
-  border-spacing: 0;
-  width: 100%;
 }
 
 /* 表头样式 */
-.custom-table thead tr {
+.custom-table :deep(.v-data-table__thead) {
   background: linear-gradient(180deg, rgba(118, 64, 193, 0.3), rgba(156, 105, 217, 0.2)) !important;
-  border-radius: 16px 16px 0 0;
 }
 
-.custom-table thead th {
-  color: #e0e0e0;
-  font-weight: 500;
-  padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  position: relative;
+.custom-table :deep(.v-data-table__th) {
+  color: #e0e0e0 !important;
+  font-weight: 500 !important;
+  padding: 16px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 /* 表格行样式 */
-.custom-table tbody tr {
+.custom-table :deep(.v-data-table__tbody tr) {
   transition: all 0.2s ease;
   background: transparent !important;
 }
 
-.custom-table tbody tr.table-row-hover:hover {
+.custom-table :deep(.v-data-table__tbody tr:hover) {
   background: rgba(118, 64, 193, 0.08) !important;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(118, 64, 193, 0.15);
 }
 
-.custom-table tbody td {
-  color: #f0f0f0;
-  padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  vertical-align: middle;
+.custom-table :deep(.v-data-table__td) {
+  color: #f0f0f0 !important;
+  padding: 16px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  vertical-align: middle !important;
 }
 
 /* 名称单元格样式 */
