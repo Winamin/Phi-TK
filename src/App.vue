@@ -317,6 +317,7 @@ const showDropdown = ref(false);
   }
 }
 
+/* 全局隐藏滚动条 */
 ::-webkit-scrollbar {
   display: none;
   width: 0 !important;

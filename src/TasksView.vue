@@ -285,159 +285,125 @@ document.addEventListener('click', closeContextMenu);
 </script>
 
 <template>
-  <div class="pa-8 w-100 h-100 d-flex flex-column" style="max-width: 1280px; gap: 1.5rem">
-    <h1 v-if="!tasks || !tasks.length" class="text-center font-italic text-disabled" v-t="'empty'"></h1>
+  <div class="pa-6 w-100 h-100 d-flex flex-column">
+    <h1 v-if="!tasks || !tasks.length" class="text-center text-disabled empty-state" v-t="'empty'"></h1>
 
-    <v-slide-y-transition>
-      <v-form ref="form" class="animated-form">
-        <v-row class="text-center">
-          <v-col cols="12">
-            <v-btn
-              @click="showFolder()"
-              v-t="'show-in-folder'"
-              class="hover-scale"
-              color="primary"
-              prepend-icon="mdi-folder-open-outline"
-            ></v-btn>
-          </v-col>
-        </v-row>
-      </v-form>
-    </v-slide-y-transition>
+    <div class="task-actions mb-4">
+      <v-btn
+        @click="showFolder()"
+        v-t="'show-in-folder'"
+        variant="elevated"
+        color="primary"
+        prepend-icon="mdi-folder-open-outline"
+      ></v-btn>
+    </div>
 
-    <div class="task-grid">
+    <div class="task-list">
       <div
-        class="task-card-container"
+        class="task-item"
         v-for="task in tasks"
         :key="task.id"
-        @mouseenter="handleMouseEnter(task.id.toString())"
-        @mousemove="handleMouseMove($event, task.id.toString())"
-        @mouseleave="handleMouseLeave(task.id.toString())"
+        @contextmenu="showContextMenu($event, task)"
       >
-        <v-card
-          class="task-card"
-          :id="'card-' + task.id.toString()"
-          :style="{
-            transform: cardTransforms[task.id.toString()]?.transform,
-            transition: cardTransforms[task.id.toString()]?.transition,
-          }"
-          @contextmenu="showContextMenu($event, task)"
-        >
-          <div class="d-flex flex-row align-stretch">
-            <!-- 封面 -->
-            <div class="task-cover-section">
-              <div
-                class="task-cover"
-                :style="{ 'background-image': 'url(' + convertFileSrc(task.cover) + ')' }"
-              ></div>
-            </div>
+        <div class="task-cover">
+          <div
+            class="cover-image"
+            :style="{ 'background-image': 'url(' + convertFileSrc(task.cover) + ')' }"
+          ></div>
+        </div>
 
-            <!-- 内容 -->
-            <div class="task-content">
-              <div class="d-flex justify-space-between align-start pa-4 pb-2">
-                <div>
-                  <v-card-title class="task-name pa-0">{{ task.name }}</v-card-title>
-                  <v-card-subtitle class="task-id pa-0">{{ task.path }}</v-card-subtitle>
-                </div>
-                <v-chip
-                  class="status-badge"
-                  :color="statusColor(task.status.type)"
-                  label
-                  size="small"
-                >
-                  {{ task.status.type.toUpperCase() }}
-                </v-chip>
-              </div>
-
-              <!-- 状态区域 -->
-              <div class="status-section">
-                <div class="d-flex align-center">
-                  <!-- 动态进度指示器 -->
-                  <template v-if="['loading', 'mixing', 'pending'].includes(task.status.type)">
-                    <div class="progress-indicator mr-4">
-                      <v-progress-circular
-                        indeterminate
-                        :color="statusColor(task.status.type)"
-                        size="40"
-                        width="3"
-                      ></v-progress-circular>
-                    </div>
-                  </template>
-
-                  <template v-else-if="task.status.type === 'rendering'">
-                    <div class="progress-indicator mr-4">
-                      <v-progress-circular
-                        :model-value="task.status.progress * 100"
-                        :color="statusColor(task.status.type)"
-                        size="40"
-                        width="3"
-                      >{{ Math.round(task.status.progress * 100) }}%</v-progress-circular>
-                    </div>
-                  </template>
-
-                  <div class="flex-grow-1">
-                    <p class="status-text mb-1">{{ describeStatus(task.status) }}</p>
-
-                    <template v-if="task.status.type === 'rendering'">
-                      <v-progress-linear
-                        :model-value="task.status.progress * 100"
-                        :color="statusColor(task.status.type)"
-                        height="6"
-                        rounded
-                      ></v-progress-linear>
-                    </template>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 操作按钮 -->
-              <div class="d-flex justify-end pa-4 pt-2">
-                <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
-                  <v-btn
-                    color="error"
-                    variant="flat"
-                    prepend-icon="mdi-cancel"
-                    @click="invoke('cancel_task', { id: task.id })"
-                    v-t="'cancel'"
-                    class="action-btn"
-                  ></v-btn>
-                </template>
-
-                <template v-else-if="task.status.type === 'failed'">
-                  <v-btn
-                    color="error"
-                    variant="flat"
-                    prepend-icon="mdi-alert-circle-outline"
-                    @click="
-                      errorDialogMessage = task.status.error;
-                      errorDialog = true;
-                    "
-                    v-t="'details'"
-                    class="action-btn"
-                  ></v-btn>
-                </template>
-
-                <template v-else-if="task.status.type === 'done'">
-                  <v-btn
-                    color="secondary"
-                    variant="flat"
-                    prepend-icon="mdi-text-box-outline"
-                    @click="showOutput(task)"
-                    v-t="'show-output'"
-                    class="action-btn mr-2"
-                  ></v-btn>
-                  <v-btn
-                    color="accent"
-                    variant="flat"
-                    prepend-icon="mdi-folder-open-outline"
-                    @click="showInFolder(task.output)"
-                    v-t="'show-in-folder'"
-                    class="action-btn"
-                  ></v-btn>
-                </template>
-              </div>
-            </div>
+        <div class="task-info">
+          <div class="task-header">
+            <h3 class="task-name" :title="task.name">{{ task.name }}</h3>
+            <v-chip
+              :color="statusColor(task.status.type)"
+              size="small"
+              variant="elevated"
+              class="flex-shrink-0"
+            >
+              {{ task.status.type.toUpperCase() }}
+            </v-chip>
           </div>
-        </v-card>
+
+          <p class="task-path" :title="task.path">{{ task.path }}</p>
+
+          <div class="task-status">
+            <div class="status-indicator">
+              <template v-if="['loading', 'mixing', 'pending'].includes(task.status.type)">
+                <v-progress-circular
+                  indeterminate
+                  :color="statusColor(task.status.type)"
+                  size="24"
+                  width="2"
+                ></v-progress-circular>
+              </template>
+              <template v-else-if="task.status.type === 'rendering'">
+                <v-progress-circular
+                  :model-value="task.status.progress * 100"
+                  :color="statusColor(task.status.type)"
+                  size="24"
+                  width="2"
+                ></v-progress-circular>
+              </template>
+            </div>
+            <p class="status-text">{{ describeStatus(task.status) }}</p>
+          </div>
+
+          <template v-if="task.status.type === 'rendering'">
+            <v-progress-linear
+              :model-value="task.status.progress * 100"
+              :color="statusColor(task.status.type)"
+              height="4"
+              rounded
+            ></v-progress-linear>
+          </template>
+
+          <div class="task-actions">
+            <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
+              <v-btn
+                size="x-small"
+                color="error"
+                variant="text"
+                prepend-icon="mdi-cancel"
+                @click="invoke('cancel_task', { id: task.id })"
+                v-t="'cancel'"
+              ></v-btn>
+            </template>
+
+            <template v-else-if="task.status.type === 'failed'">
+              <v-btn
+                size="x-small"
+                color="error"
+                variant="text"
+                prepend-icon="mdi-alert-circle-outline"
+                @click="
+                  errorDialogMessage = task.status.error;
+                  errorDialog = true;
+                "
+                v-t="'details'"
+              ></v-btn>
+            </template>
+
+            <template v-else-if="task.status.type === 'done'">
+              <v-btn
+                size="x-small"
+                color="primary"
+                variant="text"
+                prepend-icon="mdi-text-box-outline"
+                @click="showOutput(task)"
+                v-t="'show-output'"
+              ></v-btn>
+              <v-btn
+                size="x-small"
+                color="primary"
+                variant="text"
+                prepend-icon="mdi-folder-open-outline"
+                @click="showInFolder(task.output)"
+                v-t="'show-in-folder'"
+              ></v-btn>
+            </template>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -549,181 +515,156 @@ document.addEventListener('click', closeContextMenu);
 </template>
 
 <style scoped>
-.task-grid {
+.task-list {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  max-width: 800px;
+  gap: 12px;
+  max-width: 900px;
   margin: 0 auto;
+  width: 100%;
+  overflow-y: auto;
+  padding-right: 8px;
 }
 
-.task-card-container {
-  perspective: 916px;
-  transform-style: preserve-3d;
+/* 美化滚动条 */
+/* 强制显示滚动条，覆盖全局隐藏 */
+.task-list::-webkit-scrollbar {
+  width: 8px;
+  display: block !important;
 }
 
-.task-card {
-  will-change: transform;
-  backface-visibility: hidden;
-  border-radius: 12px;
-  overflow: hidden;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(8px);
+.task-list::-webkit-scrollbar-track {
+  background: rgba(30, 30, 30, 0.1);
+  border-radius: 4px;
+  margin: 8px 0;
+}
+
+.task-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, rgba(118, 64, 193, 0.6), rgba(156, 105, 217, 0.6));
+  border-radius: 4px;
+  transition: all 0.3s ease;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.task-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+.task-list::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, rgba(118, 64, 193, 0.8), rgba(156, 105, 217, 0.8));
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-.task-cover-section {
-  width: 35%;
-  min-height: 160px;
-  background: rgba(0, 0, 0, 0.1);
+.task-list::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(135deg, rgba(118, 64, 193, 0.9), rgba(156, 105, 217, 0.9));
+}
+
+.task-item {
+  display: flex;
+  background: rgba(30, 30, 30, 0.8);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  min-height: 90px;
+}
+
+.task-item:hover {
+  background: rgba(40, 40, 50, 0.9);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .task-cover {
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.cover-image {
   width: 100%;
   height: 100%;
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
+  min-height: 90px;
 }
 
-.task-content {
-  width: 65%;
-  padding: 1rem;
+.task-info {
+  flex: 1;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
+  gap: 6px;
+  min-width: 0; /* 确保flex子元素可以收缩 */
+}
+
+.task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 .task-name {
-  font-size: 1.2rem;
-  font-weight: 600;
-}
-
-.task-id {
-  font-size: 0.9rem;
-  opacity: 0.7;
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin: 0;
+  color: #e0e0e0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 300px;
+  flex: 1;
+  min-width: 0;
 }
 
-.status-section {
-  margin-top: auto;
-  padding: 0.5rem 0;
+.task-path {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
 }
 
-.progress-indicator {
-  width: 40px;
-  height: 40px;
+.task-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-indicator {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.status-badge {
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  font-size: 0.7rem;
+  flex-shrink: 0;
 }
 
 .status-text {
-  font-weight: 500;
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
-.progress-ring {
-  position: relative;
-  width: 80px;
-  height: 80px;
+.task-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
-.progress-ring__circle {
-  transform: rotate(-90deg);
-}
-
-.progress-ring__circle-bg {
-  stroke: rgba(255, 255, 255, 0.1);
-}
-
-.progress-ring__circle-fg {
-  stroke: currentColor;
-  transition: stroke-dashoffset 0.5s ease;
-}
-
-.progress-ring__text {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 1rem;
-  font-weight: bold;
-  color: white;
-}
-
-.progress-ring__indicator {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.glow-bar {
-  box-shadow: 0 0 8px currentColor;
-}
-
-.glow-primary {
-  filter: drop-shadow(0 0 6px #2196F3);
-}
-
-.glow-info {
-  filter: drop-shadow(0 0 6px #21CBF3);
-}
-
-.glow-success {
-  filter: drop-shadow(0 0 6px #4CAF50);
-}
-
-.glow-warning {
-  filter: drop-shadow(0 0 6px #FFC107);
-}
-
-.glow-error {
-  filter: drop-shadow(0 0 6px #F44336);
-}
-
-.hover-scale {
-  transition:
-    transform 0.3s ease,
-    box-shadow 0.3s ease;
-}
-
-.hover-scale:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.action-btn {
-  font-weight: 600;
-  padding: 8px 16px;
-  transition: all 0.3s ease;
-}
-
-.v-btn:active {
-  transform: scale(0.95);
+.empty-state {
+  margin: 60px 0;
+  font-size: 1.2rem;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .error-dialog {
   background: #1E1E1E;
-  border-radius: 16px !important;
-  border: 2px solid #FF5252;
+  border-radius: 12px !important;
+  border: 1px solid #FF5252;
   box-shadow: 0 0 20px rgba(255, 82, 82, 0.3);
 }
 
@@ -739,14 +680,14 @@ document.addEventListener('click', closeContextMenu);
 }
 
 .glass-background {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(30, 30, 30, 0.9);
   backdrop-filter: blur(12px);
-  border-radius: 16px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .text-gradient {
-  background: linear-gradient(45deg, #2196f3, #f32196);
+  background: linear-gradient(45deg, #3f51b5, #5c6bc0);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -756,7 +697,7 @@ pre {
   background: rgba(0, 0, 0, 0.3) !important;
   padding: 12px !important;
   border-radius: 8px;
-  font-family: 'Fira Code', monospace;
+  font-family: monospace;
   font-size: 0.9rem;
 }
 

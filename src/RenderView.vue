@@ -364,7 +364,7 @@ const archiveStyle = computed(() => ({
       0,
       ${Math.sqrt(moveOffset.value.x ** 2 + moveOffset.value.y ** 2) / 4}deg
     )`,
-  filter: `drop-shadow(${moveOffset.value.x / 4}px ${moveOffset.value.y / 4}px 6px rgba(99, 102, 241, 0.2))`,
+  filter: `drop-shadow(${moveOffset.value.x / 4}px ${moveOffset.value.y / 4}px 6px rgba(63, 81, 181, 0.2))`,
 }));
 
 const folderStyle = computed(() => ({
@@ -377,7 +377,7 @@ const folderStyle = computed(() => ({
       0,
       ${Math.sqrt(moveOffset.value.x ** 2 + moveOffset.value.y ** 2) / 6}deg
     )`,
-  filter: `drop-shadow(${-moveOffset.value.x / 4}px ${-moveOffset.value.y / 4}px 6px rgba(99, 102, 241, 0.2))`,
+  filter: `drop-shadow(${-moveOffset.value.x / 4}px ${-moveOffset.value.y / 4}px 6px rgba(63, 81, 181, 0.2))`,
 }));
 </script>
 
@@ -736,12 +736,13 @@ const folderStyle = computed(() => ({
 
 .hmcl-sidebar {
   width: 80px;
-  background-color: #252526;
-  color: #cccccc;
+  background: rgba(30, 30, 46, 0.9);
+  color: #e0e0e0;
   display: flex;
   flex-direction: column;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
-  border-right: 1px solid #3e3e42;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+  border-right: 1px solid rgba(63, 81, 181, 0.3);
+  backdrop-filter: blur(8px);
 }
 
 /* 步骤导航 */
@@ -765,7 +766,7 @@ const folderStyle = computed(() => ({
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: rgba(60, 52, 100, 0.3);
+  background: rgba(63, 81, 181, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.8);
   overflow: hidden;
@@ -791,10 +792,10 @@ const folderStyle = computed(() => ({
   transform: translateY(-2px) scale(1.05);
   background: linear-gradient(
     135deg,
-    rgba(96, 67, 140, 0.4) 0%,
-    rgba(118, 64, 193, 0.4) 100%
+    rgba(63, 81, 181, 0.5) 0%,
+    rgba(92, 107, 192, 0.5) 100%
   ) !important;
-  box-shadow: 0 4px 20px rgba(118, 64, 193, 0.4);
+  box-shadow: 0 4px 12px rgba(63, 81, 181, 0.4);
   color: #fff;
 }
 
@@ -805,11 +806,11 @@ const folderStyle = computed(() => ({
 .step-nav-item.active {
   background: linear-gradient(
     135deg,
-    rgba(118, 64, 193, 0.6) 0%,
-    rgba(156, 105, 217, 0.6) 100%
+    rgba(63, 81, 181, 0.7) 0%,
+    rgba(92, 107, 192, 0.7) 100%
   ) !important;
   color: #fff;
-  box-shadow: 0 0 20px rgba(118, 64, 193, 0.6);
+  box-shadow: 0 0 15px rgba(63, 81, 181, 0.6);
 }
 
 .step-nav-item.active::after {
@@ -820,8 +821,9 @@ const folderStyle = computed(() => ({
   transform: translateY(-50%);
   width: 4px;
   height: 24px;
-  background-color: #007acc;
+  background: linear-gradient(135deg, #3f51b5, #5c6bc0);
   border-radius: 2px;
+  box-shadow: 0 0 8px rgba(63, 81, 181, 0.5);
 }
 
 .step-nav-item.completed .step-icon {
@@ -854,16 +856,17 @@ const folderStyle = computed(() => ({
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background-color: #252526;
-  border-bottom: 1px solid #3e3e42;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: rgba(30, 30, 46, 0.9);
+  border-bottom: 1px solid rgba(63, 81, 181, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(8px);
 }
 
 .header-title h3 {
   margin: 0;
   font-size: 20px;
   font-weight: 500;
-  color: #cccccc;
+  color: #e0e0e0;
 }
 
 .header-actions {
@@ -873,26 +876,33 @@ const folderStyle = computed(() => ({
 
 .header-btn {
   margin-left: 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   text-transform: none;
   font-weight: 400;
-  background-color: #3c3c3c !important;
-  color: #cccccc !important;
-  border: 1px solid #3e3e42 !important;
+  background: rgba(63, 81, 181, 0.2) !important;
+  color: #e0e0e0 !important;
+  border: 1px solid rgba(63, 81, 181, 0.3) !important;
+  transition: all 0.3s ease;
 }
 
 .header-btn:hover {
-  background-color: #464647 !important;
+  background: rgba(63, 81, 181, 0.4) !important;
+  border-color: rgba(63, 81, 181, 0.6) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(63, 81, 181, 0.3);
 }
 
 .primary-btn {
-  background-color: #007acc !important;
+  background: linear-gradient(135deg, #3f51b5, #5c6bc0) !important;
   color: white !important;
-  border-color: #007acc !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(63, 81, 181, 0.3);
 }
 
 .primary-btn:hover {
-  background-color: #1e6ba8 !important;
+  background: linear-gradient(135deg, #303f9f, #3949ab) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(63, 81, 181, 0.4);
 }
 
 /* 内容区域 */
@@ -1103,39 +1113,48 @@ const folderStyle = computed(() => ({
 
 .field-slider :deep(.v-slider-track__background) {
   background-color: #3c3c3c !important;
+  opacity: 0.6; /* 可选：调整轨道背景透明度 */
 }
 
 .field-slider :deep(.v-slider-track__fill) {
   background-color: #007acc !important;
 }
 
-.field-slider :deep(.v-slider-thumb) {
-  background-color: #7640c1 !important;
+.field-slider :deep(.v-slider-thumb .v-slider-thumb__surface) {
   border-radius: 50% !important;
-  width: 20px !important;
+  width: 20px !important;    
   height: 20px !important;
+  background-color: #3f51b5 !important; 
+  border: 2px solid white !important;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
   transition: all 0.2s ease !important;
 }
 
-.field-slider :deep(.v-slider-thumb:hover) {
-  transform: scale(1.2) !important;
-  box-shadow: 0 3px 6px rgba(118, 64, 193, 0.5) !important;
+.field-slider :deep(.v-slider-thumb--focused .v-slider-thumb__surface),
+.field-slider :deep(.v-slider-thumb:hover .v-slider-thumb__surface),
+.field-slider :deep(.v-slider-thumb--active .v-slider-thumb__surface) {
+  border-radius: 50% !important;
+  background-color: #5c6bc0 !important; 
+  transform: scale(1.2) !important;   
+  box-shadow: 0 3px 6px rgba(63, 81, 181, 0.5) !important;
 }
 
 .field-switch :deep(.v-switch__track) {
   background-color: #3c3c3c !important;
+  border-radius: 10px !important;
 }
 
 .field-switch :deep(.v-switch__thumb) {
   background-color: #666 !important;
+  border-radius: 50% !important; 
+  transition: all 0.2s ease !important;
 }
 
-.field-switch--selected :deep(.v-switch__track) {
+.field-switch :deep(.v-switch--selected .v-switch__track) {
   background-color: #007acc !important;
 }
 
-.field-switch--selected :deep(.v-switch__thumb) {
+.field-switch :deep(.v-switch--selected .v-switch__thumb) {
   background-color: #fff !important;
 }
 
