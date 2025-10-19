@@ -228,9 +228,28 @@ mod hw_detect {
     use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
 
     pub fn detect_nvidia() -> bool {
-        RegKey::predef(HKEY_LOCAL_MACHINE)
-            .open_subkey(r"SOFTWARE\NVIDIA Corporation\Global\NvControlPanel")
-            .is_ok()
+        use std::process::Command;
+        use winreg::enums::HKEY_LOCAL_MACHINE;
+        use winreg::RegKey;
+        use std::path::Path;
+
+        if let Ok(key) = RegKey::predef(HKEY_LOCAL_MACHINE)
+            .open_subkey(r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}")
+        {
+            for subkey_name in key.enum_keys().filter_map(|x| x.ok()) {
+                if let Ok(subkey) = key.open_subkey(&subkey_name) {
+                    if let Ok(provider) = subkey.get_value::<String, _>("ProviderName") {
+                        if provider.to_lowercase().contains("nvidia") {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        if Path::new(r"C:\Windows\System32\nvcuda.dll").exists() {
+            return true;
+        }
+        Command::new("nvidia-smi").output().is_ok()
     }
 
     pub fn detect_intel_qsv() -> bool {
