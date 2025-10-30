@@ -131,7 +131,7 @@ onMounted(() => {
       <!-- 底部信息 -->
       <div class="about-footer">
         <p class="footer-text">{{ t('footer.made') || 'Made with ❤️ by the Phi TK team' }}</p>
-        <p class="footer-copyright">{{ t('footer.copyright') || '© 2023 Phi TK. All rights reserved.' }}</p>
+        <p class="footer-copyright">{{ t('footer.copyright') || '© 2025 Phi TK. All rights reserved.' }}</p>
       </div>
     </div>
   </div>
