@@ -401,6 +401,16 @@ function onVideoUpdate(newVal: boolean | string) {
   }
 }
 
+watch(video, (newVal) => {
+  if (audioFormat.value === 'flac' && newVal) {
+    toast(t('video-format-flac-error'), 'error');
+    video.value = false;
+    videoFormat.value = 'mp4';
+    return;
+  }
+  videoFormat.value = newVal ? 'mov' : 'mp4';
+});
+
 // 再加一个 watcher，保证当 videoFormat 被其它代码改动时同步布尔 video
 watch(videoFormat, (val) => {
   if (audioFormat.value === 'flac' && val === 'mov') {
@@ -515,6 +525,7 @@ function applyConfig(config: RenderConfig) {
   volumeSfx.value = config.volumeSfx;
   combo.value = config.combo;
   watermark.value = config.watermark;
+  video.value = config.video;
 
   ffmpegThread.value = config.ffmpegThread ?? false;
 

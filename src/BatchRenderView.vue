@@ -169,8 +169,6 @@ const isAddingFolder = ref(false);
 // 默认配置（从localStorage加载或使用默认值）
 const defaultConfig = ref<RenderConfig>(loadDefaultConfig());
 
-
-
 // 预览单个谱面
 async function previewChart(index: number) {
   const chart = charts.value[index];
