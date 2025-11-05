@@ -28,7 +28,6 @@ use std::{
 };
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
-use rayon::prelude::*;
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -504,7 +503,7 @@ pub async fn main() -> Result<()> {
         info!("music Time:{:?}", start_time.elapsed());
     }
 
-    fn place(pos: f64, clip: &AudioClip, volume: f32, output: &mut [f32], sample_rate_f64: f64) -> usize {
+    let mut place = |pos: f64, clip: &AudioClip, volume: f32| {
         let position = (pos * sample_rate_f64).round() as usize * 2;
         if position >= output.len() {
             return 0;
@@ -524,63 +523,47 @@ pub async fn main() -> Result<()> {
             }
         }
         valid_frames
-    }
+    };
 
     if volume_sfx != 0.0 {
         let start_time = Instant::now();
+
         let offset_f64 = offset as f64;
         let o_offset = O + offset_f64;
-        let sample_rate_f64 = sample_rate as f64;
 
-        // 按音符类型分组处理
-        let (clicks, drags, flicks): (Vec<_>, Vec<_>, Vec<_>) = chart.lines
-            .par_iter()
-            .flat_map(|line| &line.notes)
-            .filter(|note| !note.fake)
-            .map(|note| {
-                let time = o_offset + note.time as f64;
-                (time, note.kind.clone())
-            })
-            .fold(
-                || (Vec::new(), Vec::new(), Vec::new()),
-                |(mut clicks, mut drags, mut flicks), (time, kind)| {
-                    match kind {
-                        NoteKind::Click | NoteKind::Hold { .. } => clicks.push(time),
-                        NoteKind::Drag => drags.push(time),
-                        NoteKind::Flick => flicks.push(time),
+        let sfx_click_ptr = &sfx_click as *const _;
+        let sfx_drag_ptr = &sfx_drag as *const _;
+        let sfx_flick_ptr = &sfx_flick as *const _;
+
+        unsafe {
+            let lines_ptr = chart.lines.as_ptr();
+            let lines_len = chart.lines.len();
+
+            for i in 0..lines_len {
+                let line = &*lines_ptr.add(i);
+                let notes_ptr = line.notes.as_ptr();
+                let notes_len = line.notes.len();
+                for j in 0..notes_len {
+                    let note = &*notes_ptr.add(j);
+                    if !note.fake {
+                        let sfx = match note.kind {
+                            NoteKind::Click | NoteKind::Hold { .. } => &*sfx_click_ptr,
+                            NoteKind::Drag => &*sfx_drag_ptr,
+                            NoteKind::Flick => &*sfx_flick_ptr,
+                        };
+                        let time = o_offset + note.time as f64;
+                        place(time, sfx, volume_sfx);
                     }
-                    (clicks, drags, flicks)
-                },
-            )
-            .reduce(
-                || (Vec::new(), Vec::new(), Vec::new()),
-                |(mut c1, mut d1, mut f1), (c2, d2, f2)| {
-                    c1.extend(c2);
-                    d1.extend(d2);
-                    f1.extend(f2);
-                    (c1, d1, f1)
-                },
-            );
-
-        // 顺序处理各组（内部可以并行化place函数）
-        clicks.iter().for_each(|&time| {
-            place(time, &sfx_click, volume_sfx, &mut output, sample_rate_f64);
-        });
-
-        drags.iter().for_each(|&time| {
-            place(time, &sfx_drag, volume_sfx, &mut output, sample_rate_f64);
-        });
-
-        flicks.iter().for_each(|&time| {
-            place(time, &sfx_flick, volume_sfx, &mut output, sample_rate_f64);
-        });
+                }
+            }
+        }
 
         info!("sfx Time:{:?}", start_time.elapsed());
     }
 
     //ending
     let mut pos = O + length + A;
-    while place(pos, &ending, volume_music, &mut output, sample_rate_f64) != 0 && params.config.ending_length > 0.1 {
+    while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
     }
     let audio_bit = params.config.audio_bit;
@@ -1194,7 +1177,8 @@ pub async fn main() -> Result<()> {
     //const N: usize = 1;
     //let mut pbos: [GLuint; N] = [0; N];
 
-    const MAX_PBO_COUNT: usize = 10;
+    //TODO: N>1 can Audio and video are out of sync (by 2~3 frames)
+    const MAX_PBO_COUNT: usize = 1;
     let mut n = MAX_PBO_COUNT;
     while n > 0 && fps as usize % n != 0 {
         n -= 1;
