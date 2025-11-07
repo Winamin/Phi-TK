@@ -37,6 +37,7 @@ pub struct RenderConfig {
     pub ffmpeg_preset: String,
     pub ending_length: f64,
     pub disable_loading: bool,
+    pub audio_delay_frames: i32,
     pub chart_debug: bool,
     pub flid_x: bool,
     pub chart_ratio: f32,
@@ -97,6 +98,8 @@ impl Default for RenderConfig {
             ending_length: -2.0,
             disable_loading: true,
             chart_debug: false,
+            //this is....
+            audio_delay_frames: 4,
             flid_x: false,
             chart_ratio: 1.0,
             buffer_size: 256.0,
@@ -480,24 +483,48 @@ pub async fn main() -> Result<()> {
     assert_eq!(sample_rate, sfx_drag.sample_rate());
     assert_eq!(sample_rate, sfx_flick.sample_rate());
 
-    let mut output = vec![0.0_f32; (video_length * sample_rate_f64).ceil() as usize * 2];
+    let fps_f64 = params.config.fps as f64;
+    let frame_duration = 1.0 / fps_f64;
+    let audio_delay = params.config.audio_delay_frames as f64 * frame_duration;
+
+    info!("=== Audio/Video Sync Configuration ===");
+    info!("  Audio delay: {} frames", params.config.audio_delay_frames);
+    info!("  Audio delay: {:.6} seconds", audio_delay);
+    info!("  Frame duration: {:.6}s @ {}fps", frame_duration, params.config.fps);
+    info!("  Sample delay: {} samples @ {}Hz", (audio_delay * sample_rate_f64).round() as i64, sample_rate);
+    info!("======================================");
+
+    let audio_buffer_length = video_length + audio_delay.abs();
+    let mut output = vec![0.0_f32; (audio_buffer_length * sample_rate_f64).ceil() as usize * 2];
+
     if volume_music != 0.0 {
         let start_time = Instant::now();
-        let pos = O - chart.offset.min(0.) as f64;
+        let original_pos = O - chart.offset.min(0.) as f64;
+        let pos = original_pos + audio_delay;
+
+        info!("Music mixing: original_pos={:.6}s, delayed_pos={:.6}s", original_pos, pos);
+
         let count = (music.length() as f64 * sample_rate_f64) as usize;
         let start_index = (pos * sample_rate_f64).round() as usize * 2;
         let ratio = 1.0 / sample_rate_f64;
 
-        let output_ptr = output.as_mut_ptr();
-        for i in 0..count {
-            let position = i as f64 * ratio;
-            let frame = music.sample(position as f32).unwrap_or_default();
-            let left = frame.0 * volume_music;
-            let right = frame.1 * volume_music;
+        if start_index >= output.len() {
+            warn!("Music start position {} exceeds output buffer length {}", start_index, output.len());
+        } else {
+            let output_ptr = output.as_mut_ptr();
+            for i in 0..count {
+                let position = i as f64 * ratio;
+                let frame = music.sample(position as f32).unwrap_or_default();
+                let left = frame.0 * volume_music;
+                let right = frame.1 * volume_music;
 
-            unsafe {
-                *output_ptr.add(start_index + i * 2) += left;
-                *output_ptr.add(start_index + i * 2 + 1) += right;
+                unsafe {
+                    let idx = start_index + i * 2;
+                    if idx + 1 < output.len() {
+                        *output_ptr.add(idx) += left;
+                        *output_ptr.add(idx + 1) += right;
+                    }
+                }
             }
         }
         info!("music Time:{:?}", start_time.elapsed());
@@ -529,7 +556,9 @@ pub async fn main() -> Result<()> {
         let start_time = Instant::now();
 
         let offset_f64 = offset as f64;
-        let o_offset = O + offset_f64;
+        let o_offset = O + offset_f64 + audio_delay;  // 应用音频延迟( audio_delay应用为3 frames )
+
+        info!("SFX mixing: offset={:.6}s (includes {:.6}s delay)", o_offset, audio_delay);
 
         let sfx_click_ptr = &sfx_click as *const _;
         let sfx_drag_ptr = &sfx_drag as *const _;
@@ -561,11 +590,13 @@ pub async fn main() -> Result<()> {
         info!("sfx Time:{:?}", start_time.elapsed());
     }
 
-    //ending
-    let mut pos = O + length + A;
+    let mut pos = O + length + A + audio_delay;
+    info!("Ending music start: {:.6}s", pos);
+
     while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
     }
+
     let audio_bit = params.config.audio_bit;
     let audio_format = params.config.audio_format.to_lowercase();
 
@@ -1177,8 +1208,7 @@ pub async fn main() -> Result<()> {
     //const N: usize = 1;
     //let mut pbos: [GLuint; N] = [0; N];
 
-    //TODO: N>1 can Audio and video are out of sync (by 2~3 frames)
-    const MAX_PBO_COUNT: usize = 1;
+    const MAX_PBO_COUNT: usize = 20;
     let mut n = MAX_PBO_COUNT;
     while n > 0 && fps as usize % n != 0 {
         n -= 1;
@@ -1204,45 +1234,48 @@ pub async fn main() -> Result<()> {
 
     send(IPCEvent::StartRender(frames));
 
-    let fps_f64 = fps as f64;
+    let fps_f64 = params.config.fps as f64;
+    let frame_duration = 1.0 / fps_f64;
+    let total_frames = frames;
 
-    let frames10 = frames / 10;
+    let frames10 = total_frames / 10;
     let mut step_time = Instant::now();
 
-    //TODO: The first frame + 1 function test_encoder
-    for frame in 0..frames {
-        if frame % frames10 == 0 || frame == frames - 1 {
-            let progress = (frame as f64 / frames as f64).min(1.0);
+    for frame in 0..total_frames {
+        if frame % frames10 == 0 || frame == total_frames - 1 {
+            let progress = (frame as f64 / total_frames as f64).min(1.0);
             let percent = (progress * 100.).ceil() as i8;
             let bar_width = 20;
             let filled = (progress * bar_width as f64).round() as usize;
             let empty = bar_width - filled;
 
-            let time_text = if frame == frames - 1 {
+            let time_text = if frame == total_frames - 1 {
                 "Final frame".to_string()
             } else {
                 format!("{:.2}s", step_time.elapsed().as_secs_f32())
             };
 
             info!(
-            "Rendering: [{}{}] {:>3}% | Time: {} | Frames: {}/{}",
-            "█".repeat(filled),
-            " ".repeat(empty),
-            percent,
-            time_text,
-            frame + 1,
-            frames
-        );
+                "Rendering: [{}{}] {:>3}% | Time: {} | Frames: {}/{}",
+                "█".repeat(filled),
+                " ".repeat(empty),
+                percent,
+                time_text,
+                frame + 1,
+                total_frames
+            );
             step_time = Instant::now();
         }
-        let pbo_index = (frame as usize) % n;
 
-        *my_time.borrow_mut() = (frame as f64 / fps_f64).max(0.);
+        // frame * frame_duration 而不是 frame / fps
+        let current_frame_time = frame as f64 * frame_duration;
+        *my_time.borrow_mut() = current_frame_time;
+
         gl.quad_gl.render_pass(Some(mst.output().render_pass));
         main.update()?;
         main.render(&mut painter)?;
 
-        if *my_time.borrow() <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading {
+        if current_frame_time <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading {
             draw_rectangle(0., 0., 0., 0., Color::default());
         }
 
@@ -1254,8 +1287,11 @@ pub async fn main() -> Result<()> {
 
         unsafe {
             use miniquad::gl::*;
+
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(&mst.output()));
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[pbo_index]);  // 使用动态索引
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[0]);
+            glFinish();
+
             glReadPixels(
                 0, 0,
                 vw as _, vh as _,
@@ -1270,27 +1306,23 @@ pub async fn main() -> Result<()> {
                     byte_size
                 ))?;
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            } else {
+                bail!("Failed to map PBO at frame {}", frame);
             }
             glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
         }
 
         send(IPCEvent::Frame);
     }
-    /*
-    wft bro??
-    input.flush()?;
-    drop(input);
-
-     */
-
     drop(input);
     proc.wait()?;
+
     info!("Render Time: {:.2?}", render_start_time.elapsed());
     info!(
         "Average FPS: {:.2}",
-        frames as f64 / render_start_time.elapsed().as_secs_f64()
+        total_frames as f64 / render_start_time.elapsed().as_secs_f64()
     );
-    proc.wait()?;
+
     unsafe {
         use miniquad::gl::*;
         glDeleteBuffers(n as _, pbos.as_ptr());
