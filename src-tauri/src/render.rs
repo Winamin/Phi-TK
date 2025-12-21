@@ -13,6 +13,7 @@ use prpr::{
     time::TimeManager,
     ui::{FontArc, TextPainter},
     Main,
+    ext::SafeTexture,
 };
 use sasa::AudioClip;
 use serde::{Deserialize, Serialize};
@@ -346,13 +347,14 @@ pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
     Ok(BasicPlayer {
         avatar: if let Some(path) = &config.player_avatar {
             Some(
-                Texture2D::from_file_with_format(
-                    &tokio::fs::read(path)
-                        .await
-                        .with_context(|| tl!("load-avatar-failed"))?,
-                    None,
-                )
-                    .into(),
+                SafeTexture::from(
+                    Texture2D::from_file_with_format(
+                        &tokio::fs::read(path)
+                            .await
+                            .with_context(|| tl!("load-avatar-failed"))?,
+                        None,
+                    )
+                ),
             )
         } else {
             None
