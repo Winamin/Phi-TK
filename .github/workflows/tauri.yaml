@@ -38,7 +38,7 @@ jobs:
       - name: Sync node version and setup cache
         uses: pnpm/action-setup@v2
         with:
-          version: 8
+          version: 10.18.3
 
       - name: Install frontend dependencies
         # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
