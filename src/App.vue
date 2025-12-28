@@ -76,14 +76,14 @@ const showDropdown = ref(false);
 <template>
   <v-app id="phi-tk" class="dark-theme">
     <v-sonner position="top-center" />
-    
+
     <!-- 顶部导航栏 -->
     <v-app-bar :elevation="0" class="app-bar-glass blur-background">
       <!-- 左侧标题 -->
       <v-app-bar-title class="text-gradient glow-title">Phi TK</v-app-bar-title>
-      
+
       <v-spacer></v-spacer>
-      
+
       <!-- 右侧导航图标 -->
       <div class="nav-icons-container">
         <v-btn
@@ -95,27 +95,14 @@ const showDropdown = ref(false);
           size="large"
           class="nav-icon-btn"
           @click="navigateTo(item.key)"
-          v-tooltip:bottom="t(item.key)"
-        />
-        
+          v-tooltip:bottom="t(item.key)" />
+
         <!-- 更多选项下拉菜单 -->
-        <v-menu
-          v-model="showDropdown"
-          :close-on-content-click="false"
-          location="bottom end"
-          transition="slide-y-transition"
-        >
+        <v-menu v-model="showDropdown" :close-on-content-click="false" location="bottom end" transition="slide-y-transition">
           <template v-slot:activator="{ props }">
-            <v-btn
-              icon="mdi-chevron-down"
-              variant="text"
-              size="large"
-              class="nav-icon-btn"
-              v-bind="props"
-              v-tooltip:bottom="t('more')"
-            />
+            <v-btn icon="mdi-chevron-down" variant="text" size="large" class="nav-icon-btn" v-bind="props" v-tooltip:bottom="t('more')" />
           </template>
-          
+
           <v-list class="dropdown-menu-glass">
             <v-list-item
               v-for="item in dropdownItems"
@@ -124,8 +111,7 @@ const showDropdown = ref(false);
               :prepend-icon="item.icon"
               :title="t(item.key)"
               @click="navigateTo(item.key)"
-              class="dropdown-item"
-            />
+              class="dropdown-item" />
           </v-list>
         </v-menu>
       </div>
@@ -136,19 +122,11 @@ const showDropdown = ref(false);
       <router-view v-slot="{ Component }">
         <Suspense timeout="0">
           <template #default>
-            <component
-              :is="Component"
-              ref="component"
-              class="route-transition"
-            />
+            <component :is="Component" ref="component" class="route-transition" />
           </template>
           <template #fallback>
             <div class="flex justify-center pa-8">
-              <v-progress-circular
-                indeterminate
-                size="large"
-                class="glow-spinner"
-              />
+              <v-progress-circular indeterminate size="large" class="glow-spinner" />
             </div>
           </template>
         </Suspense>
@@ -172,12 +150,8 @@ const showDropdown = ref(false);
 
 .blur-background {
   backdrop-filter: blur(40px) saturate(200%);
-  background: linear-gradient(
-    135deg,
-    rgba(88, 59, 126, 0.15) 0%,
-    rgba(186, 104, 200, 0.1) 100%
-  ) !important;
-  border: 1px solid rgba(255,255,255,0.1) !important;
+  background: linear-gradient(135deg, rgba(88, 59, 126, 0.15) 0%, rgba(186, 104, 200, 0.1) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 .nav-icons-container {
@@ -187,81 +161,143 @@ const showDropdown = ref(false);
   margin-right: 16px;
 }
 
+/* 修改现有的 .nav-icon-btn 样式 */
 .nav-icon-btn {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 12px;
+  border-radius: 12px; /* 基础圆角 */
   position: relative;
   overflow: hidden;
   background: rgba(50, 42, 90, 0.3);
   color: rgba(255, 255, 255, 0.8);
 }
 
-.nav-icon-btn::before {
-  content: '';
-  position: absolute;
-  left: -100%;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255,255,255,0.15),
-    transparent
-  );
-  transition: 0.5s;
+/* 确保所有导航按钮都有圆角 */
+.nav-icon-btn,
+.nav-icon-btn:hover,
+.nav-icon-btn.v-btn--active {
+  border-radius: 12px !important; /* 强制圆角 */
 }
 
-.nav-icon-btn:hover {
+/* 下拉菜单触发器的特殊样式 */
+.nav-icon-btn[icon='mdi-chevron-down'] {
+  border-radius: 12px !important; /* 确保更多按钮本身有圆角 */
+}
+
+/* 增强更多按钮的hover效果 */
+.nav-icon-btn[icon='mdi-chevron-down']:hover {
+  border-radius: 12px !important; /* 确保hover时保持圆角 */
   transform: translateY(-2px) scale(1.05);
-  background: linear-gradient(
-    135deg,
-    rgba(96, 67, 140, 0.4) 0%,
-    rgba(118, 64, 193, 0.4) 100%
-  ) !important;
+  background: linear-gradient(135deg, rgba(96, 67, 140, 0.4) 0%, rgba(118, 64, 193, 0.4) 100%) !important;
   box-shadow: 0 4px 20px rgba(118, 64, 193, 0.4);
   color: #fff;
 }
 
-.nav-icon-btn:hover::before {
-  left: 100%;
-}
-
-.nav-icon-btn.v-btn--active {
-  background: linear-gradient(
-    135deg,
-    rgba(118, 64, 193, 0.6) 0%,
-    rgba(156, 105, 217, 0.6) 100%
-  ) !important;
+/* 下拉菜单打开时（激活状态） */
+.nav-icon-btn[icon='mdi-chevron-down'].v-btn--active {
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, rgba(118, 64, 193, 0.6) 0%, rgba(156, 105, 217, 0.6) 100%) !important;
   color: #fff;
   box-shadow: 0 0 20px rgba(118, 64, 193, 0.6);
 }
 
-.dropdown-menu-glass {
-  backdrop-filter: blur(40px) saturate(200%);
-  background: rgba(40, 32, 72, 0.9) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  overflow: hidden;
+/* 如果想让更多按钮更突出，可以添加特殊标记 */
+.nav-icon-btn[icon='mdi-chevron-down']::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(118, 64, 193, 0.6);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
+/* hover时显示小圆点 */
+.nav-icon-btn[icon='mdi-chevron-down']:hover::after {
+  opacity: 1;
+}
+
+/* 或者使用边框发光效果 */
+.nav-icon-btn[icon='mdi-chevron-down']:hover {
+  box-shadow:
+    0 4px 20px rgba(118, 64, 193, 0.4),
+    0 0 0 2px rgba(118, 64, 193, 0.2) inset; /* 内边框效果 */
+}
+
+.dropdown-menu-glass {
+  backdrop-filter: blur(40px) saturate(200%);
+  background: rgba(40, 32, 72, 0.95) !important; /* 增加透明度 */
+  border: 1px solid rgba(255, 255, 255, 0.2) !important; /* 增加边框透明度 */
+  border-radius: 16px !important; /* 添加圆角 */
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(118, 64, 193, 0.3); /* 添加发光效果 */
+  overflow: hidden;
+  margin-top: 8px; /* 增加与按钮的间距 */
+}
+
+/* 下拉菜单的动画效果 */
+.v-menu__content {
+  border-radius: 16px !important;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 确保列表项也适应圆角 */
+.dropdown-menu-glass .v-list {
+  border-radius: inherit;
+}
+
+/* 下拉菜单项样式优化 */
 .dropdown-item {
   transition: all 0.2s ease;
   margin: 4px 8px;
-  border-radius: 8px;
+  border-radius: 10px; /* 增加列表项圆角 */
+  min-height: 48px;
 }
 
+/* 第一个和最后一个菜单项的特殊圆角处理 */
+.dropdown-menu-glass .v-list-item:first-child {
+  border-radius: 10px 10px 0 0;
+}
+
+.dropdown-menu-glass .v-list-item:last-child {
+  border-radius: 0 0 10px 10px;
+}
+
+/* 鼠标悬停在菜单项上时 */
 .dropdown-item:hover {
-  background: rgba(118, 64, 193, 0.3) !important;
+  background: linear-gradient(135deg, rgba(118, 64, 193, 0.3) 0%, rgba(156, 105, 217, 0.3) 100%) !important;
   transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(118, 64, 193, 0.2);
 }
 
+/* 激活状态的菜单项 */
 .dropdown-item.v-list-item--active {
-  background: rgba(118, 64, 193, 0.5) !important;
+  background: linear-gradient(135deg, rgba(118, 64, 193, 0.6) 0%, rgba(156, 105, 217, 0.6) 100%) !important;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(118, 64, 193, 0.4);
+}
+
+/* 分割线样式 */
+.dropdown-menu-glass .v-divider {
+  border-color: rgba(255, 255, 255, 0.1);
+  margin: 4px 12px;
+}
+
+/* 如果需要在下拉菜单上添加图标效果 */
+.dropdown-item .v-icon {
+  transition: transform 0.2s ease;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.dropdown-item:hover .v-icon {
+  transform: scale(1.1);
   color: #fff;
 }
-
 .route-transition {
   transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
 }
@@ -277,8 +313,13 @@ const showDropdown = ref(false);
 }
 
 @keyframes glow-pulse {
-  0%, 100% { text-shadow: 0 0 8px rgba(193, 176, 255, 0.3); }
-  50% { text-shadow: 0 0 20px rgba(193, 176, 255, 0.6); }
+  0%,
+  100% {
+    text-shadow: 0 0 8px rgba(193, 176, 255, 0.3);
+  }
+  50% {
+    text-shadow: 0 0 20px rgba(193, 176, 255, 0.6);
+  }
 }
 
 .glow-spinner {
@@ -299,19 +340,23 @@ const showDropdown = ref(false);
 }
 
 @keyframes particleFlow {
-  0% { transform: translate(0, 0); }
-  100% { transform: translate(-50%, -50%); }
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(-50%, -50%);
+  }
 }
 
 @media (max-width: 768px) {
   .nav-icon-btn {
     size: medium;
   }
-  
+
   .text-gradient {
     font-size: 1.2rem;
   }
-  
+
   .blur-background {
     backdrop-filter: blur(20px);
   }
