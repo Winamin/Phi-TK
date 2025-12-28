@@ -3,17 +3,17 @@ prpr::tl_file!("render");
 
 use crate::Path;
 use anyhow::{bail, Context, Result};
-use macroquad::{miniquad::gl::GLuint, prelude::*};
+use macroquad::{miniquad::{gl::GLuint, RenderPass as MQRenderPass}, prelude::*};
 use prpr::{
     config::{ChallengeModeColor, Config, Mods},
     core::{internal_id, MSRenderTarget, NoteKind},
+    ext::SafeTexture,
     fs,
     info::ChartInfo,
     scene::{BasicPlayer, GameMode, GameScene, LoadingScene},
     time::TimeManager,
     ui::{FontArc, TextPainter},
     Main,
-    ext::SafeTexture,
 };
 use sasa::AudioClip;
 use serde::{Deserialize, Serialize};
@@ -99,7 +99,7 @@ impl Default for RenderConfig {
             ending_length: -2.0,
             disable_loading: true,
             chart_debug: false,
-            //this is....
+            //this is the shit
             audio_delay_frames: 4,
             flid_x: false,
             chart_ratio: 1.0,
@@ -1273,7 +1273,10 @@ pub async fn main() -> Result<()> {
         let current_frame_time = frame as f64 * frame_duration;
         *my_time.borrow_mut() = current_frame_time;
 
-        gl.quad_gl.render_pass(Some(mst.output().render_pass));
+        // Use the render_pass from the output and convert to the expected type
+        let output = mst.output();
+        let render_pass: MQRenderPass = unsafe { std::mem::transmute(output.render_pass) };
+        gl.quad_gl.render_pass(Some(render_pass));
         main.update()?;
         main.render(&mut painter)?;
 
