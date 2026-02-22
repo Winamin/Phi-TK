@@ -100,7 +100,7 @@ export interface RenderConfig {
   uiCombo: boolean;
   uiPb: boolean;
   uiPause: boolean;
-
+  bar: boolean;
   ffmpegThread: boolean;
 }
 

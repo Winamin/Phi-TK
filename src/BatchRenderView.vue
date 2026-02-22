@@ -5,32 +5,36 @@ en:
   select-preset: Select Preset
   add-files: Add Files
   add-folder: Add Folder
-  clear-list: Clear List
+  clear-list: Clear All
+  clear-done: Clear Completed
   start-render: Start Render
+  stop-render: Stop
+  retry-failed: Retry Failed
+  bulk-edit: Bulk Edit
   back: Back
   name: Name
   level: Level
   charter: Charter
   status: Status
   pending: Ready
-  rendering: Pulling
+  rendering: Rendering
   done: Done
   failed: Failed
   total-selected: "Total selected: {count}"
   all: All
   none: None
-  configure: Configure
+  configure: Global Config
   save: Save
   actions: Actions
   close: Close
-  total-charts: "Total charts: {count}"
+  total-charts: "Total: {count}"
   select-all: Select All
   deselect-all: Deselect All
   progress: Progress
   eta: ETA
-  no-charts: No charts added
+  no-charts: Drag and drop chart folders/files here, or use the buttons above to add them.
   no-results: No results found
-  search-placeholder: Search charts...
+  search-placeholder: Search charts, charter or level...
   selected: "Selected: {count}"
   filtered-results: "Filtered: {count}"
   add-files-failed: Failed to add files
@@ -38,10 +42,11 @@ en:
   charts-added: "{count} charts added"
   add-folder-failed: Failed to add folder
   no-charts-selected: No charts selected
-  batch-completed: "Submission completed: {count} scores"
+  batch-completed: "Batch completed: {count} rendered"
+  batch-stopped: "Batch queue stopped"
   ffmpeg-not-found: FFmpeg not found
   chart-info-missing: Chart info missing
-  adding-charts: Adding charts...
+  adding-charts: Adding...
   invalid-chart-file: Invalid chart file
   file-type-error: "File type error: {message}"
   config-saved: "Configuration saved"
@@ -58,49 +63,56 @@ en:
   preview: Preview
   edit: Edit
   chart-info: Chart Info
+  bulk-edit-title: Bulk Edit Settings
+  bulk-edit-hint: Leave fields blank to keep their original values.
 zh-CN:
   title: 批量渲染
   select-charts: 选择谱面
   select-preset: 选择预设
   add-files: 添加文件
   add-folder: 添加文件夹
-  clear-list: 清空列表
+  clear-list: 清空全部
+  clear-done: 清除已完成
   start-render: 开始渲染
+  stop-render: 停止渲染
+  retry-failed: 重试失败项
+  bulk-edit: 批量编辑
   back: 返回上一级
   name: 名称
   level: 难度
   charter: 谱师
   status: 状态
   pending: 已就绪
-  rendering: 提交中
+  rendering: 渲染中
   done: 已完成
   failed: 失败
   actions: 操作
   total-selected: "已选择: {count}"
   all: 全选
   none: 取消全选
-  configure: 渲染配置
+  configure: 全局渲染配置
   close: 关闭
-  total-charts: "总谱面: {count}"
+  total-charts: "总计: {count}"
   select-all: 全选
   deselect-all: 取消全选
   progress: 进度
   eta: 预计
-  no-charts: 未添加谱面
-  no-results: 未找到结果
-  search-placeholder: 搜索谱面...
-  selected: "已选择: {count}"
-  filtered-results: "筛选: {count}"
+  no-charts: 将谱面文件或文件夹拖拽至此，或使用上方按钮添加
+  no-results: 未找到相关谱面
+  search-placeholder: 搜索谱面名称、谱师或难度...
+  selected: "已选择 {count} 项"
+  filtered-results: "筛选结果: {count}"
   save: 保存
   add-files-failed: 添加文件失败
-  no-charts-found: 文件夹中未找到谱面
-  charts-added: "已添加 {count} 个谱面"
+  no-charts-found: 未找到有效谱面文件
+  charts-added: "成功添加 {count} 个谱面"
   add-folder-failed: 添加文件夹失败
-  no-charts-selected: 未选择谱面
-  batch-completed: "提交完成: {count} 个谱面"
-  ffmpeg-not-found: 未找到 FFmpeg
+  no-charts-selected: 未选择任何谱面
+  batch-completed: "批量任务完成，共处理 {count} 个谱面"
+  batch-stopped: "已停止队列"
+  ffmpeg-not-found: 未找到 FFmpeg 环境
   chart-info-missing: 谱面信息缺失
-  adding-charts: -正在添加谱面-
+  adding-charts: 解析中...
   invalid-chart-file: 无效的谱面文件
   file-type-error: "文件类型错误: {message}"
   config-saved: "配置已保存"
@@ -110,13 +122,15 @@ zh-CN:
   background-dim: 背景暗度
   hold_cover: Hold 头部遮罩
   aspect: 宽高比
-  tip: Tip
+  tip: 提示信息 (Tip)
   width: 宽
   height: 高
   dim: 背景昏暗程度
   preview: 预览
   edit: 编辑
   chart-info: 谱面信息
+  bulk-edit-title: 批量编辑属性
+  bulk-edit-hint: 未填写的项将保持每个谱面原有的设置不变。
 </i18n>
 
 <script setup lang="ts">
@@ -135,6 +149,7 @@ const { t } = useI18n();
 const router = useRouter();
 
 interface BatchChart {
+  id: string; // Add unique ID for better list rendering
   path: string;
   name: string;
   level: string;
@@ -150,45 +165,49 @@ interface BatchChart {
 const charts = ref<BatchChart[]>([]);
 const selectedPreset = ref<string>('default');
 const presets = ref<{ name: string }[]>([]);
-const allSelected = ref(false);
 const configViewRef = ref<InstanceType<typeof ConfigView> | null>(null);
 const configDialog = ref(false);
 const editDialog = ref(false);
+const bulkEditDialog = ref(false);
 const editingChartIndex = ref(-1);
 const form = ref<any>();
+const bulkForm = ref<any>();
 
-// 当前渲染状态
+// 渲染队列控制
 const currentRenderingIndex = ref<number>(-1);
+const isRenderingQueue = ref(false);
 const renderMsg = ref('');
-const renderProgress = ref<number>();
+const renderProgress = ref<number>(0);
+
+// 批量编辑数据模型
+const bulkEditData = ref({
+  aspectWidth: '',
+  aspectHeight: '',
+  backgroundDim: null as number | null,
+  holdCover: null as boolean | null,
+});
 
 // 添加状态
 const isAddingFiles = ref(false);
 const isAddingFolder = ref(false);
+const searchQuery = ref('');
 
-// 默认配置（从localStorage加载或使用默认值）
+// 默认配置
 const defaultConfig = ref<RenderConfig>(loadDefaultConfig());
+
+// UUID Generator for safe list keys
+function generateId() {
+  return Math.random().toString(36).substring(2, 9);
+}
 
 // 预览单个谱面
 async function previewChart(index: number) {
   const chart = charts.value[index];
-  if (!chart.chartInfo) {
-    toast(t('chart-info-missing'), 'error');
-    return;
-  }
-
+  if (!chart.chartInfo) return toast(t('chart-info-missing'), 'error');
   try {
     const config = await buildRenderParams();
-    // 调用预览
     await invoke('preview_chart', {
-      params: {
-        path: chart.path,
-        info: chart.chartInfo,
-        config: {
-          ...config,
-          autoplay: true, // 设置为自动播放
-        },
-      },
+      params: { path: chart.path, info: chart.chartInfo, config: { ...config, autoplay: true } },
     });
   } catch (error) {
     toastError(error);
@@ -204,8 +223,6 @@ function loadDefaultConfig(): RenderConfig {
       console.error('Failed to parse saved config', e);
     }
   }
-
-  // 默认配置
   return {
     resolution: [1920, 1080],
     ffmpegPreset: 'medium p4 balanced',
@@ -220,7 +237,7 @@ function loadDefaultConfig(): RenderConfig {
     videoCodec: 'h264',
     bitrateControl: 'CRF',
     bitrate: '28',
-    targetAudio: 96000,
+    targetAudio: 48000,
     video: false,
     audioBit: undefined,
     audioFormat: 'flac',
@@ -255,1124 +272,717 @@ function loadDefaultConfig(): RenderConfig {
     uiName: true,
     uiPb: true,
     uiPause: true,
+    bar: false,
   };
 }
 
-// 保存默认配置到localStorage
 function saveDefaultConfig(config: RenderConfig) {
   defaultConfig.value = config;
   localStorage.setItem('defaultRenderConfig', JSON.stringify(config));
   toast(t('config-saved'), 'success');
 }
 
-// 获取预设列表
 async function getPresets() {
   try {
     const presetsMap = (await invoke('get_presets')) as Record<string, any>;
-    presets.value = Object.keys(presetsMap).map((name) => ({ name }));
-    presets.value.unshift({ name: 'default' });
-
-    if (presets.value.length > 0) {
-      selectedPreset.value = presets.value[0].name;
-    }
+    presets.value = [{ name: 'default' }, ...Object.keys(presetsMap).map((name) => ({ name }))];
+    selectedPreset.value = presets.value[0].name;
   } catch (error) {
     console.error('Failed to get presets', error);
   }
 }
 
-// 添加文件
+// 提取共用的添加逻辑
+async function processNewPaths(paths: string[]) {
+  const uniquePaths = [...new Set(paths)];
+  const existingPaths = new Set(charts.value.map((c) => c.path));
+  const newPaths = uniquePaths.filter((path) => !existingPaths.has(path));
+
+  if (newPaths.length === 0) {
+    toast(t('no-charts-found'), 'warning');
+    return;
+  }
+
+  for (const path of newPaths) {
+    await addChart(path);
+  }
+  toast(t('charts-added', { count: newPaths.length }), 'success');
+}
+
 async function addFiles() {
   if (isAddingFiles.value) return;
-
   isAddingFiles.value = true;
   try {
     const files = await open({
       multiple: true,
       filters: [{ name: t('chart-file'), extensions: ['zip', 'json', 'pez'] }],
     });
-
     if (!files) return;
-
-    const fileArray = Array.isArray(files) ? files : [files];
-    const paths = fileArray.map((file) => (typeof file === 'string' ? file : (file as any).path));
-
-    // 去重处理
-    const uniquePaths = [...new Set(paths)];
-    const existingPaths = new Set(charts.value.map((c) => c.path));
-    const newPaths = uniquePaths.filter((path) => !existingPaths.has(path));
-
-    if (newPaths.length === 0) {
-      toast(t('no-charts-found'), 'warning');
-      return;
-    }
-
-    // 批量添加
-    for (const path of newPaths) {
-      await addChart(path);
-    }
-
-    toast(t('charts-added', { count: newPaths.length }), 'success');
+    const paths = (Array.isArray(files) ? files : [files]).map((f) => (typeof f === 'string' ? f : (f as any).path));
+    await processNewPaths(paths);
   } catch (error) {
-    console.error('Failed to add files', error);
     toast(t('add-files-failed'), 'error');
   } finally {
     isAddingFiles.value = false;
   }
 }
 
-// 添加文件夹并解析所有谱面
 async function addFolder() {
   if (isAddingFolder.value) return;
-
   isAddingFolder.value = true;
   try {
     const folder = await open({ directory: true });
     if (!folder) return;
-
     const folderPath = typeof folder === 'string' ? folder : (folder as any).path;
     const files = (await invoke('list_chart_files', { path: folderPath })) as string[];
 
-    if (!files || files.length === 0) {
-      toast(t('no-charts-found'), 'warning');
-      return;
-    }
+    if (!files || files.length === 0) return toast(t('no-charts-found'), 'warning');
 
-    // 只处理谱面文件扩展名
     const validExtensions = ['.json', '.zip', '.pez'];
-    const filteredFiles = files.filter((file) => {
-      const ext = file.toLowerCase().slice(file.lastIndexOf('.'));
-      return validExtensions.includes(ext);
-    });
-
-    if (filteredFiles.length === 0) {
-      toast(t('no-charts-found'), 'warning');
-      return;
-    }
-
-    // 去重处理
-    const existingPaths = new Set(charts.value.map((c) => c.path));
-    const newFiles = filteredFiles.filter((file) => !existingPaths.has(file));
-
-    if (newFiles.length === 0) {
-      toast(t('no-charts-found'), 'warning');
-      return;
-    }
-
-    // 批量添加
-    for (const file of newFiles) {
-      await addChart(file);
-    }
-
-    toast(t('charts-added', { count: newFiles.length }), 'success');
+    const filteredFiles = files.filter((f) => validExtensions.includes(f.toLowerCase().slice(f.lastIndexOf('.'))));
+    await processNewPaths(filteredFiles);
   } catch (error) {
-    console.error('Failed to add folder', error);
     toast(t('add-folder-failed'), 'error');
   } finally {
     isAddingFolder.value = false;
   }
 }
 
-// 添加单个谱面并解析完整信息
 async function addChart(path: string) {
+  if (charts.value.some((c) => c.path === path)) return;
+
+  const newChart: BatchChart = {
+    id: generateId(),
+    path,
+    name: t('adding-charts'),
+    level: '...',
+    charter: '...',
+    status: 'pending',
+    selected: true,
+  };
+  const placeholderIndex = charts.value.push(newChart) - 1;
+
   try {
-    // 检查是否已添加
-    if (charts.value.some((c) => c.path === path)) {
-      return;
-    }
-
-    // 先添加一个占位符
-    const placeholderIndex =
-      charts.value.push({
-        path,
-        name: t('adding-charts'),
-        level: '...',
-        charter: '...',
-        status: 'pending',
-        selected: true,
-      }) - 1;
-
     const chartInfo = (await invoke('parse_chart', { path })) as ChartInfo;
+    let aW = String(chartInfo.aspectRatio);
+    let aH = '1.0';
 
-    // 更新占位符为实际数据
-    const aspectWidth = ref('0');
-    const aspectHeight = ref('0');
-    aspectWidth.value = String(chartInfo.aspectRatio);
-    aspectHeight.value = '1.0';
-    for (let asp of [
-      [16, 9],
-      [4, 3],
-      [8, 5],
-      [3, 2],
-    ]) {
+    for (const asp of [[16, 9], [4, 3], [8, 5], [3, 2]]) {
       if (Math.abs(asp[0] / asp[1] - chartInfo.aspectRatio) < 1e-4) {
-        aspectWidth.value = String(asp[0]);
-        aspectHeight.value = String(asp[1]);
-        break;
+        aW = String(asp[0]); aH = String(asp[1]); break;
       }
     }
 
     charts.value[placeholderIndex] = {
-      path,
+      ...newChart,
       name: chartInfo.name,
       level: chartInfo.level,
       charter: chartInfo.charter,
-      status: 'pending',
-      selected: true,
       chartInfo,
-      aspectWidth: aspectWidth.value,
-      aspectHeight: aspectHeight.value
+      aspectWidth: aW,
+      aspectHeight: aH,
     };
-  } catch (error) {
-    console.error(`Failed to parse chart: ${path}`, error);
+  } catch (error: any) {
+    let errorMessage = t('invalid-chart-file');
+    if (error.message?.includes('as zip archive')) errorMessage = t('file-type-error', { message: 'Not a ZIP archive' });
+    else if (error.message?.includes('central directory')) errorMessage = t('file-type-error', { message: 'Invalid ZIP format' });
 
-    // 更新错误状态
-    const index = charts.value.findIndex((c) => c.path === path);
-    if (index !== -1) {
-      let errorMessage = t('invalid-chart-file');
-
-      if (error instanceof Error) {
-        // 提取更友好的错误消息
-        if (error.message.includes('as zip archive')) {
-          errorMessage = t('file-type-error', { message: 'JSON file is not a ZIP archive' });
-        } else if (error.message.includes('Could not find central directory')) {
-          errorMessage = t('file-type-error', { message: 'Invalid ZIP file format' });
-        } else {
-          errorMessage = error.message;
-        }
-      }
-
-      charts.value[index] = {
-        path,
-        name: t('parse-failed'),
-        level: 'N/A',
-        charter: 'N/A',
-        status: 'failed',
-        selected: false,
-        error: errorMessage,
-      };
-    }
+    charts.value[placeholderIndex] = {
+      ...newChart,
+      name: t('failed'),
+      status: 'failed',
+      selected: false,
+      error: errorMessage,
+    };
   }
 }
 
-// 清空列表
+// 列表操作快捷键
 function clearList() {
-  charts.value = [];
+  if (confirm(t('clear-list') + '?')) charts.value = [];
 }
-
-// 全选/取消全选
-function toggleSelectAll() {
-  allSelected.value = !allSelected.value;
-  charts.value.forEach((chart) => {
-    chart.selected = allSelected.value;
+function clearDone() {
+  charts.value = charts.value.filter(c => c.status !== 'done');
+}
+function retryFailed() {
+  charts.value.forEach(c => {
+    if (c.status === 'failed') c.status = 'pending';
   });
+}
+function removeChart(id: string) {
+  charts.value = charts.value.filter(c => c.id !== id);
 }
 
 // 构建渲染参数
 async function buildRenderParams() {
-  // 检查 ffmpeg
-  if (!(await invoke('test_ffmpeg'))) {
-    throw new Error(t('ffmpeg-not-found'));
-  }
-
-  // 获取配置
-  let config: RenderConfig;
-
-  if (selectedPreset.value === 'default') {
-    // 使用保存的默认配置
-    config = defaultConfig.value;
-  } else {
-    // 获取预设配置
-    const presetsMap = (await invoke('get_presets')) as Record<string, RenderConfig>;
-    config = presetsMap[selectedPreset.value];
-
-    // 如果预设不存在，使用默认配置
-    if (!config) {
-      config = defaultConfig.value;
-    }
-  }
-
-  // 确保关键字段存在
-  if (!config.resolution) {
-    throw new Error('Resolution is missing in config');
-  }
-
+  if (!(await invoke('test_ffmpeg'))) throw new Error(t('ffmpeg-not-found'));
+  let config = selectedPreset.value === 'default' ? defaultConfig.value : ((await invoke('get_presets')) as any)[selectedPreset.value];
+  if (!config) config = defaultConfig.value;
+  if (!config.resolution) throw new Error('Resolution missing');
   return config;
 }
 
 async function saveConfig() {
-  if (!configViewRef.value) return;
-
-  const config = await configViewRef.value.buildConfig();
+  const config = await configViewRef.value?.buildConfig();
   if (config) {
     saveDefaultConfig(config);
     configDialog.value = false;
   }
 }
 
-// 渲染单个谱面
-async function renderSingleChart(chart: BatchChart, index: number, config: RenderConfig) {
-  try {
-    // 检查谱面信息是否存在
-    if (!chart.chartInfo) {
-      throw new Error(t('chart-info-missing'));
-    }
-
-    chart.status = 'rendering';
-    currentRenderingIndex.value = index;
-
-    await invoke('post_render', {
-      params: {
-        path: chart.path,
-        info: chart.chartInfo,
-        config,
-      },
-    });
-
-    chart.status = 'done';
-  } catch (error) {
-    console.error(`Failed to render: ${chart.path}`, error);
-    chart.status = 'failed';
-    chart.error = error instanceof Error ? error.message : String(error);
-    toastError(error);
-  }
-}
-
-// 开始批量渲染
+// 队列执行逻辑
 async function startRender() {
-  const selectedCharts = charts.value.filter((chart) => chart.selected && chart.status !== 'done');
-
-  if (selectedCharts.length === 0) {
-    toast(t('no-charts-selected'), 'warning');
-    return;
-  }
+  const pendingCount = filteredCharts.value.filter((c) => c.selected && c.status === 'pending').length;
+  if (pendingCount === 0) return toast(t('no-charts-selected'), 'warning');
 
   try {
     const config = await buildRenderParams();
+    isRenderingQueue.value = true;
 
-    for (let i = 0; i < selectedCharts.length; i++) {
-      const chart = selectedCharts[i];
-      const originalIndex = charts.value.findIndex((c) => c === chart);
+    for (let i = 0; i < charts.value.length; i++) {
+      if (!isRenderingQueue.value) break; // 检查是否中止
 
-      if (chart.status !== 'pending') continue;
+      const chart = charts.value[i];
+      if (!chart.selected || chart.status !== 'pending') continue;
 
-      await renderSingleChart(chart, originalIndex, config);
+      currentRenderingIndex.value = i;
+      chart.status = 'rendering';
+      renderProgress.value = 0;
+
+      try {
+        if (!chart.chartInfo) throw new Error(t('chart-info-missing'));
+        await invoke('post_render', { params: { path: chart.path, info: chart.chartInfo, config } });
+        chart.status = 'done';
+      } catch (error: any) {
+        chart.status = 'failed';
+        chart.error = error.message || String(error);
+        toastError(error);
+      }
     }
 
-    toast(t('batch-completed', { count: selectedCharts.length }), 'success');
+    if (isRenderingQueue.value) {
+      toast(t('batch-completed', { count: pendingCount }), 'success');
+    }
   } catch (error) {
     toastError(error);
   } finally {
+    isRenderingQueue.value = false;
     currentRenderingIndex.value = -1;
     renderMsg.value = '';
-    renderProgress.value = undefined;
+    renderProgress.value = 0;
   }
 }
 
-// 状态颜色
-function statusColor(status: string) {
-  switch (status) {
-    case 'rendering':
-      return 'blue';
-    case 'done':
-      return 'green';
-    case 'failed':
-      return 'red';
-    default:
-      return 'gray';
-  }
+function stopRender() {
+  isRenderingQueue.value = false;
+  toast(t('batch-stopped'), 'info');
 }
 
-// 表格头部定义
-const tableHeaders = [
-  { title: '', key: 'selected', width: 40, sortable: false },
-  { title: t('name'), key: 'name', sortable: true },
-  { title: t('level'), key: 'level', width: 100, sortable: true },
-  { title: t('charter'), key: 'charter', width: 120, sortable: true },
-  { title: t('status'), key: 'status', width: 120, sortable: true },
-  { title: t('actions'), key: 'actions', width: 160, sortable: false },
-];
-
-// 搜索功能
-const searchQuery = ref('');
-
-// 过滤后的谱面列表
+// 筛选与选择逻辑
 const filteredCharts = computed(() => {
-  if (!searchQuery.value.trim()) {
-    return charts.value;
-  }
-  
-  const query = searchQuery.value.toLowerCase();
-  return charts.value.filter(chart => 
-    chart.name.toLowerCase().includes(query) ||
-    chart.level.toLowerCase().includes(query) ||
-    chart.charter.toLowerCase().includes(query) ||
-    chart.path.toLowerCase().includes(query)
+  if (!searchQuery.value.trim()) return charts.value;
+  const q = searchQuery.value.toLowerCase();
+  return charts.value.filter(c =>
+    c.name.toLowerCase().includes(q) ||
+    c.level.toLowerCase().includes(q) ||
+    c.charter.toLowerCase().includes(q)
   );
 });
 
-// 计算选中数量
-const selectedCount = computed(() => {
-  return filteredCharts.value.filter((chart) => chart.selected).length;
-});
+const selectedCount = computed(() => charts.value.filter(c => c.selected).length);
+const allSelected = computed(() => charts.value.length > 0 && selectedCount.value === charts.value.length);
+const isIndeterminate = computed(() => selectedCount.value > 0 && selectedCount.value < charts.value.length);
 
-// 计算过滤后的选中数量
-const filteredSelectedCount = computed(() => {
-  return filteredCharts.value.filter((chart) => chart.selected).length;
-});
+function toggleSelectAll() {
+  const target = !allSelected.value;
+  charts.value.forEach((chart) => {
+    if (chart.status !== 'rendering') chart.selected = target;
+  });
+}
 
-// 监听渲染事件
+// Tauri Event Listeners
 event.listen('render-msg', (msg) => {
   renderMsg.value = msg.payload as string;
 });
-
 event.listen('render-progress', (msg) => {
-  let payload = msg.payload as { progress: number; fps: number; estimate: number };
-  renderMsg.value = `${t('progress')}: ${(payload.progress * 100).toFixed(2)}% | FPS: ${payload.fps} | ${t('eta')}: ${payload.estimate}s`;
-  renderProgress.value = payload.progress * 100;
+  const p = msg.payload as { progress: number; fps: number; estimate: number };
+  renderMsg.value = `FPS: ${p.fps} | ${t('eta')}: ${p.estimate}s`;
+  renderProgress.value = p.progress * 100;
 });
 
-async function applyDefaultConfig() {
-  await nextTick();
-  configViewRef.value?.applyConfig(defaultConfig.value);
-}
-
-// 打开编辑对话框
-/*
+// 编辑功能
 function openEditDialog(index: number) {
   editingChartIndex.value = index;
   editDialog.value = true;
 }
 
-
- */
-function openEditDialog(index: number) {
-  editingChartIndex.value = index;
-  // 确保aspectWidth和aspectHeight有值
-  if (!charts.value[index].aspectWidth || !charts.value[index].aspectHeight) {
-    const chart = charts.value[index];
-    if (chart.chartInfo) {
-      charts.value[index].aspectWidth = String(chart.chartInfo.aspectRatio);
-      charts.value[index].aspectHeight = '1.0';
-      for (let asp of [
-        [16, 9],
-        [4, 3],
-        [8, 5],
-        [3, 2],
-      ]) {
-        if (Math.abs(asp[0] / asp[1] - chart.chartInfo.aspectRatio) < 1e-4) {
-          charts.value[index].aspectWidth = String(asp[0]);
-          charts.value[index].aspectHeight = String(asp[1]);
-          break;
-        }
-      }
-    }
-  }
-  editDialog.value = true;
-}
-
-// 保存编辑的谱面信息
 async function saveChartInfo() {
-  if (editingChartIndex.value === -1 || !charts.value[editingChartIndex.value]?.chartInfo) return;
-
-  // Safely check if form.value exists before calling validate
-  if (!form.value) {
-    toast(t('has-error'), 'error');
-    return;
-  }
-
+  if (!form.value || editingChartIndex.value === -1) return;
   const { valid } = await form.value.validate();
-  if (!valid) {
-    toast(t('has-error'), 'error');
-    return;
-  }
+  if (!valid) return;
 
   const chart = charts.value[editingChartIndex.value];
   const aspect = tryParseAspect(chart.aspectWidth, chart.aspectHeight);
-  if (aspect !== undefined && chart.chartInfo) {
-    chart.chartInfo.aspectRatio = aspect;
-  }
-
-  // Update display information in the list
+  if (aspect && chart.chartInfo) chart.chartInfo.aspectRatio = aspect;
   if (chart.chartInfo) {
-    charts.value[editingChartIndex.value] = {
-      ...chart,
-      name: chart.chartInfo.name,
-      level: chart.chartInfo.level,
-      charter: chart.chartInfo.charter
-    };
+    chart.name = chart.chartInfo.name;
+    chart.level = chart.chartInfo.level;
+    chart.charter = chart.chartInfo.charter;
   }
-
   editDialog.value = false;
+}
+
+// 批量编辑功能
+function openBulkEditDialog() {
+  bulkEditData.value = { aspectWidth: '', aspectHeight: '', backgroundDim: null, holdCover: null };
+  bulkEditDialog.value = true;
+}
+
+function saveBulkEdit() {
+  const aspect = tryParseAspect(bulkEditData.value.aspectWidth, bulkEditData.value.aspectHeight);
+  const selectedCharts = charts.value.filter(c => c.selected && c.chartInfo);
+
+  selectedCharts.forEach(chart => {
+    if (!chart.chartInfo) return;
+    if (aspect) {
+      chart.aspectWidth = bulkEditData.value.aspectWidth;
+      chart.aspectHeight = bulkEditData.value.aspectHeight;
+      chart.chartInfo.aspectRatio = aspect;
+    }
+    if (bulkEditData.value.backgroundDim !== null) {
+      chart.chartInfo.backgroundDim = bulkEditData.value.backgroundDim;
+    }
+    if (bulkEditData.value.holdCover !== null) {
+      chart.chartInfo.HoldPartialCover = bulkEditData.value.holdCover;
+    }
+  });
+
+  bulkEditDialog.value = false;
   toast(t('config-saved'), 'success');
 }
 
-// 尝试解析宽高比
-function tryParseAspect(width: string | undefined, height: string | undefined): number | undefined {
-  if (!width || !height) return undefined;
-
-  try {
-    let w = parseFloat(width);
-    let h = parseFloat(height);
-    if (isNaN(w) || isNaN(h)) return undefined;
-    return w / h;
-  } catch (e) {
-    return undefined;
-  }
+function tryParseAspect(w?: string, h?: string) {
+  if (!w || !h) return undefined;
+  const numW = parseFloat(w), numH = parseFloat(h);
+  return (isNaN(numW) || isNaN(numH)) ? undefined : numW / numH;
 }
 
-// 本地存储键名
-const STORAGE_KEY = 'batch_render_charts';
-
-// 从本地存储加载任务列表
-function loadChartsFromStorage() {
-  const savedCharts = localStorage.getItem(STORAGE_KEY);
-  if (savedCharts) {
-    try {
-      charts.value = JSON.parse(savedCharts);
-    } catch (e) {
-      console.error('Failed to parse saved charts', e);
-    }
-  }
-}
-
-// 保存任务列表到本地存储
-function saveChartsToStorage() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(charts.value));
-}
-
+// 本地存储
+const STORAGE_KEY = 'batch_render_charts_v2';
 onMounted(() => {
   getPresets();
-  loadChartsFromStorage(); // 加载存储的任务
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    try {
+      charts.value = JSON.parse(saved).map((c: any) => ({...c, status: c.status === 'rendering' ? 'failed' : c.status}));
+    }
+    catch(e) {}
+  }
 });
 
-// 监听任务列表变化并保存
-watch(charts, saveChartsToStorage, { deep: true });
+watch(charts, (val) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
+}, { deep: true });
 </script>
 
 <template>
-  <div class="pa-4 w-100 h-100 d-flex flex-column">
-    <!-- 顶部导航栏 -->
-    <div class="top-bar d-flex align-center justify-space-between mb-4">
-      <v-btn @click="router.go(-1)" prepend-icon="mdi-arrow-left" variant="text" size="small">
-        {{ t('back') }}
-      </v-btn>
-      <h2 class="text-h6 font-weight-medium">{{ t('title') }}</h2>
-      <div style="width: 80px"></div> <!-- 占位符使标题居中 -->
-    </div>
+  <div class="batch-layout">
+    <div class="header-glass mb-4">
+      <div class="d-flex align-center justify-space-between mb-4">
+        <v-btn @click="router.go(-1)" prepend-icon="mdi-arrow-left" variant="text" class="text-none">
+          {{ t('back') }}
+        </v-btn>
+        <h2 class="text-h6 font-weight-bold letter-spacing-1"></h2>
+        <v-btn color="secondary" variant="tonal" prepend-icon="mdi-cog" @click="configDialog = true">
+          {{ t('configure') }}
+        </v-btn>
+      </div>
 
-    <!-- 工具栏 -->
-    <div class="toolbar mb-4">
-      <div class="toolbar-section">
-        <!-- 搜索框 -->
+      <div class="d-flex align-center flex-wrap gap-4">
         <v-text-field
           v-model="searchQuery"
           :placeholder="t('search-placeholder')"
           prepend-inner-icon="mdi-magnify"
-          variant="outlined"
-          density="compact"
+          variant="solo-filled"
+          density="comfortable"
           hide-details
-          clearable
-          class="search-field"
+          flat
+          class="search-bar"
         ></v-text-field>
-      </div>
-      
-      <div class="toolbar-section">
-        <!-- 文件操作 -->
-        <v-btn :disabled="isAddingFolder" :loading="isAddingFiles" variant="text" size="small" @click="addFiles">
-          <v-icon>mdi-file-plus</v-icon>
-        </v-btn>
-        <v-btn :disabled="isAddingFiles" :loading="isAddingFolder" variant="text" size="small" @click="addFolder">
-          <v-icon>mdi-folder-plus</v-icon>
-        </v-btn>
-        <v-btn color="error" variant="text" size="small" @click="clearList">
-          <v-icon>mdi-delete</v-icon>
-        </v-btn>
-        
-        <v-divider vertical class="mx-2"></v-divider>
-        
-        <!-- 渲染控制 -->
-        <v-btn color="secondary" variant="text" size="small" @click="configDialog = true">
-          <v-icon>mdi-cog</v-icon>
-        </v-btn>
-        <v-btn
-          color="primary"
-          @click="startRender"
-          :disabled="filteredSelectedCount === 0 || currentRenderingIndex >= 0"
-          :loading="currentRenderingIndex >= 0"
-          size="small">
-          <v-icon>mdi-play</v-icon>
-        </v-btn>
-      </div>
-    </div>
 
-    <!-- 统计信息栏 -->
-    <div class="stats-bar d-flex align-center justify-space-between mb-3">
-      <div class="text-caption">
-        {{ t('total-charts', { count: charts.length }) }}
-        <span v-if="searchQuery" class="ml-2">
-          ({{ t('filtered-results', { count: filteredCharts.length }) }})
-        </span>
-      </div>
-      <div class="d-flex align-center gap-2">
-        <span class="text-caption">{{ t('selected', { count: filteredSelectedCount }) }}</span>
-        <v-btn @click="toggleSelectAll" variant="text" size="x-small" density="compact">
-          {{ t(allSelected ? 'deselect-all' : 'select-all') }}
+        <v-divider vertical class="mx-1 d-none d-sm-block"></v-divider>
+
+        <v-btn color="primary" variant="tonal" prepend-icon="mdi-file-plus" :loading="isAddingFiles" @click="addFiles">
+          {{ t('add-files') }}
         </v-btn>
-      </div>
-    </div>
+        <v-btn color="primary" variant="tonal" prepend-icon="mdi-folder-plus" :loading="isAddingFolder" @click="addFolder">
+          {{ t('add-folder') }}
+        </v-btn>
 
-    <!-- 渲染进度显示 -->
-    <v-card v-if="currentRenderingIndex >= 0" class="mb-3 progress-card">
-      <v-card-text class="pa-3">
-        <div class="d-flex align-center mb-2">
-          <v-progress-circular indeterminate size="16" width="2" class="mr-2" />
-          <span class="text-body-2">{{ t('rendering') }}: {{ charts[currentRenderingIndex]?.name }}</span>
-        </div>
-        <v-progress-linear :model-value="renderProgress" color="primary" height="4" rounded />
-        <p class="text-caption mt-1 mb-0">{{ renderMsg }}</p>
-      </v-card-text>
-    </v-card>
+        <v-spacer></v-spacer>
 
-    <!-- 配置对话框 -->
-     <v-dialog v-model="configDialog" max-width="700" scrollable @after-enter="applyDefaultConfig" class="dialog-blur">
-      <v-card rounded="xl" class="transparent-blur-card">
-        <v-toolbar color="primary">
-          <v-toolbar-title>{{ t('configure') }}</v-toolbar-title>
-          <v-spacer></v-spacer>
-          <v-btn icon @click="configDialog = false" color="blue-darken-2">
-            <v-icon>mdi-close</v-icon>
+        <template v-if="isRenderingQueue">
+          <v-chip color="warning" variant="flat" class="font-weight-bold px-4 pulse-anim">
+            <v-icon start icon="mdi-loading" class="spin-anim"></v-icon>
+            {{ t('rendering') }}
+          </v-chip>
+          <v-btn color="error" variant="flat" prepend-icon="mdi-stop" @click="stopRender">
+            {{ t('stop-render') }}
           </v-btn>
+        </template>
+        <template v-else>
+          <v-btn
+            color="success"
+            variant="flat"
+            prepend-icon="mdi-play"
+            :disabled="selectedCount === 0"
+            @click="startRender"
+            class="glow-button"
+          >
+            {{ t('start-render') }} ({{ selectedCount }})
+          </v-btn>
+        </template>
+      </div>
+    </div>
+
+    <div class="list-controls d-flex align-center justify-space-between px-2 mb-2">
+      <div class="d-flex align-center gap-3">
+        <v-checkbox-btn
+          :model-value="allSelected"
+          :indeterminate="isIndeterminate"
+          @click="toggleSelectAll"
+          color="primary"
+        ></v-checkbox-btn>
+        <span class="text-body-2 text-medium-emphasis">
+          {{ t('selected', { count: selectedCount }) }} / {{ t('total-charts', { count: charts.length }) }}
+        </span>
+
+        <v-slide-x-transition>
+          <div v-if="selectedCount > 1" class="d-flex gap-2 ml-4">
+            <v-btn size="small" variant="tonal" color="info" prepend-icon="mdi-pencil-box-multiple" @click="openBulkEditDialog">
+              {{ t('bulk-edit') }}
+            </v-btn>
+          </div>
+        </v-slide-x-transition>
+      </div>
+
+      <div class="d-flex gap-2">
+        <v-btn size="small" variant="text" color="warning" @click="retryFailed" v-if="charts.some(c => c.status === 'failed')">
+          <v-icon start>mdi-refresh</v-icon>{{ t('retry-failed') }}
+        </v-btn>
+        <v-btn size="small" variant="text" color="success" @click="clearDone" v-if="charts.some(c => c.status === 'done')">
+          <v-icon start>mdi-check-all</v-icon>{{ t('clear-done') }}
+        </v-btn>
+        <v-btn size="small" variant="text" color="error" @click="clearList" :disabled="charts.length === 0">
+          <v-icon start>mdi-trash-can-outline</v-icon>{{ t('clear-list') }}
+        </v-btn>
+      </div>
+    </div>
+
+    <div class="list-container flex-grow-1">
+      <v-fade-transition mode="out-in">
+        <div v-if="charts.length === 0" class="empty-state w-100 h-100 d-flex flex-column align-center justify-center">
+          <v-icon size="80" color="primary" class="mb-4 opacity-50">mdi-text-box-plus-outline</v-icon>
+          <div class="text-h6 text-medium-emphasis mb-2">{{ t('no-charts') }}</div>
+        </div>
+
+        <v-virtual-scroll v-else :items="filteredCharts" item-height="84" class="custom-scroll px-2 pb-2">
+          <template v-slot:default="{ item, index }">
+            <v-card
+              class="chart-row-card mb-2"
+              :class="{ 'is-rendering': item.status === 'rendering', 'is-failed': item.status === 'failed' }"
+              elevation="0"
+            >
+              <div
+                v-if="item.status === 'rendering'"
+                class="progress-bg"
+                :style="{ width: `${renderProgress}%` }"
+              ></div>
+
+              <div class="d-flex align-center pa-3 position-relative z-1">
+                <div class="d-flex align-center mr-3">
+                  <v-checkbox-btn
+                    v-model="item.selected"
+                    :disabled="item.status === 'rendering'"
+                    color="primary"
+                  ></v-checkbox-btn>
+                </div>
+
+                <div class="chart-info flex-grow-1 min-w-0">
+                  <div class="d-flex align-center gap-2 mb-1">
+                    <span class="text-subtitle-1 font-weight-bold text-truncate" :title="item.name">{{ item.name }}</span>
+                    <v-chip size="x-small" variant="outlined" color="primary">{{ item.level }}</v-chip>
+                  </div>
+                  <div class="text-caption text-medium-emphasis d-flex align-center text-truncate">
+                    <v-icon size="14" class="mr-1">mdi-account-music</v-icon> {{ item.charter }}
+                    <template v-if="item.status === 'rendering'">
+                      <v-divider vertical class="mx-2"></v-divider>
+                      <span class="text-primary font-weight-medium">{{ renderProgress.toFixed(1) }}% - {{ renderMsg }}</span>
+                    </template>
+                    <template v-else-if="item.error">
+                      <v-divider vertical class="mx-2"></v-divider>
+                      <span class="text-error text-truncate" style="max-width: 300px" :title="item.error">{{ item.error }}</span>
+                    </template>
+                  </div>
+                </div>
+
+                <div class="status-zone mx-4 min-w-[80px] text-center">
+                  <v-chip
+                    :color="item.status === 'done' ? 'success' : item.status === 'failed' ? 'error' : item.status === 'rendering' ? 'warning' : 'default'"
+                    :variant="item.status === 'pending' ? 'tonal' : 'flat'"
+                    size="small"
+                    class="text-uppercase font-weight-bold"
+                  >
+                    {{ t(item.status) }}
+                  </v-chip>
+                </div>
+
+                <div class="action-zone d-flex gap-1">
+                  <v-btn icon="mdi-pencil" size="small" variant="text" color="info" :disabled="!item.chartInfo || item.status === 'rendering'" @click="openEditDialog(charts.indexOf(item))" :title="t('edit')"></v-btn>
+                  <v-btn icon="mdi-play-circle-outline" size="small" variant="text" color="success" :disabled="!item.chartInfo || item.status === 'rendering'" @click="previewChart(charts.indexOf(item))" :title="t('preview')"></v-btn>
+                  <v-btn icon="mdi-close" size="small" variant="text" color="error" :disabled="item.status === 'rendering'" @click="removeChart(item.id)" :title="t('close')"></v-btn>
+                </div>
+              </div>
+            </v-card>
+          </template>
+        </v-virtual-scroll>
+      </v-fade-transition>
+    </div>
+
+    <v-dialog v-model="configDialog" max-width="800" transition="dialog-bottom-transition">
+      <v-card rounded="xl" class="glass-dialog">
+        <v-toolbar color="transparent" class="border-b">
+          <v-toolbar-title class="font-weight-bold">{{ t('configure') }}</v-toolbar-title>
+          <v-spacer></v-spacer>
+          <v-btn icon="mdi-close" variant="text" @click="configDialog = false"></v-btn>
         </v-toolbar>
         <v-card-text class="pa-0">
           <ConfigView ref="configViewRef" />
         </v-card-text>
-        <v-card-actions class="justify-end pa-4">
-          <v-btn
-            color="primary"
-            @click="saveConfig"
-          >
-            {{ t('save') }}
-          </v-btn>
+        <v-card-actions class="pa-4 bg-surface-light border-t">
+          <v-spacer></v-spacer>
+          <v-btn variant="plain" @click="configDialog = false">{{ t('close') }}</v-btn>
+          <v-btn color="primary" variant="flat" class="px-6" @click="saveConfig">{{ t('save') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <!-- 谱面信息编辑对话框 -->
-    <v-dialog v-model="editDialog" max-width="700" class="dialog-blur">
-      <v-card rounded="xl" class="transparent-blur-card">
-        <v-toolbar color="primary">
-          <v-toolbar-title>{{ t('chart-info') }}</v-toolbar-title>
+    <v-dialog v-model="editDialog" max-width="600" transition="dialog-bottom-transition">
+      <v-card rounded="xl" class="glass-dialog">
+        <v-toolbar color="transparent" class="border-b">
+          <v-toolbar-title class="font-weight-bold">{{ t('chart-info') }}</v-toolbar-title>
           <v-spacer></v-spacer>
-          <v-btn icon @click="editDialog = false" color="blue-darken-2">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
+          <v-btn icon="mdi-close" variant="text" @click="editDialog = false"></v-btn>
         </v-toolbar>
-        <v-card-text class="pa-4">
+        <v-card-text class="pa-6">
           <v-form ref="form" v-if="editingChartIndex >= 0 && charts[editingChartIndex]?.chartInfo">
-            <v-row no-gutters class="mx-n2">
-              <v-col cols="8">
-                <v-text-field class="mx-2" :label="t('chart-name')" :rules="[RULES.non_empty]"
-                              v-model="charts[editingChartIndex].chartInfo!.name" prepend-inner-icon="mdi-format-title"></v-text-field>
-              </v-col>
-              <v-col cols="4">
-                <v-text-field class="mx-2" :label="t('level')" :rules="[RULES.non_empty]"
-                              v-model="charts[editingChartIndex].chartInfo!.level" prepend-inner-icon="mdi-star-outline"></v-text-field>
-              </v-col>
+            <v-row dense>
+              <v-col cols="8"><v-text-field :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="charts[editingChartIndex].chartInfo!.name" variant="outlined" density="comfortable"></v-text-field></v-col>
+              <v-col cols="4"><v-text-field :label="t('level')" :rules="[RULES.non_empty]" v-model="charts[editingChartIndex].chartInfo!.level" variant="outlined" density="comfortable"></v-text-field></v-col>
+              <v-col cols="4"><v-text-field :label="t('charter')" :rules="[RULES.non_empty]" v-model="charts[editingChartIndex].chartInfo!.charter" variant="outlined" density="comfortable"></v-text-field></v-col>
+              <v-col cols="4"><v-text-field :label="t('composer')" v-model="charts[editingChartIndex].chartInfo!.composer" variant="outlined" density="comfortable"></v-text-field></v-col>
+              <v-col cols="4"><v-text-field :label="t('illustrator')" v-model="charts[editingChartIndex].chartInfo!.illustrator" variant="outlined" density="comfortable"></v-text-field></v-col>
             </v-row>
-
-            <v-row no-gutters class="mx-n2 mt-1">
-              <v-col cols="12" sm="4">
-                <v-text-field class="mx-2" :label="t('charter')" :rules="[RULES.non_empty]"
-                              v-model="charts[editingChartIndex].chartInfo!.charter" prepend-inner-icon="mdi-account-edit"></v-text-field>
-              </v-col>
-              <v-col cols="12" sm="4">
-                <v-text-field class="mx-2" :label="t('composer')"
-                              v-model="charts[editingChartIndex].chartInfo!.composer" prepend-inner-icon="mdi-music-note"></v-text-field>
-              </v-col>
-              <v-col cols="12" sm="4">
-                <v-text-field class="mx-2" :label="t('illustrator')"
-                              v-model="charts[editingChartIndex].chartInfo!.illustrator" prepend-inner-icon="mdi-palette"></v-text-field>
-              </v-col>
-            </v-row>
-
-            <v-row no-gutters class="mx-n2 mt-1 align-center">
-              <v-col cols="4">
-                <div class="mx-2 d-flex flex-column">
-                  <p class="text-caption" v-t="'aspect'"></p>
-                  <div class="d-flex flex-row align-center justify-center">
-                    <v-text-field type="number" class="mr-2" :rules="[RULES.positive]" :label="t('width')"
-                                  v-model="charts[editingChartIndex].aspectWidth" prepend-inner-icon="mdi-arrow-expand-horizontal"></v-text-field>
-                    <p>:</p>
-                    <v-text-field type="number" class="ml-2" :rules="[RULES.positive]" :label="t('height')"
-                                  v-model="charts[editingChartIndex].aspectHeight" prepend-inner-icon="mdi-arrow-expand-vertical"></v-text-field>
-                  </div>
+            <v-divider class="my-4"></v-divider>
+            <v-row dense align="center">
+              <v-col cols="12" sm="5">
+                <div class="text-caption mb-1">{{ t('aspect') }}</div>
+                <div class="d-flex align-center gap-2">
+                  <v-text-field type="number" :rules="[RULES.positive]" v-model="charts[editingChartIndex].aspectWidth" hide-details variant="outlined" density="compact"></v-text-field>
+                  <span>:</span>
+                  <v-text-field type="number" :rules="[RULES.positive]" v-model="charts[editingChartIndex].aspectHeight" hide-details variant="outlined" density="compact"></v-text-field>
                 </div>
               </v-col>
-              <v-col cols="8" class="px-6">
-                <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01"
-                          v-model="charts[editingChartIndex].chartInfo!.backgroundDim">
-                </v-slider>
-                <v-row no-gutters class="mx-n2 mt-1 align-center">
-                  <v-col cols="12" class="px-6">
-                    <v-switch
-                      :label="t('hold_cover')"
-                      v-model="charts[editingChartIndex].chartInfo!.HoldPartialCover"
-                      :true-value="1"
-                      :false-value="0"
-                      color="primary"
-                      persistent-hint
-                    ></v-switch>
-                  </v-col>
-                </v-row>
+              <v-col cols="12" sm="7">
+                <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01" v-model="charts[editingChartIndex].chartInfo!.backgroundDim" hide-details class="mt-4"></v-slider>
               </v-col>
-            </v-row>
-
-            <v-row no-gutters class="mx-n2 mt-1">
               <v-col cols="12">
-                <v-text-field class="mx-2" :label="t('tip')" :placeholder="t('tip-placeholder')"
-                              v-model="charts[editingChartIndex].chartInfo!.tip" prepend-inner-icon="mdi-lightbulb-on-outline"></v-text-field>
+                <v-switch color="primary" :label="t('hold_cover')" v-model="charts[editingChartIndex].chartInfo!.HoldPartialCover" :true-value="1" :false-value="0" hide-details></v-switch>
+              </v-col>
+              <v-col cols="12">
+                <v-text-field :label="t('tip')" v-model="charts[editingChartIndex].chartInfo!.tip" variant="outlined" density="comfortable" hide-details class="mt-2"></v-text-field>
               </v-col>
             </v-row>
           </v-form>
         </v-card-text>
-        <v-card-actions class="justify-end pa-4">
-          <v-btn color="primary" @click="saveChartInfo">{{ t('save') }}</v-btn>
+        <v-card-actions class="pa-4 bg-surface-light border-t">
+          <v-spacer></v-spacer>
+          <v-btn variant="plain" @click="editDialog = false">{{ t('close') }}</v-btn>
+          <v-btn color="primary" variant="flat" class="px-6" @click="saveChartInfo">{{ t('save') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <!-- 渲染进度显示 -->
-    <v-card v-if="currentRenderingIndex >= 0" class="mb-4 dialog-blur">
-      <v-card-title class="d-flex align-center text-subtitle-1">
-        <v-progress-circular indeterminate size="20" width="2" class="mr-2" />
-        {{ t('rendering') }}: {{ charts[currentRenderingIndex]?.name }}
-      </v-card-title>
-      <v-card-text>
-        <v-progress-linear :model-value="renderProgress" color="primary" height="8" rounded />
-        <p class="mt-2 text-caption">{{ renderMsg }}</p>
-      </v-card-text>
-    </v-card>
+    <v-dialog v-model="bulkEditDialog" max-width="500" transition="dialog-bottom-transition">
+      <v-card rounded="xl" class="glass-dialog">
+        <v-toolbar color="transparent" class="border-b">
+          <v-toolbar-title class="font-weight-bold">{{ t('bulk-edit-title') }}</v-toolbar-title>
+          <v-spacer></v-spacer>
+          <v-btn icon="mdi-close" variant="text" @click="bulkEditDialog = false"></v-btn>
+        </v-toolbar>
+        <v-card-text class="pa-6">
+          <v-alert color="info" variant="tonal" class="mb-4 text-body-2" icon="mdi-information-outline">
+            {{ t('bulk-edit-hint') }}
+          </v-alert>
+          <v-form ref="bulkForm">
+            <div class="text-subtitle-2 mb-2">{{ t('aspect') }}</div>
+            <div class="d-flex align-center gap-2 mb-6">
+              <v-text-field type="number" placeholder="Original" v-model="bulkEditData.aspectWidth" hide-details variant="outlined" density="comfortable"></v-text-field>
+              <span>:</span>
+              <v-text-field type="number" placeholder="Original" v-model="bulkEditData.aspectHeight" hide-details variant="outlined" density="comfortable"></v-text-field>
+            </div>
 
-    <!-- 谱面表格 -->
-    <div class="batch-table-container flex-grow-1">
-      <!-- 使用虚拟滚动表格 -->
-      <v-data-table-virtual
-        :headers="tableHeaders"
-        :items="filteredCharts"
-        :item-value="(item) => item.path"
-        density="compact"
-        fixed-header
-        height="100%"
-        class="custom-table"
-        :no-data-text="searchQuery ? t('no-results') : t('no-charts')"
-        :items-per-page="-1"
-        hide-default-footer
-      >
-        <!-- 选择框列 -->
-        <template v-slot:item.selected="{ item, index }">
-          <v-checkbox
-            v-model="item.selected"
-            :disabled="item.status === 'rendering'"
-            density="compact"
-            hide-details
-            class="custom-checkbox"
-          />
-        </template>
+            <div class="text-subtitle-2 mb-1">{{ t('dim') }}</div>
+            <v-slider thumb-label :min="0" :max="1" :step="0.01" :model-value="bulkEditData.backgroundDim ?? 0" @update:model-value="bulkEditData.backgroundDim = $event" hide-details color="primary" class="mb-2">
+              <template v-slot:append>
+                <v-btn icon="mdi-close-circle" size="small" variant="text" color="error" v-if="bulkEditData.backgroundDim !== null" @click="bulkEditData.backgroundDim = null"></v-btn>
+              </template>
+            </v-slider>
 
-        <!-- 名称列 -->
-        <template v-slot:item.name="{ item }">
-          <div :title="item.name" class="text-truncate table-name-cell">{{ item.name }}</div>
-        </template>
-
-        <!-- 状态列 -->
-        <template v-slot:item.status="{ item }">
-          <v-chip
-            :class="`status-chip status-${item.status}`"
-            size="small"
-            class="status-chip-custom"
-          >
-            {{ t(item.status) }}
-          </v-chip>
-          <div v-if="item.error" class="text-caption text-red mt-1 error-message">{{ item.error }}</div>
-        </template>
-
-        <!-- 操作列 -->
-        <template v-slot:item.actions="{ item, index }">
-          <div class="action-buttons">
-            <v-btn
-              @click="openEditDialog(index)"
-              color="primary"
-              icon="mdi-pencil"
-              size="small"
-              variant="flat"
-              class="action-btn"
-              :disabled="!item.chartInfo"
-              :title="t('edit')"
-            ></v-btn>
-            <v-btn
-              @click="previewChart(index)"
-              color="primary"
-              icon="mdi-play"
-              size="small"
-              variant="flat"
-              class="action-btn"
-              :disabled="!item.chartInfo"
-              :title="t('preview')"
-            ></v-btn>
-            <v-btn
-              :disabled="item.status === 'rendering'"
-              color="error"
-              icon="mdi-delete"
-              size="small"
-              variant="flat"
-              class="action-btn"
-              @click="charts.splice(index, 1)"
-              :title="t('delete')"
-            />
-          </div>
-        </template>
-      </v-data-table-virtual>
-    </div>
+            <div class="d-flex align-center justify-space-between mt-4">
+              <span class="text-subtitle-2">{{ t('hold_cover') }}</span>
+              <v-btn-toggle v-model="bulkEditData.holdCover" color="primary" variant="outlined" density="compact">
+                <v-btn :value="null">Keep</v-btn>
+                <v-btn :value="1">On</v-btn>
+                <v-btn :value="0">Off</v-btn>
+              </v-btn-toggle>
+            </div>
+          </v-form>
+        </v-card-text>
+        <v-card-actions class="pa-4 bg-surface-light border-t">
+          <v-spacer></v-spacer>
+          <v-btn variant="plain" @click="bulkEditDialog = false">{{ t('close') }}</v-btn>
+          <v-btn color="primary" variant="flat" class="px-6" @click="saveBulkEdit">{{ t('save') }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
 <style scoped>
-/* 顶部导航栏 */
-.top-bar {
-  background: rgba(30, 30, 30, 0.8);
-  backdrop-filter: blur(8px);
-  border-radius: 12px;
-  padding: 8px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* 工具栏 */
-.toolbar {
+/* 全局布局 */
+.batch-layout {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  background: rgba(30, 30, 30, 0.8);
-  backdrop-filter: blur(8px);
-  border-radius: 12px;
-  padding: 8px 16px;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  background: transparent;
+}
+
+/* 通用间距辅助类 */
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+.min-w-0 { min-width: 0; }
+
+/* 玻璃态头部 */
+.header-glass {
+  background: rgba(30, 30, 30, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px 20px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
 }
 
-.toolbar-section {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.search-field {
-  width: 250px;
-  transition: width 0.3s ease;
-}
-
-.search-field:focus-within {
-  width: 300px;
-}
-
-/* 统计信息栏 */
-.stats-bar {
-  background: rgba(30, 30, 30, 0.6);
-  border-radius: 8px;
-  padding: 8px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-/* 进度卡片 */
-.progress-card {
-  background: rgba(30, 30, 30, 0.8) !important;
-  backdrop-filter: blur(8px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 12px !important;
-}
-
-/* 表格容器 */
-.batch-table-container {
-  background: rgba(30, 30, 30, 0.8) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 12px !important;
-  overflow: hidden;
-  flex: 1;
-  min-height: 300px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
-}
-
-/* 美化滚动条 */
-.batch-table-container :deep(.v-data-table-virtual__scroll) {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(118, 64, 193, 0.5) rgba(30, 30, 30, 0.1);
-}
-
-/* 强制显示滚动条，覆盖全局隐藏 */
-.batch-table-container :deep(.v-data-table-virtual__scroll)::-webkit-scrollbar {
-  width: 8px;
-  display: block !important;
-}
-
-.batch-table-container :deep(.v-data-table-virtual__scroll)::-webkit-scrollbar-track {
-  background: rgba(30, 30, 30, 0.1);
-  border-radius: 4px;
-  margin: 8px;
-}
-
-.batch-table-container :deep(.v-data-table-virtual__scroll)::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, rgba(118, 64, 193, 0.6), rgba(156, 105, 217, 0.6));
-  border-radius: 4px;
-  transition: all 0.3s ease;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.batch-table-container :deep(.v-data-table-virtual__scroll)::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, rgba(118, 64, 193, 0.8), rgba(156, 105, 217, 0.8));
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.batch-table-container :deep(.v-data-table-virtual__scroll)::-webkit-scrollbar-thumb:active {
-  background: linear-gradient(135deg, rgba(118, 64, 193, 0.9), rgba(156, 105, 217, 0.9));
-}
-
-.text-truncate {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.gap-2 {
-  gap: 8px;
-}
-
-.flex-grow-1 {
+.search-bar {
+  max-width: 300px;
   flex-grow: 1;
 }
 
-tr:hover {
-  background-color: rgba(118, 64, 193, 0.1) !important;
-  transition: background-color 0.3s ease;
-}
-
-tr {
-  transition: background-color 0.5s ease;
-}
-
-.dialog-blur {
-  backdrop-filter: blur(16px);
-}
-
-.transparent-blur-card {
-  background: rgba(30, 30, 30, 0.85) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  border-radius: 20px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
-}
-
-/* 表格整体样式穿透 */
-.custom-table {
-  background: transparent !important;
-}
-
-/* 表头样式 */
-.custom-table :deep(.v-data-table__thead) {
-  background: linear-gradient(180deg, rgba(118, 64, 193, 0.3), rgba(156, 105, 217, 0.2)) !important;
-}
-
-.custom-table :deep(.v-data-table__th) {
-  color: #e0e0e0 !important;
-  font-weight: 500 !important;
-  padding: 16px !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
-
-/* 表格行样式 */
-.custom-table :deep(.v-data-table__tbody tr) {
-  transition: all 0.2s ease;
-  background: transparent !important;
-}
-
-.custom-table :deep(.v-data-table__tbody tr:hover) {
-  background: rgba(118, 64, 193, 0.08) !important;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(118, 64, 193, 0.15);
-}
-
-.custom-table :deep(.v-data-table__td) {
-  color: #f0f0f0 !important;
-  padding: 16px !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-  vertical-align: middle !important;
-}
-
-/* 名称单元格样式 */
-.table-name-cell {
-  max-width: 200px;
+/* 列表容器滚动定制 */
+.list-container {
+  position: relative;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border-radius: 16px;
+}
+.custom-scroll {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.2) transparent;
+}
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
 }
 
-/* 复选框样式优化 */
-.custom-checkbox .v-icon {
-  color: #8a8a94 !important;
-  transition: color 0.2s ease;
-}
-
-.custom-checkbox .v-icon.checked {
-  color: #7640c1 !important;
-}
-
-.custom-checkbox:disabled .v-icon {
-  color: #505058 !important;
-  opacity: 0.6;
-}
-
-/* 状态标签样式 */
-.status-chip-custom {
-  border: none !important;
-  font-weight: 500;
-  text-transform: capitalize;
-  padding: 4px 12px;
+/* 单个列表项（核心视觉） */
+.chart-row-card {
+  background: rgba(40, 40, 40, 0.7) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 12px !important;
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  position: relative;
+  overflow: hidden;
 }
 
-/* 不同状态的标签颜色 */
-.status-chip.status-ready {
-  background: rgba(76, 175, 80, 0.2) !important;
-  color: #81c784 !important;
+.chart-row-card:hover {
+  background: rgba(55, 55, 55, 0.9) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
-.status-chip.status-rendering {
-  background: rgba(255, 152, 0, 0.2) !important;
-  color: #ffb74d !important;
+/* 进度条背景效果 */
+.progress-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(var(--v-theme-primary), 0.15) 0%, rgba(var(--v-theme-primary), 0.3) 100%);
+  z-index: 0;
+  transition: width 0.3s linear;
 }
 
-.status-chip.status-error {
-  background: rgba(244, 67, 54, 0.2) !important;
-  color: #e57373 !important;
+.z-1 { z-index: 1; }
+
+.is-failed {
+  border-left: 4px solid rgb(var(--v-theme-error)) !important;
 }
 
-.error-message {
-  font-size: 12px;
-  color: #ff8a80 !important;
-  margin-top: 4px;
+.is-rendering {
+  border: 1px solid rgba(var(--v-theme-warning), 0.4) !important;
 }
 
-.action-buttons {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
+/* 动画效果 */
+.spin-anim {
+  animation: spin 1.5s linear infinite;
+}
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+.pulse-anim {
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(var(--v-theme-warning), 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(var(--v-theme-warning), 0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--v-theme-warning), 0); }
 }
 
-.action-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px !important;
-  transition: all 0.2s ease !important;
-  opacity: 0.9;
+/* 弹窗毛玻璃 */
+.glass-dialog {
+  background: rgba(24, 24, 24, 0.85) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.action-btn:hover {
-  opacity: 1;
-  transform: scale(1.05);
-  background: rgba(118, 64, 193, 0.2) !important;
-}
+.border-b { border-bottom: 1px solid rgba(255,255,255,0.08) !important; }
+.border-t { border-top: 1px solid rgba(255,255,255,0.08) !important; }
 
-.action-btn:disabled {
-  opacity: 0.4 !important;
-  transform: none !important;
-  background: transparent !important;
+.glow-button {
+  box-shadow: 0 0 15px rgba(var(--v-theme-success), 0.3);
+  transition: box-shadow 0.3s;
 }
-
-/* 空状态样式 */
-.empty-state {
-  text-align: center;
-  padding: 60px 20px !important;
-  color: #a0a0a0;
-}
-
-.empty-state-icon {
-  margin-bottom: 16px;
-}
-
-.empty-state-text {
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-/* 按钮样式优化 */
-:deep(.v-btn) {
-  border-radius: 8px !important;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  text-transform: none;
-}
-
-:deep(.v-btn[color="primary"]) {
-  background: linear-gradient(135deg, rgba(118, 64, 193, 0.8), rgba(156, 105, 217, 0.8)) !important;
-  box-shadow: 0 4px 12px rgba(118, 64, 193, 0.3);
-}
-
-:deep(.v-btn[color="primary"]:hover) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(118, 64, 193, 0.4);
-}
-
-:deep(.v-btn[color="secondary"]) {
-  background: linear-gradient(135deg, rgba(63, 81, 181, 0.8), rgba(92, 107, 192, 0.8)) !important;
-  box-shadow: 0 4px 12px rgba(63, 81, 181, 0.3);
-}
-
-:deep(.v-btn[color="error"]) {
-  background: linear-gradient(135deg, rgba(244, 67, 54, 0.8), rgba(229, 115, 115, 0.8)) !important;
-  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
-}
-
-/* 组合框样式优化 */
-:deep(.v-combobox .v-field) {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border-radius: 8px !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-}
-
-:deep(.v-combobox .v-field__input) {
-  color: #fff !important;
-}
-
-:deep(.v-combobox .v-label) {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-
-/* 进度卡片样式优化 */
-:deep(.v-card) {
-  background: rgba(30, 30, 30, 0.85) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  border-radius: 16px !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
-}
-
-:deep(.v-card-title) {
-  color: #e0e0e0 !important;
-}
-
-:deep(.v-card-text) {
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-
-/* 工具栏样式优化 */
-:deep(.v-toolbar) {
-  background: linear-gradient(135deg, rgba(118, 64, 193, 0.8), rgba(156, 105, 217, 0.8)) !important;
-  border-radius: 20px 20px 0 0 !important;
-}
-
-:deep(.v-toolbar-title) {
-  color: #fff !important;
+.glow-button:hover:not(:disabled) {
+  box-shadow: 0 0 25px rgba(var(--v-theme-success), 0.6);
 }
 </style>
