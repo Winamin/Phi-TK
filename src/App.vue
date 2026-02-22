@@ -44,6 +44,8 @@ declare global {
 </script>
 
 <script setup lang="ts">
+import { computed, onMounted } from 'vue';
+import { convertFileSrc } from '@tauri-apps/api/core';
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -71,10 +73,48 @@ window.goto = navigateTo;
 
 // 下拉菜单状态
 const showDropdown = ref(false);
+
+// 自定义背景
+const customBackground = ref<string | null>(null);
+
+onMounted(() => {
+  // 从 localStorage 读取自定义背景
+  customBackground.value = localStorage.getItem('customBackground');
+
+  // 监听自定义背景变化事件
+  window.addEventListener('customBackgroundChanged', ((event: CustomEvent) => {
+    customBackground.value = event.detail;
+  }) as EventListener);
+});
+
+// 计算背景样式（使用convertFileSrc转换路径）
+const backgroundStyle = computed(() => {
+  if (customBackground.value) {
+    try {
+      const imageUrl = convertFileSrc(customBackground.value);
+      return {
+        backgroundImage: `url('${imageUrl}')`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
+      };
+    } catch {
+      return {};
+    }
+  }
+  return {};
+});
 </script>
 
 <template>
   <v-app id="phi-tk" class="dark-theme">
+    <!-- 自定义背景层 -->
+    <div v-if="customBackground" class="custom-background-layer" :style="backgroundStyle"></div>
+
+    <!-- 自定义背景遮罩层 -->
+    <div v-if="customBackground" class="background-overlay"></div>
+
     <v-sonner position="top-center" />
 
     <!-- 顶部导航栏 -->
@@ -137,21 +177,61 @@ const showDropdown = ref(false);
 
 <style>
 .dark-theme {
-  background: linear-gradient(135deg, #1f1b3d, #3c2d6d, #5b4a9a);
+  background-color: #0d0d0d;
   min-height: 100vh;
+  position: relative !important;
+}
+
+/* 自定义背景层 */
+.custom-background-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* 自定义背景渐变遮罩层 - 从边缘暗到中心亮的过渡 */
+.background-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(
+      ellipse at center,
+      transparent 0%,
+      rgba(13, 13, 13, 0.3) 30%,
+      rgba(13, 13, 13, 0.6) 50%,
+      rgba(13, 13, 13, 0.8) 70%,
+      rgba(13, 13, 13, 0.95) 100%
+    );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 确保内容在背景之上 */
+.dark-theme > * {
+  position: relative;
+  z-index: 1;
 }
 
 .app-bar-glass {
   backdrop-filter: blur(40px) saturate(200%);
-  background: rgba(40, 32, 72, 0.7) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+  background: rgba(18, 18, 18, 0.9) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 10;
 }
 
 .blur-background {
   backdrop-filter: blur(40px) saturate(200%);
-  background: linear-gradient(135deg, rgba(88, 59, 126, 0.15) 0%, rgba(186, 104, 200, 0.1) 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background: rgba(18, 18, 18, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 .nav-icons-container {
@@ -167,7 +247,7 @@ const showDropdown = ref(false);
   border-radius: 12px; /* 基础圆角 */
   position: relative;
   overflow: hidden;
-  background: rgba(50, 42, 90, 0.3);
+  background: rgba(40, 40, 40, 0.5);
   color: rgba(255, 255, 255, 0.8);
 }
 
@@ -187,17 +267,17 @@ const showDropdown = ref(false);
 .nav-icon-btn[icon='mdi-chevron-down']:hover {
   border-radius: 12px !important; /* 确保hover时保持圆角 */
   transform: translateY(-2px) scale(1.05);
-  background: linear-gradient(135deg, rgba(96, 67, 140, 0.4) 0%, rgba(118, 64, 193, 0.4) 100%) !important;
-  box-shadow: 0 4px 20px rgba(118, 64, 193, 0.4);
+  background: rgba(60, 60, 60, 0.8) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   color: #fff;
 }
 
 /* 下拉菜单打开时（激活状态） */
 .nav-icon-btn[icon='mdi-chevron-down'].v-btn--active {
   border-radius: 12px !important;
-  background: linear-gradient(135deg, rgba(118, 64, 193, 0.6) 0%, rgba(156, 105, 217, 0.6) 100%) !important;
+  background: rgba(80, 80, 80, 0.9) !important;
   color: #fff;
-  box-shadow: 0 0 20px rgba(118, 64, 193, 0.6);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
 /* 如果想让更多按钮更突出，可以添加特殊标记 */
@@ -210,7 +290,7 @@ const showDropdown = ref(false);
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: rgba(118, 64, 193, 0.6);
+  background: rgba(255, 255, 255, 0.4);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -223,18 +303,17 @@ const showDropdown = ref(false);
 /* 或者使用边框发光效果 */
 .nav-icon-btn[icon='mdi-chevron-down']:hover {
   box-shadow:
-    0 4px 20px rgba(118, 64, 193, 0.4),
-    0 0 0 2px rgba(118, 64, 193, 0.2) inset; /* 内边框效果 */
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    0 0 0 2px rgba(80, 80, 80, 0.3) inset; /* 内边框效果 */
 }
 
 .dropdown-menu-glass {
   backdrop-filter: blur(40px) saturate(200%);
-  background: rgba(40, 32, 72, 0.95) !important; /* 增加透明度 */
-  border: 1px solid rgba(255, 255, 255, 0.2) !important; /* 增加边框透明度 */
+  background: rgba(18, 18, 18, 0.95) !important; /* 增加透明度 */
+  border: 1px solid rgba(255, 255, 255, 0.1) !important; /* 增加边框透明度 */
   border-radius: 16px !important; /* 添加圆角 */
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.4),
-    0 0 20px rgba(118, 64, 193, 0.3); /* 添加发光效果 */
+    0 12px 40px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   margin-top: 8px; /* 增加与按钮的间距 */
 }
@@ -270,16 +349,16 @@ const showDropdown = ref(false);
 
 /* 鼠标悬停在菜单项上时 */
 .dropdown-item:hover {
-  background: linear-gradient(135deg, rgba(118, 64, 193, 0.3) 0%, rgba(156, 105, 217, 0.3) 100%) !important;
+  background: rgba(50, 50, 50, 0.8) !important;
   transform: translateX(4px);
-  box-shadow: 0 4px 12px rgba(118, 64, 193, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* 激活状态的菜单项 */
 .dropdown-item.v-list-item--active {
-  background: linear-gradient(135deg, rgba(118, 64, 193, 0.6) 0%, rgba(156, 105, 217, 0.6) 100%) !important;
+  background: rgba(70, 70, 70, 0.9) !important;
   color: #fff;
-  box-shadow: 0 4px 16px rgba(118, 64, 193, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 /* 分割线样式 */
@@ -303,40 +382,46 @@ const showDropdown = ref(false);
 }
 
 .text-gradient {
-  background: linear-gradient(45deg, #c5b8ff, #d1c4e9);
+  background: linear-gradient(45deg, #ffffff, #b0b0b0);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   font-weight: 600;
   letter-spacing: 1px;
-  text-shadow: 0 0 8px rgba(193, 176, 255, 0.3);
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
   animation: glow-pulse 3s ease-in-out infinite;
 }
 
 @keyframes glow-pulse {
   0%,
   100% {
-    text-shadow: 0 0 8px rgba(193, 176, 255, 0.3);
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
   }
   50% {
-    text-shadow: 0 0 20px rgba(193, 176, 255, 0.6);
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
   }
 }
 
 .glow-spinner {
-  filter: drop-shadow(0 0 12px #b19dff);
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.3));
 }
 
 .animated-background::after {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
+  content: none;
+}
+
+.v-main {
+  display: flex;
+  justify-content: center;
+  align-items: center;
   width: 100%;
   height: 100%;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 1000 1000' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-  opacity: 0.05;
-  pointer-events: none;
-  animation: particleFlow 20s linear infinite;
+  position: relative;
+  z-index: 3 !important;
+  background: transparent !important;
+}
+
+.v-main__wrap {
+  background: transparent !important;
 }
 
 @keyframes particleFlow {

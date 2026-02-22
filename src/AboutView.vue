@@ -167,13 +167,13 @@ onMounted(() => {
   position: absolute;
   border-radius: 50%;
   filter: blur(60px);
-  opacity: 0.4;
+  opacity: 0.3;
 }
 
 .circle-1 {
   width: 300px;
   height: 300px;
-  background: linear-gradient(135deg, #2196F3, #64B5F6);
+  background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
   top: -100px;
   left: -100px;
 }
@@ -181,7 +181,7 @@ onMounted(() => {
 .circle-2 {
   width: 400px;
   height: 400px;
-  background: linear-gradient(135deg, #9C27B0, #BA68C8);
+  background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
   bottom: -150px;
   right: -150px;
 }
@@ -189,7 +189,7 @@ onMounted(() => {
 .circle-3 {
   width: 250px;
   height: 250px;
-  background: linear-gradient(135deg, #4CAF50, #81C784);
+  background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
   top: 50%;
   right: 10%;
   transform: translateY(-50%);
@@ -223,26 +223,23 @@ onMounted(() => {
   width: 120px;
   height: 120px;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(30, 30, 30, 0.8);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .app-logo:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 
 .logo-icon {
-  background: linear-gradient(135deg, #2196F3, #9C27B0);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .title-container {
@@ -256,7 +253,7 @@ onMounted(() => {
   font-size: 4rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #fff, #a8d8ff);
+  background: linear-gradient(135deg, #ffffff, #909090);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -269,9 +266,9 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   padding: 6px 16px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(40, 40, 40, 0.8);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
 }
 
@@ -294,9 +291,9 @@ onMounted(() => {
 }
 
 .info-card {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(25, 25, 25, 0.8);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   overflow: hidden;
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
@@ -305,13 +302,13 @@ onMounted(() => {
 
 .info-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
-  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .github-card:hover {
-  border-color: rgba(33, 150, 243, 0.5);
-  box-shadow: 0 12px 32px rgba(33, 150, 243, 0.2);
+  border-color: rgba(60, 60, 60, 0.8);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
 }
 
 .card-content {
@@ -332,27 +329,27 @@ onMounted(() => {
 }
 
 .github-card .card-icon {
-  background: rgba(33, 150, 243, 0.1);
+  background: rgba(50, 50, 50, 0.5);
 }
 
 .license-card .card-icon {
-  background: rgba(76, 175, 80, 0.1);
+  background: rgba(50, 50, 50, 0.5);
 }
 
 .version-card .card-icon {
-  background: rgba(156, 39, 176, 0.1);
+  background: rgba(50, 50, 50, 0.5);
 }
 
 .github-icon {
-  color: #2196F3;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .license-icon {
-  color: #4CAF50;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .info-icon {
-  color: #9C27B0;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .card-text {

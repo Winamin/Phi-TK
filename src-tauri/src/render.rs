@@ -78,6 +78,7 @@ pub struct RenderConfig {
 
     pub hand_split: bool,
     pub note_speed_factor: f32,
+    pub bar: bool,
 
     pub ui_score: bool,
     pub ui_combo: bool,
@@ -110,7 +111,7 @@ impl Default for RenderConfig {
             video_codec: "h264".to_string(),
             show_progress_text: false,
             show_time_text: false,
-            target_audio: 96000,
+            target_audio: 44100,
             autoplay: None,
             bitrate_control: "CRF".to_string(),
             bitrate: "28".to_string(),
@@ -144,6 +145,7 @@ impl Default for RenderConfig {
             ui_line: true,
             ui_pb: true,
             ui_pause: true,
+            bar: false,
 
             //ffmpeg
             ffmpeg_thread: false,
@@ -190,6 +192,7 @@ impl RenderConfig {
             ui_line: self.ui_line,
             ui_pb: self.ui_pb,
             ui_pause: self.ui_pause,
+            bar: self.bar,
             ..Default::default()
         }
     }
@@ -458,7 +461,7 @@ pub async fn main() -> Result<()> {
         }
     let music: Result<_> = async { AudioClip::new(fs.load_file(&info.music).await?) }.await;
     let music = music.with_context(|| tl!("load-music-failed"))?;
-    let ending = ld!("ending.ogg");
+    let ending = ld!("ending.mp3"); //煞笔吧
     let track_length = music.length() as f64;
     let sfx_click = ld!("click.ogg");
     let sfx_drag = ld!("drag.ogg");
@@ -478,7 +481,7 @@ pub async fn main() -> Result<()> {
     send(IPCEvent::StartMixing);
     let mixing_output = NamedTempFile::new()?;
     let target_sample_rate = params.config.target_audio;
-    let sample_rate = 96000;
+    let sample_rate = 44100;
     let sample_rate_f64 = sample_rate as f64;
     assert_eq!(sample_rate, ending.sample_rate());
     assert_eq!(sample_rate, sfx_click.sample_rate());

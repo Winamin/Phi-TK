@@ -534,41 +534,41 @@ document.addEventListener('click', closeContextMenu);
 }
 
 .task-list::-webkit-scrollbar-track {
-  background: rgba(30, 30, 30, 0.1);
+  background: rgba(18, 18, 18, 0.1);
   border-radius: 4px;
   margin: 8px 0;
 }
 
 .task-list::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, rgba(118, 64, 193, 0.6), rgba(156, 105, 217, 0.6));
+  background: rgba(80, 80, 80, 0.8);
   border-radius: 4px;
   transition: all 0.3s ease;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .task-list::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, rgba(118, 64, 193, 0.8), rgba(156, 105, 217, 0.8));
+  background: rgba(100, 100, 100, 0.9);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
 .task-list::-webkit-scrollbar-thumb:active {
-  background: linear-gradient(135deg, rgba(118, 64, 193, 0.9), rgba(156, 105, 217, 0.9));
+  background: rgba(120, 120, 120, 0.9);
 }
 
 .task-item {
   display: flex;
-  background: rgba(30, 30, 30, 0.8);
+  background: rgba(18, 18, 18, 0.9);
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.2s ease;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   min-height: 90px;
 }
 
 .task-item:hover {
-  background: rgba(40, 40, 50, 0.9);
+  background: rgba(30, 30, 30, 0.95);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .task-cover {
@@ -662,7 +662,7 @@ document.addEventListener('click', closeContextMenu);
 }
 
 .error-dialog {
-  background: #1E1E1E;
+  background: #0a0a0a;
   border-radius: 12px !important;
   border: 1px solid #FF5252;
   box-shadow: 0 0 20px rgba(255, 82, 82, 0.3);
@@ -680,14 +680,14 @@ document.addEventListener('click', closeContextMenu);
 }
 
 .glass-background {
-  background: rgba(30, 30, 30, 0.9);
+  background: rgba(18, 18, 18, 0.95);
   backdrop-filter: blur(12px);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .text-gradient {
-  background: linear-gradient(45deg, #3f51b5, #5c6bc0);
+  background: linear-gradient(45deg, #ffffff, #909090);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -703,11 +703,11 @@ pre {
 
 /* 右键菜单样式 */
 .context-menu {
-  background: rgba(30, 30, 30, 0.9) !important;
+  background: rgba(18, 18, 18, 0.95) !important;
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 8px !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
 }
 
 /* 详情对话框样式 */

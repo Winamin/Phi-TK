@@ -1,7 +1,7 @@
 <i18n>
   en:
     already-running: Phi TK is already running
-  
+
     prev-step: Previous
     next-step: Next
     steps:
@@ -9,14 +9,14 @@
       config: 'Configure chart'
       options: 'Render options'
       render: 'Render'
-  
+
     choose:
       archive: Archive
       folder: Folder
-  
+
     chart-file: Chart file
     choose-drop: Drag and drop chart file here
-  
+
     chart-name: Chart name
     charter: Charter
     illustrator: Illustrator
@@ -24,32 +24,32 @@
     aspect: Aspect ratio
     dim: Background dim
     hold_cover: Hold Head Partial Cover
-  
+
     tip: Tip
     tip-placeholder: Leave empty to choose randomly
-  
+
     width: Width
     height: Height
-  
+
     file:
       title: File
       chart: Chart file (empty for default)
       music: Music (empty for default)
       illustration: Illustration (empty for default)
-  
+
     preview: Preview
     render: Render
     play: Play
-  
+
     render-started: Rendering has started!
     see-tasks: See tasks
     next-chart: Render Next Chart
-  
+
     ffmpeg-not-found: You haven't installed ffmpeg yet. Please download FFmpeg.exe and put it in the specific folder.
-  
+
   zh-CN:
     already-running: Phi TK 已经在运行
-  
+
     prev-step: 上一步
     next-step: 下一步
     steps:
@@ -57,14 +57,14 @@
       config: '配置谱面'
       options: '渲染参数'
       render: '渲染视频'
-  
+
     choose:
       archive: 压缩包
       folder: 文件夹
-  
+
     chart-file: 谱面文件
     choose-drop: 拖拽谱面文件到此处
-  
+
     chart-name: 谱面名
     charter: 谱师
     composer: 曲师
@@ -73,23 +73,23 @@
     aspect: 宽高比
     dim: 背景昏暗程度
     hold_cover: Hold 头部遮罩
-  
+
     tip: Tip
     tip-placeholder: 留空则随机选择
-  
+
     width: 宽
     height: 高
-  
+
     preview: 演示
     render: 渲染
     play: 游玩
-  
+
     render-started: 视频开始渲染了！
     see-tasks: 查看任务列表
     next-chart: 渲染下一个谱面
-  
+
     ffmpeg-not-found: 笨蛋怎么没安装 FFmpeg。请下载 FFmpeg.exe 并放置在指定文件夹内。
-  
+
   </i18n>
 
 <script setup lang="ts">
@@ -364,7 +364,7 @@ const archiveStyle = computed(() => ({
       0,
       ${Math.sqrt(moveOffset.value.x ** 2 + moveOffset.value.y ** 2) / 4}deg
     )`,
-  filter: `drop-shadow(${moveOffset.value.x / 4}px ${moveOffset.value.y / 4}px 6px rgba(63, 81, 181, 0.2))`,
+  filter: `drop-shadow(${moveOffset.value.x / 4}px ${moveOffset.value.y / 4}px 6px rgba(0, 0, 0, 0.3))`,
 }));
 
 const folderStyle = computed(() => ({
@@ -377,92 +377,24 @@ const folderStyle = computed(() => ({
       0,
       ${Math.sqrt(moveOffset.value.x ** 2 + moveOffset.value.y ** 2) / 6}deg
     )`,
-  filter: `drop-shadow(${-moveOffset.value.x / 4}px ${-moveOffset.value.y / 4}px 6px rgba(63, 81, 181, 0.2))`,
+  filter: `drop-shadow(${-moveOffset.value.x / 4}px ${-moveOffset.value.y / 4}px 6px rgba(0, 0, 0, 0.3))`,
 }));
 </script>
 
 <template>
   <div class="hmcl-container">
-    <!-- 简化的侧边栏 -->
-    <div class="hmcl-sidebar">
-      <!-- 简化的步骤导航 -->
-      <div class="step-nav">
-        <div 
-          v-for="(stepName, index) in steps" 
-          :key="index" 
-          class="step-nav-item"
-          :class="{ 'active': stepIndex === index + 1, 'completed': stepIndex > index + 1 }"
-          @click="stepIndex > index + 1 && (stepIndex = index + 1)"
-        >
-          <div class="step-icon">
-            <v-icon v-if="stepIndex > index + 1" size="20">mdi-check</v-icon>
-            <span v-else>{{ index + 1 }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 主内容区域 -->
     <div class="hmcl-main">
-      <!-- 顶部操作栏 -->
-      <div class="hmcl-header">
-        <div class="header-title">
-          <h3>{{ t('steps.' + step) }}</h3>
-        </div>
-        <div class="header-actions">
-          <v-btn 
-            v-if="step === 'config' || step === 'options'" 
-            variant="text" 
-            @click="stepIndex && stepIndex--" 
-            class="header-btn"
-            size="small"
-          >
-            <v-icon class="mr-1">mdi-arrow-left</v-icon>
-            {{ t('prev-step') }}
-          </v-btn>
-          <v-btn 
-            v-if="step === 'options'" 
-            variant="outlined" 
-            @click="playChart" 
-            class="header-btn ml-2"
-            size="small"
-          >
-            <v-icon class="mr-1">mdi-play</v-icon>
-            {{ t('play') }}
-          </v-btn>
-          <v-btn 
-            v-if="step === 'options'" 
-            variant="outlined" 
-            @click="previewChart" 
-            class="header-btn ml-2"
-            size="small"
-          >
-            <v-icon class="mr-1">mdi-eye</v-icon>
-            {{ t('preview') }}
-          </v-btn>
-          <v-btn 
-            v-if="step === 'config' || step === 'options'" 
-            variant="flat" 
-            @click="moveNext" 
-            class="header-btn primary-btn ml-2"
-            size="small"
-          >
-            {{ step === 'options' ? t('render') : t('next-step') }}
-            <v-icon class="ml-1">mdi-arrow-right</v-icon>
-          </v-btn>
-        </div>
-      </div>
-
       <!-- 内容区域 -->
       <div class="hmcl-content">
         <!-- 步骤1: 选择谱面 -->
         <div class="step-content" :class="{ 'active': step === 'choose' }">
           <div class="choose-content">
             <div class="choose-cards">
-              <div 
+              <div
                 class="choose-card"
                 @click="chooseChart(false)"
-                @mousemove="onHoverMove" 
+                @mousemove="onHoverMove"
                 @mouseleave="resetHover"
                 ref="hoverContainer"
               >
@@ -472,7 +404,7 @@ const folderStyle = computed(() => ({
                 <h4>{{ t('choose.archive') }}</h4>
                 <p>选择 .zip 或 .pez 格式的谱面压缩包</p>
               </div>
-              <div 
+              <div
                 class="choose-card"
                 @click="chooseChart(true)"
               >
@@ -502,139 +434,133 @@ const folderStyle = computed(() => ({
 
         <!-- 步骤2: 配置谱面 -->
         <div class="step-content" :class="{ 'active': step === 'config' }">
-          <div class="config-content" v-if="chartInfo">
-            <v-form ref="form" class="config-form">
-              <!-- 左右两栏布局 -->
-              <div class="config-layout">
+          <div class="config-panel" v-if="chartInfo">
+            <v-form ref="form" class="config-form-neo">
+              <!-- 标题区 -->
+              <div class="config-header">
+                <h2 class="config-title">Configure Chart</h2>
+                <p class="config-subtitle">设置谱面基本信息与显示参数</p>
+              </div>
+
+              <!-- 内容网格布局 -->
+              <div class="config-grid">
                 <!-- 左栏 - 基本信息 -->
-                <div class="config-column">
-                  <div class="field-group">
-                    <div class="field-title">基本信息</div>
-                    <div class="field-list">
-                      <div class="field-item">
-                        <label class="field-label">{{ t('chart-name') }} *</label>
-                        <v-text-field 
-                          v-model="chartInfo.name"
-                          :rules="[RULES.non_empty]"
-                          variant="outlined"
-                          density="compact"
-                          hide-details
-                          class="field-input"
-                        ></v-text-field>
-                      </div>
-                      <div class="field-item">
-                        <label class="field-label">{{ t('level') }} *</label>
-                        <v-text-field 
-                          v-model="chartInfo.level"
-                          :rules="[RULES.non_empty]"
-                          variant="outlined"
-                          density="compact"
-                          hide-details
-                          class="field-input"
-                        ></v-text-field>
-                      </div>
-                      <div class="field-item">
-                        <label class="field-label">{{ t('charter') }} *</label>
-                        <v-text-field 
-                          v-model="chartInfo.charter"
-                          :rules="[RULES.non_empty]"
-                          variant="outlined"
-                          density="compact"
-                          hide-details
-                          class="field-input"
-                        ></v-text-field>
-                      </div>
-                      <div class="field-item">
-                        <label class="field-label">{{ t('composer') }}</label>
-                        <v-text-field 
-                          v-model="chartInfo.composer"
-                          variant="outlined"
-                          density="compact"
-                          hide-details
-                          class="field-input"
-                        ></v-text-field>
-                      </div>
-                      <div class="field-item">
-                        <label class="field-label">{{ t('illustrator') }}</label>
-                        <v-text-field 
-                          v-model="chartInfo.illustrator"
-                          variant="outlined"
-                          density="compact"
-                          hide-details
-                          class="field-input"
-                        ></v-text-field>
-                      </div>
+                <div class="config-section">
+                  <div class="section-header">
+                    <span class="section-number">01</span>
+                    <h3 class="section-title">基本信息</h3>
+                  </div>
+                  <div class="section-body">
+                    <div class="neo-field">
+                      <label class="neo-label required">{{ t('chart-name') }}</label>
+                      <input
+                        v-model="chartInfo.name"
+                        class="neo-input"
+                        :class="{ 'has-value': chartInfo.name }"
+                        placeholder=" "
+                      />
+                    </div>
+                    <div class="neo-field">
+                      <label class="neo-label required">{{ t('level') }}</label>
+                      <input
+                        v-model="chartInfo.level"
+                        class="neo-input"
+                        :class="{ 'has-value': chartInfo.level }"
+                        placeholder=" "
+                      />
+                    </div>
+                    <div class="neo-field">
+                      <label class="neo-label required">{{ t('charter') }}</label>
+                      <input
+                        v-model="chartInfo.charter"
+                        class="neo-input"
+                        :class="{ 'has-value': chartInfo.charter }"
+                        placeholder=" "
+                      />
+                    </div>
+                    <div class="neo-field">
+                      <label class="neo-label">{{ t('composer') }}</label>
+                      <input
+                        v-model="chartInfo.composer"
+                        class="neo-input"
+                        :class="{ 'has-value': chartInfo.composer }"
+                        placeholder=" "
+                      />
+                    </div>
+                    <div class="neo-field">
+                      <label class="neo-label">{{ t('illustrator') }}</label>
+                      <input
+                        v-model="chartInfo.illustrator"
+                        class="neo-input"
+                        :class="{ 'has-value': chartInfo.illustrator }"
+                        placeholder=" "
+                      />
                     </div>
                   </div>
                 </div>
 
                 <!-- 右栏 - 显示设置 -->
-                <div class="config-column">
-                  <div class="field-group">
-                    <div class="field-title">显示设置</div>
-                    <div class="field-list">
-                      <div class="field-item">
-                        <label class="field-label">{{ t('aspect') }}</label>
-                        <div class="aspect-inputs">
-                          <v-text-field 
-                            type="number"
-                            v-model="aspectWidth"
-                            :rules="[RULES.positive]"
-                            :label="t('width')"
-                            variant="outlined"
-                            density="compact"
-                            hide-details
-                            class="aspect-input"
-                          ></v-text-field>
-                          <span class="aspect-separator">:</span>
-                          <v-text-field 
-                            type="number"
-                            v-model="aspectHeight"
-                            :rules="[RULES.positive]"
-                            :label="t('height')"
-                            variant="outlined"
-                            density="compact"
-                            hide-details
-                            class="aspect-input"
-                          ></v-text-field>
-                        </div>
+                <div class="config-section">
+                  <div class="section-header">
+                    <span class="section-number">02</span>
+                    <h3 class="section-title">显示设置</h3>
+                  </div>
+                  <div class="section-body">
+                    <!-- 宽高比 -->
+                    <div class="neo-field">
+                      <label class="neo-label">{{ t('aspect') }}</label>
+                      <div class="aspect-row">
+                        <input
+                          type="number"
+                          v-model="aspectWidth"
+                          class="neo-input aspect-input"
+                        />
+                        <span class="aspect-colon">:</span>
+                        <input
+                          type="number"
+                          v-model="aspectHeight"
+                          class="neo-input aspect-input"
+                        />
                       </div>
-                      <div class="field-item">
-                        <label class="field-label">{{ t('dim') }}</label>
-                        <v-slider 
+                    </div>
+
+                    <!-- 背景暗度 -->
+                    <div class="neo-field">
+                      <label class="neo-label">{{ t('dim') }}</label>
+                      <div class="slider-container">
+                        <input
+                          type="range"
                           v-model="chartInfo.backgroundDim"
-                          :min="0"
-                          :max="1"
-                          :step="0.01"
-                          color="primary"
-                          thumb-label="always"
-                          density="compact"
-                          hide-details
-                          class="field-slider"
-                        ></v-slider>
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          class="neo-slider"
+                        />
+                        <span class="slider-value">{{ Math.round(chartInfo.backgroundDim * 100) }}%</span>
                       </div>
-                      <div class="field-item">
-                        <v-switch 
-                          v-model="chartInfo.HoldPartialCover"
-                          :true-value="1"
-                          :false-value="0"
-                          :label="t('hold_cover')"
-                          color="primary"
-                          hide-details
-                          class="field-switch"
-                        ></v-switch>
-                      </div>
-                      <div class="field-item">
-                        <label class="field-label">{{ t('tip') }}</label>
-                        <v-text-field 
-                          v-model="chartInfo.tip"
-                          :placeholder="t('tip-placeholder')"
-                          variant="outlined"
-                          density="compact"
-                          hide-details
-                          class="field-input"
-                        ></v-text-field>
-                      </div>
+                    </div>
+
+                    <!-- Hold遮罩开关 -->
+                    <div class="neo-field toggle-field">
+                      <label class="neo-label">{{ t('hold_cover') }}</label>
+                      <button
+                        type="button"
+                        class="neo-toggle"
+                        :class="{ 'active': chartInfo.HoldPartialCover }"
+                        @click="chartInfo.HoldPartialCover = !chartInfo.HoldPartialCover"
+                      >
+                        <span class="toggle-indicator"></span>
+                      </button>
+                    </div>
+
+                    <!-- Tip -->
+                    <div class="neo-field">
+                      <label class="neo-label">{{ t('tip') }}</label>
+                      <input
+                        v-model="chartInfo.tip"
+                        class="neo-input"
+                        :placeholder="t('tip-placeholder')"
+                      />
                     </div>
                   </div>
                 </div>
@@ -645,8 +571,15 @@ const folderStyle = computed(() => ({
 
         <!-- 步骤3: 渲染选项 -->
         <div class="step-content" :class="{ 'active': step === 'options' }">
-          <div class="options-content">
-            <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()" class="hmcl-config"></ConfigView>
+          <div class="options-panel">
+            <!-- 标题区 -->
+            <div class="options-header">
+              <h2 class="options-title">Render Options</h2>
+              <p class="options-subtitle">配置视频输出参数与渲染设置</p>
+            </div>
+            <div class="options-content">
+              <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()" class="hmcl-config"></ConfigView>
+            </div>
           </div>
         </div>
 
@@ -686,10 +619,10 @@ const folderStyle = computed(() => ({
                     <span class="info-value">{{ aspectWidth }}:{{ aspectHeight }}</span>
                   </div>
                 </div>
-                
+
                 <div v-if="renderProgress !== undefined" class="progress-area">
-                  <v-progress-linear 
-                    :model-value="renderProgress" 
+                  <v-progress-linear
+                    :model-value="renderProgress"
                     color="primary"
                     height="8"
                     rounded
@@ -714,6 +647,54 @@ const folderStyle = computed(() => ({
       </div>
     </div>
 
+    <!-- 底部操作栏 -->
+    <div class="bottom-action-bar" v-if="step === 'config' || step === 'options' || step === 'render'">
+      <div class="action-buttons-left">
+        <v-btn
+          v-if="step === 'config' || step === 'options'"
+          variant="outlined"
+          @click="stepIndex && stepIndex--"
+          class="action-btn"
+          size="small"
+        >
+          <v-icon class="mr-1">mdi-arrow-left</v-icon>
+          {{ t('prev-step') }}
+        </v-btn>
+      </div>
+      <div class="action-buttons-right">
+        <v-btn
+          v-if="step === 'options'"
+          variant="outlined"
+          @click="playChart"
+          class="action-btn"
+          size="small"
+        >
+          <v-icon class="mr-1">mdi-gamepad-variant</v-icon>
+          {{ t('play') }}
+        </v-btn>
+        <v-btn
+          v-if="step === 'options'"
+          variant="outlined"
+          @click="previewChart"
+          class="action-btn"
+          size="small"
+        >
+          <v-icon class="mr-1">mdi-eye</v-icon>
+          {{ t('preview') }}
+        </v-btn>
+        <v-btn
+          v-if="step === 'config' || step === 'options'"
+          variant="flat"
+          @click="moveNext"
+          class="action-btn primary-btn"
+          size="small"
+        >
+          {{ step === 'options' ? t('render') : t('next-step') }}
+          <v-icon class="ml-1">mdi-arrow-right</v-icon>
+        </v-btn>
+      </div>
+    </div>
+
     <!-- 文件拖放覆盖层 -->
     <v-overlay v-model="fileHovering" contained class="align-center justify-center hmcl-drop-overlay" persistent :close-on-content-click="false">
       <div class="drop-zone">
@@ -729,117 +710,11 @@ const folderStyle = computed(() => ({
   display: flex;
   height: 100%;
   width: 100%;
-  background-color: #1e1e1e;
+  background-color: transparent;
   font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
   color: #e0e0e0;
-}
-
-.hmcl-sidebar {
-  width: 80px;
-  background: rgba(30, 30, 46, 0.9);
-  color: #e0e0e0;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
-  border-right: 1px solid rgba(63, 81, 181, 0.3);
-  backdrop-filter: blur(8px);
-}
-
-/* 步骤导航 */
-.step-nav {
-  padding: 20px 0;
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-.step-nav-item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: rgba(63, 81, 181, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.8);
-  overflow: hidden;
-}
-
-.step-nav-item::before {
-  content: '';
-  position: absolute;
-  left: -100%;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255,255,255,0.15),
-    transparent
-  );
-  transition: 0.5s;
-}
-
-.step-nav-item:hover {
-  transform: translateY(-2px) scale(1.05);
-  background: linear-gradient(
-    135deg,
-    rgba(63, 81, 181, 0.5) 0%,
-    rgba(92, 107, 192, 0.5) 100%
-  ) !important;
-  box-shadow: 0 4px 12px rgba(63, 81, 181, 0.4);
-  color: #fff;
-}
-
-.step-nav-item:hover::before {
-  left: 100%;
-}
-
-.step-nav-item.active {
-  background: linear-gradient(
-    135deg,
-    rgba(63, 81, 181, 0.7) 0%,
-    rgba(92, 107, 192, 0.7) 100%
-  ) !important;
-  color: #fff;
-  box-shadow: 0 0 15px rgba(63, 81, 181, 0.6);
-}
-
-.step-nav-item.active::after {
-  content: '';
-  position: absolute;
-  left: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 24px;
-  background: linear-gradient(135deg, #3f51b5, #5c6bc0);
-  border-radius: 2px;
-  box-shadow: 0 0 8px rgba(63, 81, 181, 0.5);
-}
-
-.step-nav-item.completed .step-icon {
-  color: #4caf50;
-}
-
-.step-icon {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  font-weight: 500;
-  position: relative;
-  z-index: 1;
+  z-index: 3;
 }
 
 /* 主内容区 */
@@ -847,72 +722,20 @@ const folderStyle = computed(() => ({
   flex-grow: 1;
   display: flex;
   flex-direction: column;
-  background-color: #1e1e1e;
+  background-color: transparent;
+  position: relative;
+  z-index: 3;
 }
 
-.hmcl-header {
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  background: rgba(30, 30, 46, 0.9);
-  border-bottom: 1px solid rgba(63, 81, 181, 0.3);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(8px);
-}
-
-.header-title h3 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 500;
-  color: #e0e0e0;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-}
-
-.header-btn {
-  margin-left: 8px;
-  border-radius: 6px;
-  text-transform: none;
-  font-weight: 400;
-  background: rgba(63, 81, 181, 0.2) !important;
-  color: #e0e0e0 !important;
-  border: 1px solid rgba(63, 81, 181, 0.3) !important;
-  transition: all 0.3s ease;
-}
-
-.header-btn:hover {
-  background: rgba(63, 81, 181, 0.4) !important;
-  border-color: rgba(63, 81, 181, 0.6) !important;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(63, 81, 181, 0.3);
-}
-
-.primary-btn {
-  background: linear-gradient(135deg, #3f51b5, #5c6bc0) !important;
-  color: white !important;
-  border: none !important;
-  box-shadow: 0 2px 8px rgba(63, 81, 181, 0.3);
-}
-
-.primary-btn:hover {
-  background: linear-gradient(135deg, #303f9f, #3949ab) !important;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(63, 81, 181, 0.4);
-}
-
-/* 内容区域 */
+/* 主内容区 */
 /* 步骤内容 */
 .hmcl-content {
   flex-grow: 1;
   padding: 24px;
   overflow-y: auto;
-  background-color: #1e1e1e;
+  background-color: transparent;
   position: relative;
+  z-index: 3;
 }
 
 /* 步骤切换动画 */
@@ -928,6 +751,9 @@ const folderStyle = computed(() => ({
   transition: opacity 0.3s ease, transform 0.3s ease;
   pointer-events: none;
   overflow-y: auto;
+  z-index: 4;
+  max-height: 100%;
+  box-sizing: border-box;
 }
 
 .step-content.active {
@@ -943,6 +769,8 @@ const folderStyle = computed(() => ({
   align-items: center;
   justify-content: center;
   height: 100%;
+  position: relative;
+  z-index: 4;
 }
 
 .choose-cards {
@@ -954,8 +782,10 @@ const folderStyle = computed(() => ({
 .choose-card {
   width: 220px;
   height: 260px;
-  background-color: #252526;
-  border: 1px solid #3e3e42;
+  background: rgba(26, 26, 26, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   padding: 24px;
   display: flex;
@@ -964,26 +794,32 @@ const folderStyle = computed(() => ({
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 4;
 }
 
 .choose-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
-  border-color: #007acc;
-  background-color: #2a2d2e;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(34, 34, 34, 0.9);
+  position: relative;
+  z-index: 5;
 }
 
 .card-icon {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background-color: #3c3c3c;
+  background: rgba(42, 42, 42, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 16px;
   color: #cccccc;
+  position: relative;
+  z-index: 5;
 }
 
 .choose-card h4 {
@@ -1000,18 +836,270 @@ const folderStyle = computed(() => ({
   text-align: center;
 }
 
-/* 配置内容 */
+/* 配置面板 - Neo-Brutalism 风格 */
+.config-panel {
+  width: 100%;
+  height: 100%;
+  max-height: calc(100vh - 180px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.config-form-neo {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.config-header {
+  margin-bottom: 24px;
+  flex-shrink: 0;
+}
+
+.config-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary, #f5f5f5);
+  margin: 0 0 8px;
+  letter-spacing: -0.5px;
+}
+
+.config-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary, #a0a0a0);
+  margin: 0;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  flex: 1;
+  min-height: 0;
+}
+
+.config-section {
+  background: rgba(20, 20, 22, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+}
+
+.section-number {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-primary, #6366f1);
+  background: rgba(99, 102, 241, 0.15);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #f5f5f5);
+  margin: 0;
+}
+
+.section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+}
+
+/* Neo 表单字段 */
+.neo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.neo-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #a0a0a0);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.neo-label.required::after {
+  content: '*';
+  color: #ef4444;
+  margin-left: 4px;
+}
+
+.neo-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(40, 40, 44, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-primary, #f5f5f5);
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.neo-input:focus {
+  outline: none;
+  border-color: var(--brand-primary, #6366f1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.neo-input::placeholder {
+  color: var(--text-muted, #666);
+}
+
+/* 宽高比输入 */
+.aspect-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aspect-input {
+  flex: 1;
+  text-align: center;
+}
+
+.aspect-colon {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-secondary, #a0a0a0);
+}
+
+/* 滑块 */
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.neo-slider {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.neo-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--brand-primary, #6366f1);
+  border: 2px solid white;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  transition: transform 0.15s ease;
+}
+
+.neo-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.slider-value {
+  min-width: 50px;
+  text-align: right;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #f5f5f5);
+}
+
+/* 开关 */
+.toggle-field {
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.neo-toggle {
+  width: 52px;
+  height: 28px;
+  background: rgba(40, 40, 44, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.neo-toggle.active {
+  background: var(--brand-primary, #6366f1);
+  border-color: var(--brand-primary, #6366f1);
+}
+
+.toggle-indicator {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+}
+
+.neo-toggle.active .toggle-indicator {
+  transform: translateX(24px);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .config-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .config-section {
+    padding: 16px;
+  }
+
+  .config-title {
+    font-size: 22px;
+  }
+
+  .section-header {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+  }
+}
+
+/* 配置内容 - 保留旧样式兼容 */
 .config-content {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 4;
 }
 
 .config-form {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 4;
 }
 
 /* 配置布局 */
@@ -1019,6 +1107,8 @@ const folderStyle = computed(() => ({
   display: flex;
   gap: 24px;
   flex-grow: 1;
+  position: relative;
+  z-index: 4;
 }
 
 .config-column {
@@ -1028,9 +1118,11 @@ const folderStyle = computed(() => ({
 }
 
 .field-group {
-  background-color: #252526;
+  background: rgba(26, 26, 26, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 8px;
-  border: 1px solid #3e3e42;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 16px;
   height: 100%;
 }
@@ -1041,7 +1133,7 @@ const folderStyle = computed(() => ({
   color: #cccccc;
   margin-bottom: 16px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #3e3e42;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .field-list {
@@ -1063,14 +1155,14 @@ const folderStyle = computed(() => ({
 }
 
 .field-input {
-  background-color: #3c3c3c !important;
+  background-color: #2a2a2a !important;
 }
 
 .field-input :deep(.v-field) {
   border-radius: 4px;
-  background-color: #3c3c3c !important;
+  background-color: #2a2a2a !important;
   color: #cccccc !important;
-  border-color: #3e3e42 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 .field-input :deep(.v-field-label) {
@@ -1094,9 +1186,9 @@ const folderStyle = computed(() => ({
 
 .aspect-input :deep(.v-field) {
   border-radius: 4px;
-  background-color: #3c3c3c !important;
+  background-color: #2a2a2a !important;
   color: #cccccc !important;
-  border-color: #3e3e42 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 .aspect-separator {
@@ -1112,19 +1204,19 @@ const folderStyle = computed(() => ({
 }
 
 .field-slider :deep(.v-slider-track__background) {
-  background-color: #3c3c3c !important;
+  background-color: #2a2a2a !important;
   opacity: 0.6; /* 可选：调整轨道背景透明度 */
 }
 
 .field-slider :deep(.v-slider-track__fill) {
-  background-color: #007acc !important;
+  background-color: #505050 !important;
 }
 
 .field-slider :deep(.v-slider-thumb .v-slider-thumb__surface) {
   border-radius: 50% !important;
-  width: 20px !important;    
+  width: 20px !important;
   height: 20px !important;
-  background-color: #3f51b5 !important; 
+  background-color: #606060 !important;
   border: 2px solid white !important;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
   transition: all 0.2s ease !important;
@@ -1134,28 +1226,67 @@ const folderStyle = computed(() => ({
 .field-slider :deep(.v-slider-thumb:hover .v-slider-thumb__surface),
 .field-slider :deep(.v-slider-thumb--active .v-slider-thumb__surface) {
   border-radius: 50% !important;
-  background-color: #5c6bc0 !important; 
-  transform: scale(1.2) !important;   
-  box-shadow: 0 3px 6px rgba(63, 81, 181, 0.5) !important;
+  background-color: #808080 !important;
+  transform: scale(1.2) !important;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5) !important;
 }
 
 .field-switch :deep(.v-switch__track) {
-  background-color: #3c3c3c !important;
+  background-color: #2a2a2a !important;
   border-radius: 10px !important;
 }
 
 .field-switch :deep(.v-switch__thumb) {
   background-color: #666 !important;
-  border-radius: 50% !important; 
+  border-radius: 50% !important;
   transition: all 0.2s ease !important;
 }
 
 .field-switch :deep(.v-switch--selected .v-switch__track) {
-  background-color: #007acc !important;
+  background-color: #505050 !important;
 }
 
 .field-switch :deep(.v-switch--selected .v-switch__thumb) {
   background-color: #fff !important;
+}
+
+/* 选项面板 - Neo-Brutalism 风格 */
+.options-panel {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+}
+
+.options-header {
+  margin-bottom: 24px;
+  flex-shrink: 0;
+}
+
+.options-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary, #f5f5f5);
+  margin: 0 0 8px;
+  letter-spacing: -0.5px;
+}
+
+.options-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary, #a0a0a0);
+  margin: 0;
+}
+
+.options-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.hmcl-config {
+  height: 100%;
 }
 
 /* 渲染内容 */
@@ -1165,16 +1296,22 @@ const folderStyle = computed(() => ({
   align-items: center;
   justify-content: center;
   height: 100%;
+  position: relative;
+  z-index: 4;
 }
 
 .hmcl-card {
   width: 100%;
   max-width: 600px;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   overflow: hidden;
-  background-color: #252526;
-  border: 1px solid #3e3e42;
+  background: rgba(26, 26, 26, 0.9);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+  z-index: 4;
 }
 
 .card-title {
@@ -1190,7 +1327,7 @@ const folderStyle = computed(() => ({
 .info-item {
   display: flex;
   padding: 8px 0;
-  border-bottom: 1px solid #3e3e42;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .info-item:last-child {
@@ -1210,6 +1347,8 @@ const folderStyle = computed(() => ({
 
 .progress-area {
   margin-top: 16px;
+  position: relative;
+  z-index: 6;
 }
 
 .progress-text {
@@ -1222,45 +1361,47 @@ const folderStyle = computed(() => ({
 .card-actions {
   justify-content: flex-end;
   gap: 8px;
-  background-color: #2a2d2e;
+  background: rgba(31, 31, 31, 0.85);
 }
 
 .card-actions .v-btn {
-  background-color: #3c3c3c !important;
+  background-color: #2a2a2a !important;
   color: #cccccc !important;
-  border: 1px solid #3e3e42 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 .card-actions .v-btn.v-btn--flat {
-  background-color: #007acc !important;
+  background-color: #404040 !important;
   color: white !important;
-  border-color: #007acc !important;
+  border-color: #404040 !important;
 }
 
 /* 加载和拖放覆盖层 */
 .hmcl-loading {
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: rgba(0, 0, 0, 0.8);
+  z-index: 10;
 }
 
 .loading-card {
   border-radius: 8px;
   overflow: hidden;
-  background-color: #252526;
+  background-color: #1a1a1a;
 }
 
 .hmcl-drop-overlay {
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: rgba(0, 0, 0, 0.8);
+  z-index: 10;
 }
 
 .drop-zone {
-  background-color: #252526;
+  background-color: #1a1a1a;
   border-radius: 8px;
   padding: 40px;
   display: flex;
   flex-direction: column;
   align-items: center;
   color: #cccccc;
-  border: 2px dashed #3e3e42;
+  border: 2px dashed rgba(255, 255, 255, 0.2);
 }
 
 .drop-zone p {
@@ -1269,29 +1410,90 @@ const folderStyle = computed(() => ({
   font-weight: 500;
 }
 
+/* 底部操作栏 */
+.bottom-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: rgba(18, 18, 18, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+  z-index: 100;
+}
+
+.action-buttons-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.action-buttons-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.action-btn {
+  border-radius: 8px;
+  text-transform: none;
+  font-weight: 500;
+  background: rgba(50, 50, 50, 0.5) !important;
+  color: #e0e0e0 !important;
+  border: 1px solid rgba(80, 80, 80, 0.4) !important;
+  transition: all 0.3s ease;
+  padding: 0 16px;
+}
+
+.action-btn:hover {
+  background: rgba(70, 70, 70, 0.6) !important;
+  border-color: rgba(120, 120, 120, 0.5) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, #404040, #505050) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.primary-btn:hover {
+  background: linear-gradient(135deg, #505050, #606060) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
 @media (max-width: 768px) {
   .hmcl-sidebar {
     width: 60px;
   }
-  
+
   .step-nav {
     gap: 12px;
   }
-  
+
   .step-nav-item {
     width: 36px;
     height: 36px;
   }
-  
+
   .step-icon {
     font-size: 14px;
   }
-  
+
   .choose-cards {
     flex-direction: column;
     align-items: center;
   }
-  
+
   .config-layout {
     flex-direction: column;
     gap: 16px;
@@ -1302,7 +1504,7 @@ const folderStyle = computed(() => ({
   .hmcl-container {
     flex-direction: column;
   }
-  
+
   .hmcl-sidebar {
     width: 100%;
     height: auto;
@@ -1310,22 +1512,22 @@ const folderStyle = computed(() => ({
     border-right: none;
     border-bottom: 1px solid #3e3e42;
   }
-  
+
   .step-nav {
     flex-direction: row;
     padding: 10px 0;
     gap: 8px;
   }
-  
+
   .step-nav-item {
     width: 32px;
     height: 32px;
   }
-  
+
   .step-icon {
     font-size: 12px;
   }
-  
+
   .step-nav-item.active::after {
     left: 50%;
     top: -8px;
@@ -1333,7 +1535,7 @@ const folderStyle = computed(() => ({
     width: 24px;
     height: 4px;
   }
-  
+
   .config-layout {
     flex-direction: column;
   }
