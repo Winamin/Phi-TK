@@ -558,7 +558,7 @@ async function replacePreset() {
                   <span class="tile-label">分辨率</span>
                 </div>
                 <transition name="tile-expand">
-                  <div v-if="focusField === 'resolution'" class="tile-editor">
+                  <div v-if="focusField === 'resolution'" class="tile-editor" @click.stop>
                     <v-combobox v-model="resolution" :items="RESOLUTIONS" density="compact" variant="outlined" hide-details />
                   </div>
                 </transition>
@@ -574,7 +574,7 @@ async function replacePreset() {
                   <span class="tile-label">帧率</span>
                 </div>
                 <transition name="tile-expand">
-                  <div v-if="focusField === 'fps'" class="tile-editor">
+                  <div v-if="focusField === 'fps'" class="tile-editor" @click.stop>
                     <v-text-field v-model="fps" density="compact" variant="outlined" hide-details type="number" />
                   </div>
                 </transition>
@@ -590,7 +590,7 @@ async function replacePreset() {
                   <span class="tile-label">编码</span>
                 </div>
                 <transition name="tile-expand">
-                  <div v-if="focusField === 'codec'" class="tile-editor">
+                  <div v-if="focusField === 'codec'" class="tile-editor" @click.stop>
                     <v-select v-model="videoCodec" :items="VIDEO_CODECS" density="compact" variant="outlined" hide-details />
                   </div>
                 </transition>
@@ -606,7 +606,7 @@ async function replacePreset() {
                   <span class="tile-label">采样率</span>
                 </div>
                 <transition name="tile-expand">
-                  <div v-if="focusField === 'audio'" class="tile-editor">
+                  <div v-if="focusField === 'audio'" class="tile-editor" @click.stop>
                     <v-select v-model="targetAudio" :items="SAMPLE_RATES" density="compact" variant="outlined" hide-details />
                   </div>
                 </transition>
