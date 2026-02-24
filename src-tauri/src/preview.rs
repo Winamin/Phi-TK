@@ -87,9 +87,13 @@ pub async fn main() -> Result<()> {
     )
     .await?;
     let mut fps_time = -1;
-
+    let mut is_fullscreen = false;
     'app: loop {
         let frame_start = tm.real_time();
+        if is_key_pressed(KeyCode::F11) {
+            is_fullscreen = !is_fullscreen;
+            set_fullscreen(is_fullscreen);
+        }
         main.update()?;
         main.render(&mut painter)?;
         if main.should_exit() {

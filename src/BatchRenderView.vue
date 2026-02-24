@@ -749,14 +749,14 @@ watch(charts, (val) => {
       </v-fade-transition>
     </div>
 
-    <v-dialog v-model="configDialog" max-width="800" transition="dialog-bottom-transition">
-      <v-card rounded="xl" class="glass-dialog">
+    <v-dialog v-model="configDialog" fullscreen transition="dialog-bottom-transition">
+      <v-card class="glass-dialog h-100">
         <v-toolbar color="transparent" class="border-b">
           <v-toolbar-title class="font-weight-bold">{{ t('configure') }}</v-toolbar-title>
           <v-spacer></v-spacer>
           <v-btn icon="mdi-close" variant="text" @click="configDialog = false"></v-btn>
         </v-toolbar>
-        <v-card-text class="pa-0">
+        <v-card-text class="pa-0 h-100">
           <ConfigView ref="configViewRef" />
         </v-card-text>
         <v-card-actions class="pa-4 bg-surface-light border-t">
