@@ -235,6 +235,7 @@ function loadDefaultConfig(): RenderConfig {
     fps: 60,
     hardwareAccel: true,
     videoCodec: 'h264',
+    encoder: 'auto',
     bitrateControl: 'CRF',
     bitrate: '28',
     targetAudio: 48000,
