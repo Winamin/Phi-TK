@@ -47,6 +47,7 @@ pub struct RenderConfig {
     pub fps: u32,
     pub hardware_accel: bool,
     pub video_codec: String,
+    pub encoder: String, // 'auto', 'nvenc', 'qsv', 'amf', 'vulkan', 'cpu'
     pub show_progress_text: bool,
     pub show_time_text: bool,
     pub target_audio: u32,
@@ -109,6 +110,7 @@ impl Default for RenderConfig {
             fps: 60,
             hardware_accel: true,
             video_codec: "h264".to_string(),
+            encoder: "auto".to_string(),
             show_progress_text: false,
             show_time_text: false,
             target_audio: 44100,
@@ -227,6 +229,10 @@ struct EncoderAvailability {
     h264_cuvid: bool,
     hevc_cuvid: bool,
     av1_cuvid: bool,
+    // Vulkan encoders
+    h264_vulkan: bool,
+    hevc_vulkan: bool,
+    av1_vulkan: bool,
 }
 
 #[cfg(target_os = "windows")]
@@ -289,6 +295,11 @@ mod hw_detect {
         Path::new(r"C:\Windows\System32\amdvlk64.dll").exists()
             || Path::new(r"C:\Windows\System32\amfrt64.dll").exists()
     }
+
+    pub fn detect_vulkan() -> bool {
+        // Check for Vulkan runtime (Vulkan Loader)
+        Path::new(r"C:\Windows\System32\vulkan-1.dll").exists()
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -314,6 +325,13 @@ mod hw_detect {
             .output()
             .map(|out| String::from_utf8_lossy(&out.stdout).contains("AMD"))
             .unwrap_or(false)
+    }
+
+    pub fn detect_vulkan() -> bool {
+        // Check for Vulkan ICD files (indicates Vulkan driver is installed)
+        Path::new("/usr/share/vulkan/icd.d").exists()
+            || Path::new("/etc/vulkan/icd.d").exists()
+            || Path::new("/usr/local/share/vulkan/icd.d").exists()
     }
 }
 
@@ -342,6 +360,17 @@ mod hw_detect {
             .args(&["SPDisplaysDataType"])
             .output()
             .map(|out| String::from_utf8_lossy(&out.stdout).contains("AMD"))
+            .unwrap_or(false)
+    }
+
+    pub fn detect_vulkan() -> bool {
+        // macOS uses MoltenVK for Vulkan support
+        // Check for MoltenVK or Vulkan loader
+        Command::new("sh")
+            .arg("-c")
+            .arg("ls /usr/local/lib/libMoltenVK.dylib 2>/dev/null || ls /opt/homebrew/lib/libMoltenVK.dylib 2>/dev/null || ls ~/Library/Frameworks/libMoltenVK.dylib 2>/dev/null")
+            .status()
+            .map(|s| s.success())
             .unwrap_or(false)
     }
 }
@@ -798,13 +827,29 @@ pub async fn main() -> Result<()> {
 
     fn test_encoder(ffmpeg: &Path, encoder: &str) -> Result<(bool, String)> {
         let mut cmd = Command::new(ffmpeg);
-        cmd.args(&[
-            "-f", "lavfi",
-            "-i", "color=c=black:s=320x240:d=0",
-            "-c:v", encoder,
-            "-f", "null", "-",
-        ])
-            .arg("-loglevel")
+        
+        // Vulkan 编码器需要特殊的初始化命令
+        if encoder.ends_with("_vulkan") {
+            // Vulkan 编码器只支持 NV12 格式，使用 hwupload 上传
+            cmd.args(&[
+                "-init_hw_device", "vulkan=vk",
+                "-f", "lavfi",
+                "-i", "testsrc=duration=0.1:size=320x240:rate=30",
+                "-filter_hw_device", "vk",
+                "-vf", "format=nv12,hwupload",
+                "-c:v", encoder,
+                "-f", "null", "-",
+            ]);
+        } else {
+            cmd.args(&[
+                "-f", "lavfi",
+                "-i", "color=c=black:s=320x240:d=0",
+                "-c:v", encoder,
+                "-f", "null", "-",
+            ]);
+        }
+        
+        cmd.arg("-loglevel")
             .arg("warning")
             .arg("-hide_banner")
             .stdout(Stdio::piped())
@@ -841,7 +886,14 @@ pub async fn main() -> Result<()> {
         av1_amf: params.config.hardware_accel
             && params.config.video_codec == "av1"
             && hw_detect::detect_amd(),
-
+        // Vulkan encoders - detect Vulkan runtime
+        h264_vulkan: params.config.hardware_accel && hw_detect::detect_vulkan(),
+        hevc_vulkan: params.config.hardware_accel
+            && params.config.video_codec == "hevc"
+            && hw_detect::detect_vulkan(),
+        av1_vulkan: params.config.hardware_accel
+            && params.config.video_codec == "av1"
+            && hw_detect::detect_vulkan(),
     };
 
     let mut hw_errors = Vec::new();
@@ -860,6 +912,9 @@ pub async fn main() -> Result<()> {
         h264_cuvid: false,
         hevc_cuvid: false,
         av1_cuvid: false,
+        h264_vulkan: false,
+        hevc_vulkan: false,
+        av1_vulkan: false,
     };
 
     // 测试每个硬件编码器并收集错误
@@ -873,6 +928,10 @@ pub async fn main() -> Result<()> {
         ("h264_amf", hw_detected.h264_amf, &mut encoder_availability.h264_amf),
         ("hevc_amf", hw_detected.hevc_amf, &mut encoder_availability.hevc_amf),
         ("av1_amf", hw_detected.av1_amf, &mut encoder_availability.av1_amf),
+        // Vulkan encoders
+        ("h264_vulkan", hw_detected.h264_vulkan, &mut encoder_availability.h264_vulkan),
+        ("hevc_vulkan", hw_detected.hevc_vulkan, &mut encoder_availability.hevc_vulkan),
+        ("av1_vulkan", hw_detected.av1_vulkan, &mut encoder_availability.av1_vulkan),
     ];
 
     for (name, detected, availability_flag) in encoders_to_test {
@@ -907,13 +966,24 @@ pub async fn main() -> Result<()> {
     for (name, detected, availability_flag) in cuvid_to_test {
         if detected {
             // 1. 生成测试用的编码视频（内存中）
+            // 使用 yuv420p 格式，因为 cuvid 解码器只支持 yuv420p
+            let (encoder_name, container_format) = if name == "h264_cuvid" {
+                ("libx264", "mpegts")
+            } else if name == "hevc_cuvid" {
+                ("libx265", "mpegts")
+            } else {
+                // AV1 使用 matroska 容器，因为 libaom-av1 不支持 mpegts
+                ("libaom-av1", "matroska")
+            };
+            
             let mut encode_cmd = Command::new(&ffmpeg);
             encode_cmd.args(&[
                 "-f", "lavfi",
                 "-i", "testsrc=duration=1:size=320x240:rate=30",
-                "-c:v", if name == "h264_cuvid" { "libx264" } else { "libx265" },
+                "-vf", "format=yuv420p",  // 强制使用 yuv420p 格式
+                "-c:v", encoder_name,
                 "-t", "0.5",  // 只编码0.5秒
-                "-f", "mpegts",  // 使用TS容器
+                "-f", container_format,
                 "-"  // 输出到stdout
             ])
                 .stdout(Stdio::piped())
@@ -925,7 +995,7 @@ pub async fn main() -> Result<()> {
                 "-hwaccel", "cuvid",
                 "-hwaccel_device", "0",
                 "-c:v", name,
-                "-f", "mpegts",
+                "-f", container_format,
                 "-i", "-",  // 从stdin读取
                 "-f", "null",
                 "-"  // 输出到null
@@ -968,26 +1038,135 @@ pub async fn main() -> Result<()> {
     }
     let mut dummy_flag = false;
 
-    // 构建候选编码器列表
-    let candidates = match params.config.video_codec.as_str() {
-        "hevc" => vec![
-            ("hevc_nvenc", encoder_availability.hevc_nvenc, &mut encoder_availability.hevc_nvenc),
-            ("hevc_qsv", encoder_availability.hevc_qsv, &mut encoder_availability.hevc_qsv),
-            ("hevc_amf", encoder_availability.hevc_amf, &mut encoder_availability.hevc_amf),
-            ("libx265", true, &mut dummy_flag), // 需要定义一个 dummy_flag 变量
-        ],
-        "av1" => vec![
-            ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
-            ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
-            ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
-            ("libaom-av1", true, &mut dummy_flag), // 需要定义一个 dummy_flag 变量
-        ],
-        _ => vec![
-            ("h264_nvenc", encoder_availability.h264_nvenc, &mut encoder_availability.h264_nvenc),
-            ("h264_qsv", encoder_availability.h264_qsv, &mut encoder_availability.h264_qsv),
-            ("h264_amf", encoder_availability.h264_amf, &mut encoder_availability.h264_amf),
-            ("libx264", true, &mut dummy_flag), // 需要定义一个 dummy_flag 变量
-        ],
+    // 构建候选编码器列表，根据用户选择的编码器类型调整优先级
+    let encoder_type = params.config.encoder.as_str();
+    
+    // 根据用户选择构建编码器列表
+    let candidates: Vec<(&str, bool, &mut bool)> = match params.config.video_codec.as_str() {
+        "hevc" => {
+            match encoder_type {
+                "nvenc" => vec![
+                    ("hevc_nvenc", encoder_availability.hevc_nvenc, &mut encoder_availability.hevc_nvenc),
+                    ("hevc_vulkan", encoder_availability.hevc_vulkan, &mut encoder_availability.hevc_vulkan),
+                    ("hevc_qsv", encoder_availability.hevc_qsv, &mut encoder_availability.hevc_qsv),
+                    ("hevc_amf", encoder_availability.hevc_amf, &mut encoder_availability.hevc_amf),
+                    ("libx265", true, &mut dummy_flag),
+                ],
+                "qsv" => vec![
+                    ("hevc_qsv", encoder_availability.hevc_qsv, &mut encoder_availability.hevc_qsv),
+                    ("hevc_vulkan", encoder_availability.hevc_vulkan, &mut encoder_availability.hevc_vulkan),
+                    ("hevc_nvenc", encoder_availability.hevc_nvenc, &mut encoder_availability.hevc_nvenc),
+                    ("hevc_amf", encoder_availability.hevc_amf, &mut encoder_availability.hevc_amf),
+                    ("libx265", true, &mut dummy_flag),
+                ],
+                "amf" => vec![
+                    ("hevc_amf", encoder_availability.hevc_amf, &mut encoder_availability.hevc_amf),
+                    ("hevc_vulkan", encoder_availability.hevc_vulkan, &mut encoder_availability.hevc_vulkan),
+                    ("hevc_nvenc", encoder_availability.hevc_nvenc, &mut encoder_availability.hevc_nvenc),
+                    ("hevc_qsv", encoder_availability.hevc_qsv, &mut encoder_availability.hevc_qsv),
+                    ("libx265", true, &mut dummy_flag),
+                ],
+                "vulkan" => vec![
+                    ("hevc_vulkan", encoder_availability.hevc_vulkan, &mut encoder_availability.hevc_vulkan),
+                    ("hevc_nvenc", encoder_availability.hevc_nvenc, &mut encoder_availability.hevc_nvenc),
+                    ("hevc_qsv", encoder_availability.hevc_qsv, &mut encoder_availability.hevc_qsv),
+                    ("hevc_amf", encoder_availability.hevc_amf, &mut encoder_availability.hevc_amf),
+                    ("libx265", true, &mut dummy_flag),
+                ],
+                "cpu" => vec![
+                    ("libx265", true, &mut dummy_flag),
+                ],
+                _ => vec![ // auto
+                    ("hevc_nvenc", encoder_availability.hevc_nvenc, &mut encoder_availability.hevc_nvenc),
+                    ("hevc_qsv", encoder_availability.hevc_qsv, &mut encoder_availability.hevc_qsv),
+                    ("hevc_amf", encoder_availability.hevc_amf, &mut encoder_availability.hevc_amf),
+                    ("hevc_vulkan", encoder_availability.hevc_vulkan, &mut encoder_availability.hevc_vulkan),
+                    ("libx265", true, &mut dummy_flag),
+                ],
+            }
+        },
+        "av1" => {
+            match encoder_type {
+                "nvenc" => vec![
+                    ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
+                    ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
+                    ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
+                    ("libaom-av1", true, &mut dummy_flag),
+                ],
+                "qsv" => vec![
+                    ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
+                    ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
+                    ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
+                    ("libaom-av1", true, &mut dummy_flag),
+                ],
+                "amf" => vec![
+                    ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
+                    ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
+                    ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
+                    ("libaom-av1", true, &mut dummy_flag),
+                ],
+                "vulkan" => vec![
+                    // 注意：AV1 Vulkan 编码器有已知问题会导致卡死，暂时禁用
+                    // 如果需要 AV1 编码，建议使用 nvenc 或其他编码器
+                    ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
+                    ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
+                    ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
+                    ("libaom-av1", true, &mut dummy_flag),
+                ],
+                "cpu" => vec![
+                    ("libaom-av1", true, &mut dummy_flag),
+                ],
+                _ => vec![ // auto
+                    ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
+                    ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
+                    ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
+                    // AV1 Vulkan 编码器有已知问题，从 auto 中排除
+                    ("libaom-av1", true, &mut dummy_flag),
+                ],
+            }
+        },
+        _ => { // h264
+            match encoder_type {
+                "nvenc" => vec![
+                    ("h264_nvenc", encoder_availability.h264_nvenc, &mut encoder_availability.h264_nvenc),
+                    ("h264_vulkan", encoder_availability.h264_vulkan, &mut encoder_availability.h264_vulkan),
+                    ("h264_qsv", encoder_availability.h264_qsv, &mut encoder_availability.h264_qsv),
+                    ("h264_amf", encoder_availability.h264_amf, &mut encoder_availability.h264_amf),
+                    ("libx264", true, &mut dummy_flag),
+                ],
+                "qsv" => vec![
+                    ("h264_qsv", encoder_availability.h264_qsv, &mut encoder_availability.h264_qsv),
+                    ("h264_vulkan", encoder_availability.h264_vulkan, &mut encoder_availability.h264_vulkan),
+                    ("h264_nvenc", encoder_availability.h264_nvenc, &mut encoder_availability.h264_nvenc),
+                    ("h264_amf", encoder_availability.h264_amf, &mut encoder_availability.h264_amf),
+                    ("libx264", true, &mut dummy_flag),
+                ],
+                "amf" => vec![
+                    ("h264_amf", encoder_availability.h264_amf, &mut encoder_availability.h264_amf),
+                    ("h264_vulkan", encoder_availability.h264_vulkan, &mut encoder_availability.h264_vulkan),
+                    ("h264_nvenc", encoder_availability.h264_nvenc, &mut encoder_availability.h264_nvenc),
+                    ("h264_qsv", encoder_availability.h264_qsv, &mut encoder_availability.h264_qsv),
+                    ("libx264", true, &mut dummy_flag),
+                ],
+                "vulkan" => vec![
+                    ("h264_vulkan", encoder_availability.h264_vulkan, &mut encoder_availability.h264_vulkan),
+                    ("h264_nvenc", encoder_availability.h264_nvenc, &mut encoder_availability.h264_nvenc),
+                    ("h264_qsv", encoder_availability.h264_qsv, &mut encoder_availability.h264_qsv),
+                    ("h264_amf", encoder_availability.h264_amf, &mut encoder_availability.h264_amf),
+                    ("libx264", true, &mut dummy_flag),
+                ],
+                "cpu" => vec![
+                    ("libx264", true, &mut dummy_flag),
+                ],
+                _ => vec![ // auto
+                    ("h264_nvenc", encoder_availability.h264_nvenc, &mut encoder_availability.h264_nvenc),
+                    ("h264_qsv", encoder_availability.h264_qsv, &mut encoder_availability.h264_qsv),
+                    ("h264_amf", encoder_availability.h264_amf, &mut encoder_availability.h264_amf),
+                    ("h264_vulkan", encoder_availability.h264_vulkan, &mut encoder_availability.h264_vulkan),
+                    ("libx264", true, &mut dummy_flag),
+                ],
+            }
+        },
     };
 
 
@@ -997,10 +1176,35 @@ pub async fn main() -> Result<()> {
         .map(|&(name, _, _)| name)
         .expect("At least one software encoder is available.");
 
-    println!("Selected encoder: {}", ffmpeg_encoder);
+    // 打印编码器选择信息
+    info!("=== Encoder Selection ===");
+    info!("  Video codec: {}", params.config.video_codec);
+    info!("  User preference: {}", params.config.encoder);
+    info!("  --- Encoder Availability ---");
+    info!("    h264_nvenc: {}", encoder_availability.h264_nvenc);
+    info!("    h264_qsv: {}", encoder_availability.h264_qsv);
+    info!("    h264_amf: {}", encoder_availability.h264_amf);
+    info!("    h264_vulkan: {}", encoder_availability.h264_vulkan);
+    info!("    hevc_nvenc: {}", encoder_availability.hevc_nvenc);
+    info!("    hevc_qsv: {}", encoder_availability.hevc_qsv);
+    info!("    hevc_amf: {}", encoder_availability.hevc_amf);
+    info!("    hevc_vulkan: {}", encoder_availability.hevc_vulkan);
+    info!("    av1_nvenc: {}", encoder_availability.av1_nvenc);
+    info!("    av1_qsv: {}", encoder_availability.av1_qsv);
+    info!("    av1_amf: {}", encoder_availability.av1_amf);
+    info!("    av1_vulkan: {}", encoder_availability.av1_vulkan);
+    if !hw_errors.is_empty() {
+        info!("  --- Encoder Errors ---");
+        for error in &hw_errors {
+            info!("    {}", error);
+        }
+    }
+    info!("  Selected encoder: {}", ffmpeg_encoder);
+    info!("=========================");
 
     let ffmpeg_preset = match ffmpeg_encoder {
-        "h264_amf" | "hevc_amf" => "-quality",
+        "h264_amf" | "hevc_amf" | "av1_amf" => "-quality",
+        "h264_vulkan" | "hevc_vulkan" | "av1_vulkan" => "-preset",
         _ => "-preset",
     };
 
@@ -1023,6 +1227,12 @@ pub async fn main() -> Result<()> {
             .split_whitespace()
             .nth(2)
             .unwrap_or("balanced"),
+        "h264_vulkan" | "hevc_vulkan" | "av1_vulkan" => params
+            .config
+            .ffmpeg_preset
+            .split_whitespace()
+            .next()
+            .unwrap_or("default"),
         _ => params
             .config
             .ffmpeg_preset
@@ -1036,6 +1246,7 @@ pub async fn main() -> Result<()> {
             "h264_nvenc" | "hevc_nvenc" | "av1_nvenc" => "-cq",
             "h264_qsv" | "hevc_qsv" | "av1_qsv" => "-q",
             "h264_amf" | "hevc_amf" | "av1_amf" => "-qp_p",
+            "h264_vulkan" | "hevc_vulkan" | "av1_vulkan" => "-qp",
             _ => "-crf",
         }
     } else {
@@ -1045,13 +1256,16 @@ pub async fn main() -> Result<()> {
     if params.config.hardware_accel {
         let h264_supported = encoder_availability.h264_nvenc
             || encoder_availability.h264_qsv
-            || encoder_availability.h264_amf;
+            || encoder_availability.h264_amf
+            || encoder_availability.h264_vulkan;
         let hevc_supported = encoder_availability.hevc_nvenc
             || encoder_availability.hevc_qsv
-            || encoder_availability.hevc_amf;
+            || encoder_availability.hevc_amf
+            || encoder_availability.hevc_vulkan;
         let av1_supported = encoder_availability.av1_nvenc
             || encoder_availability.av1_qsv
-            || encoder_availability.av1_amf;
+            || encoder_availability.av1_amf
+            || encoder_availability.av1_vulkan;
 
         if (params.config.video_codec == "h264" && !h264_supported)
             || (params.config.video_codec == "hevc" && !hevc_supported)
@@ -1063,10 +1277,12 @@ pub async fn main() -> Result<()> {
                 "Hardware detection summary:\n\
          - NVIDIA: {}\n\
          - Intel Quick Sync: {}\n\
-         - AMD AMF: {}\n\n",
+         - AMD AMF: {}\n\
+         - Vulkan: {}\n\n",
                 hw_detected.h264_nvenc,
                 hw_detected.h264_qsv,
-                hw_detected.h264_amf
+                hw_detected.h264_amf,
+                hw_detected.h264_vulkan
             );
 
             detailed_error += "Encoder test results:\n";
@@ -1091,7 +1307,7 @@ pub async fn main() -> Result<()> {
                 if encoder_availability.hevc_qsv { "SUCCESS" } else { "FAILED" }
             );
             detailed_error += &format!(
-                "av1_qsv: {}\n",
+                "- av1_qsv: {}\n",
                 if encoder_availability.av1_qsv { "SUCCESS" } else { "FAILED" }
             );
             detailed_error += &format!(
@@ -1107,15 +1323,27 @@ pub async fn main() -> Result<()> {
                 if encoder_availability.av1_amf { "SUCCESS" } else { "FAILED" }
             );
             detailed_error += &format!(
+                "- h264_vulkan: {}\n",
+                if encoder_availability.h264_vulkan { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
+                "- hevc_vulkan: {}\n",
+                if encoder_availability.hevc_vulkan { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
+                "- av1_vulkan: {}\n",
+                if encoder_availability.av1_vulkan { "SUCCESS" } else { "FAILED" }
+            );
+            detailed_error += &format!(
                 "- h264_cuvid: {}\n",
                 if encoder_availability.h264_cuvid { "SUCCESS" } else { "FAILED" }
             );
             detailed_error += &format!(
-                "- hevc_cuvid: {}\n\n",
+                "- hevc_cuvid: {}\n",
                 if encoder_availability.hevc_cuvid { "SUCCESS" } else { "FAILED" }
             );
             detailed_error += &format!(
-                "av1_cuvid: {}\n\n",
+                "- av1_cuvid: {}\n\n",
                 if encoder_availability.av1_cuvid { "SUCCESS" } else { "FAILED" }
             );
 
@@ -1158,6 +1386,7 @@ pub async fn main() -> Result<()> {
         args.push_str(" -hwaccel_output_format cuda");
     }
 
+    // 输入格式：RGBA，让 FFmpeg 处理格式转换
     write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
     let ffmpeg_thread = if params.config.ffmpeg_thread {
@@ -1177,26 +1406,65 @@ pub async fn main() -> Result<()> {
         ""
     };
 
-    let args2 = format!(
-        "-c:a {} -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} {} {} -vf vflip -f {}",
-        audio_codec,
-        ffmpeg_encoder,
-        bitrate_control,
-        params.config.bitrate,
-        ffmpeg_preset,
-        ffmpeg_preset_name,
-        strict_flag,
-        ffmpeg_thread,
-        if params.config.disable_loading {
-            format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
-        } else {
-            "-ss 0.1".to_string()
-        },
-        video,
-    );
+    // Vulkan 编码器需要初始化硬件设备
+    let is_vulkan_encoder = ffmpeg_encoder.ends_with("_vulkan");
+    
+    // 根据编码器类型选择最佳的格式转换方式
+    // 只有 Vulkan 编码器需要 NV12 格式，其他编码器可以直接使用 yuv420p
+    let (final_args, video_filter) = if is_vulkan_encoder {
+        // Vulkan 编码器：RGBA 输入，先翻转，再转换为 NV12 后 hwupload 到 Vulkan
+        (
+            format!("-init_hw_device vulkan=vk -filter_hw_device vk {}", args),
+            "vflip,format=nv12,hwupload"
+        )
+    } else {
+        // NVENC/QSV/AMF/CPU 编码器：直接使用 yuv420p 格式
+        // 这些编码器都支持 yuv420p 输入，不需要转换成 NV12
+        (args, "format=yuv420p,vflip")
+    };
+
+    let args2 = if is_vulkan_encoder {
+        // Vulkan 编码器
+        format!(
+            "-c:a {} -c:v {} {} {} -map 0:v:0 -map 1:a:0 {} {} {} -vf {} -f {}",
+            audio_codec,
+            ffmpeg_encoder,
+            bitrate_control,
+            params.config.bitrate,
+            strict_flag,
+            ffmpeg_thread,
+            if params.config.disable_loading {
+                format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
+            } else {
+                "-ss 0.1".to_string()
+            },
+            video_filter,
+            video,
+        )
+    } else {
+        // 其他编码器
+        format!(
+            "-c:a {} -c:v {} {} {} {} {} -map 0:v:0 -map 1:a:0 {} {} {} -vf {} -f {}",
+            audio_codec,
+            ffmpeg_encoder,
+            bitrate_control,
+            params.config.bitrate,
+            ffmpeg_preset,
+            ffmpeg_preset_name,
+            strict_flag,
+            ffmpeg_thread,
+            if params.config.disable_loading {
+                format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
+            } else {
+                "-ss 0.1".to_string()
+            },
+            video_filter,
+            video,
+        )
+    };
 
     let mut proc = cmd_hidden(&ffmpeg)
-        .args(args.split_whitespace())
+        .args(final_args.split_whitespace())
         .arg(mixing_output.path())
         .args(args2.split_whitespace())
         .arg(output_path)
@@ -1208,11 +1476,13 @@ pub async fn main() -> Result<()> {
         .with_context(|| tl!("run-ffmpeg-failed"))?;
     let mut input = proc.stdin.take().unwrap();
 
-    let byte_size = vw as usize * vh as usize * 4;
+    // 使用 RGBA 格式，FFmpeg 处理格式转换
+    let rgba_size = vw as usize * vh as usize * 4;
+    
+    info!("Using FFmpeg format conversion (RGBA -> NV12)");
+    info!("RGBA buffer size: {}", rgba_size);
 
-    //const N: usize = 1;
-    //let mut pbos: [GLuint; N] = [0; N];
-
+    // PBO 用于异步读取 RGBA
     const MAX_PBO_COUNT: usize = 20;
     let mut n = MAX_PBO_COUNT;
     while n > 0 && fps as usize % n != 0 {
@@ -1229,7 +1499,7 @@ pub async fn main() -> Result<()> {
             glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
             glBufferData(
                 GL_PIXEL_PACK_BUFFER,
-                (vw as u64 * vh as u64 * 4) as _,
+                rgba_size as _,
                 std::ptr::null(),
                 GL_STREAM_READ,
             );
@@ -1295,7 +1565,8 @@ pub async fn main() -> Result<()> {
 
         unsafe {
             use miniquad::gl::*;
-
+            
+            // 读取 RGBA 数据，直接传给 FFmpeg
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(&mst.output()));
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[0]);
             glFinish();
@@ -1309,9 +1580,10 @@ pub async fn main() -> Result<()> {
 
             let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
             if !src.is_null() {
+                // 直接写入 RGBA 数据，FFmpeg 会处理格式转换
                 input.write_all(std::slice::from_raw_parts(
                     src as *const u8,
-                    byte_size
+                    rgba_size
                 ))?;
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
             } else {

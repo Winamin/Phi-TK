@@ -1,8 +1,21 @@
-<i18n>
+﻿<i18n>
 en:
   resolution: Resolution
   ffmpeg-preset: Preset
   video-codec: Encoder
+  encoder-select: Hardware Encoder
+  encoder-auto: Auto
+  encoder-nvenc: NVIDIA NVENC
+  encoder-qsv: Intel QSV
+  encoder-amf: AMD AMF
+  encoder-vulkan: Vulkan
+  encoder-cpu: CPU Software
+  encoder-desc-auto: Auto detect best encoder
+  encoder-desc-nvenc: NVIDIA GPU hardware acceleration
+  encoder-desc-qsv: Intel Quick Sync Video
+  encoder-desc-amf: AMD Advanced Media Framework
+  encoder-desc-vulkan: Cross-platform GPU encoding
+  encoder-desc-cpu: libx264/libx265/libaom-av1
   fps: FPS
   hw-accel: Hardware Acceleration
   hw-accel-tips: Improve speed, slightly reduce quality
@@ -62,6 +75,19 @@ zh-CN:
   resolution: 分辨率
   ffmpeg-preset: 编码预设
   video-codec: 编码器
+  encoder-select: 硬件编码器
+  encoder-auto: 自动选择
+  encoder-nvenc: NVIDIA NVENC
+  encoder-qsv: Intel QSV
+  encoder-amf: AMD AMF
+  encoder-vulkan: Vulkan
+  encoder-cpu: CPU软编码
+  encoder-desc-auto: 自动检测最佳编码器
+  encoder-desc-nvenc: NVIDIA GPU 硬件加速
+  encoder-desc-qsv: Intel Quick Sync Video
+  encoder-desc-amf: AMD Advanced Media Framework
+  encoder-desc-vulkan: 跨平台 GPU 编码
+  encoder-desc-cpu: libx264/libx265/libaom-av1
   fps: 帧率
   hw-accel: 硬件加速
   hw-accel-tips: 提升速度，略微降低质量
@@ -135,7 +161,19 @@ const props = defineProps<{ initAspectRatio?: number }>();
 // Constants
 const RESOLUTIONS = ['1280x720', '1920x1080', '2560x1440', '3840x2160', '2844x1600', '2388x1668', '1600x1080', '7680x4320'];
 const FFMPEG_PRESETS = ['veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow'];
-const VIDEO_CODECS = ['h264', 'hevc', 'av1'];
+const VIDEO_CODECS = [
+  { value: 'h264', title: 'H.264' },
+  { value: 'hevc', title: 'HEVC' },
+  { value: 'av1', title: 'AV1' },
+];
+const ENCODERS = [
+  { value: 'auto', title: '自动选择', desc: '自动检测最佳编码器' },
+  { value: 'nvenc', title: 'NVIDIA NVENC', desc: 'NVIDIA GPU 硬件加速' },
+  { value: 'qsv', title: 'Intel QSV', desc: 'Intel Quick Sync Video' },
+  { value: 'amf', title: 'AMD AMF', desc: 'AMD Advanced Media Framework' },
+  { value: 'vulkan', title: 'Vulkan', desc: '跨平台 GPU 编码' },
+  { value: 'cpu', title: 'CPU 软编码', desc: 'libx264/libx265/libaom-av1' },
+];
 const AUDIO_FORMATS = ['flac', 'mp3', 'aac', 'opus', 'wav'];
 const AUDIO_BITS = [16, 24, 32];
 const SAMPLE_RATES = [44100, 48000, 96000, 192000, 384000, 768000];
@@ -163,6 +201,7 @@ const resolution = ref('1920x1080');
 const fps = ref('60');
 const sampleCount = ref('1');
 const videoCodec = ref('h264');
+const encoder = ref('auto');
 const ffmpegPreset = ref('medium');
 const videoFormat = ref('mp4');
 const bitrateControl = ref('CRF');
@@ -263,6 +302,7 @@ const DEFAULT_PRESET: Preset = {
     fps: 60,
     hardwareAccel: true,
     videoCodec: 'h264',
+    encoder: 'auto',
     bitrateControl: 'CRF',
     bitrate: '28',
     targetAudio: 48000,
@@ -355,6 +395,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
     fps: parseInt(fps.value),
     hardwareAccel: hwAccel.value,
     videoCodec: videoCodec.value,
+    encoder: encoder.value,
     bitrateControl: bitrateControl.value,
     bitrate: bitrate.value,
     targetAudio: targetAudio.value,
@@ -408,6 +449,7 @@ function applyConfig(c: RenderConfig) {
   fps.value = String(c.fps);
   hwAccel.value = c.hardwareAccel;
   videoCodec.value = c.videoCodec;
+  encoder.value = c.encoder || 'auto';
   bitrateControl.value = c.bitrateControl;
   bitrate.value = c.bitrate;
   targetAudio.value = c.targetAudio;
@@ -591,7 +633,7 @@ async function replacePreset() {
                 </div>
                 <transition name="tile-expand">
                   <div v-if="focusField === 'codec'" class="tile-editor" @click.stop>
-                    <v-select v-model="videoCodec" :items="VIDEO_CODECS" density="compact" variant="outlined" hide-details />
+                    <v-select v-model="videoCodec" :items="VIDEO_CODECS" item-title="title" item-value="value" density="compact" variant="outlined" hide-details />
                   </div>
                 </transition>
               </div>
@@ -628,7 +670,7 @@ async function replacePreset() {
               <div class="panel-row">
                 <div class="panel-field">
                   <label>编码器</label>
-                  <v-select v-model="videoCodec" :items="VIDEO_CODECS" density="compact" variant="outlined" hide-details />
+                  <v-select v-model="videoCodec" :items="VIDEO_CODECS" item-title="title" item-value="value" density="compact" variant="outlined" hide-details />
                 </div>
                 <div class="panel-field">
                   <label>采样率</label>
@@ -742,7 +784,10 @@ async function replacePreset() {
                 </div>
                 <div class="section-group">
                   <div class="group-label">编码设置</div>
-                  <v-select v-model="videoCodec" :items="VIDEO_CODECS" :label="t('video-codec')" density="compact" variant="outlined" hide-details />
+                  <div class="field-row">
+                    <v-select v-model="videoCodec" :items="VIDEO_CODECS" item-title="title" item-value="value" :label="t('video-codec')" density="compact" variant="outlined" hide-details />
+                    <v-select v-model="encoder" :items="ENCODERS" item-title="title" item-value="value" :label="t('encoder-select')" density="compact" variant="outlined" hide-details />
+                  </div>
                   <div class="field-row">
                     <v-select v-model="ffmpegPreset" :items="FFMPEG_PRESETS" :label="t('ffmpeg-preset')" density="compact" variant="outlined" hide-details />
                     <v-select v-model="videoFormat" :items="['mp4', 'mov']" :label="t('video-format')" density="compact" variant="outlined" hide-details />
@@ -2341,3 +2386,5 @@ section:hover {
   }
 }
 </style>
+
+
