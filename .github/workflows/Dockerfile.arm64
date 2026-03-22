@@ -30,4 +30,29 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 RUN apt-get install -y nodejs
 RUN npm install -g pnpm@latest
 
+# 设置aarch64交叉编译工具链
+RUN apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+
 WORKDIR /workspace
+
+# 复制项目文件
+COPY . .
+
+# 安装前端依赖
+RUN pnpm install
+
+# 下载并解压 static-lib
+RUN mkdir -p static-lib && \
+    wget -q https://raw.githubusercontent.com/Winamin/Phi-TK/main/prpr-avc-static-lib.tar.gz -O static-lib/prpr-avc-static-lib.tar.gz && \
+    tar -xzf static-lib/prpr-avc-static-lib.tar.gz -C static-lib && \
+    rm static-lib/prpr-avc-static-lib.tar.gz
+
+# 构建ARM64版本
+ENV PRPR_AVC_LIBS=/workspace/static-lib
+RUN cargo build --release --target aarch64-unknown-linux-gnu --manifest-path src-tauri/Cargo.toml
+
+# 创建输出目录并复制产物
+RUN mkdir -p /output && \
+    cp src-tauri/target/aarch64-unknown-linux-gnu/release/Phi-TK /output/Phi-TK
