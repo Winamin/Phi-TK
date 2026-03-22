@@ -30,6 +30,7 @@ jobs:
           platforms: linux/arm64
           load: false
           outputs: type=local,dest=./output
+          no-cache: true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
