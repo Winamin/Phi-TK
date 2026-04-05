@@ -721,9 +721,8 @@ pub async fn main() -> Result<()> {
         } else {
             vh = (vw as f64 / target_aspect).round() as u32;
         }
-        info!("{}x{} -> {}x{} (目标 {:.9})", ow, oh, vw, vh, target_aspect);
+        info!("{}x{} -> {}x{} (target {:.9})", ow, oh, vw, vh, target_aspect);
     }
-
 
     let mst = Rc::new(MSRenderTarget::new((vw, vh), config.sample_count));
     let my_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.));
@@ -743,7 +742,7 @@ pub async fn main() -> Result<()> {
             let mst = Rc::clone(&mst);
             move || {
                 cnt += 1;
-                if cnt == 1 || cnt == 3 {
+                if cnt % 2 == 1{
                     MSAA.store(true, Ordering::SeqCst);
                     Some(mst.input())
                 } else {
