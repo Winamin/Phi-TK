@@ -17,7 +17,7 @@ impl Scene for BaseScene {
             result
                 .downcast::<anyhow::Error>()
                 .unwrap()
-                .context("加载谱面失败"),
+                .context("loading failed"),
         );
         self.1 = true;
         Ok(())
@@ -88,23 +88,35 @@ pub async fn main() -> Result<()> {
     .await?;
     let mut fps_time = -1;
     let mut is_fullscreen = false;
+    let mut frame_times = Vec::with_capacity(100);
+    //let mut avg_fps = 0.0;
     'app: loop {
         let frame_start = tm.real_time();
-        if is_key_pressed(KeyCode::F11) {
+        if is_key_pressed(KeyCode::F11)
+        {
             is_fullscreen = !is_fullscreen;
             set_fullscreen(is_fullscreen);
         }
         main.update()?;
         main.render(&mut painter)?;
-        if main.should_exit() {
-            break 'app;
-        }
-
+        if main.should_exit()
+        { break 'app; }
         let t = tm.real_time();
+        let frame_time = t - frame_start; // 当前帧耗时（秒）
+        // 存储帧时间
+        frame_times.push(frame_time);
+        if frame_times.len() > 100
+        {
+            frame_times.remove(0);
+        }
+        // 计算平均帧时间
+        let avg_frame_time: f64 = frame_times.iter().sum::<f64>() / frame_times.len() as f64;
+        let current_fps = 1.0 / frame_time;
+        let avg_fps = 1.0 / avg_frame_time;
         let fps_now = t as i32;
         if fps_now != fps_time {
             fps_time = fps_now;
-            info!("| {}", (1. / (t - frame_start)) as u32);
+            info!("| {} | {:.1}", current_fps as u32, avg_fps);
         }
 
         next_frame().await;
