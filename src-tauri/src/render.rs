@@ -757,7 +757,7 @@ pub async fn main() -> Result<()> {
     main.viewport = Some((0, 0, vw as _, vh as _));
 
     const O: f64 = LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64;
-    const A: f64 = 0.7 + 0.3 + 0.4 - 0.4;
+    const A: f64 = 1.0; //?
 
     let fps = params.config.fps;
     //let frame_delta = 1. / fps as f32;
@@ -897,7 +897,6 @@ pub async fn main() -> Result<()> {
 
     let mut hw_errors = Vec::new();
 
-    // 创建编码器可用性结构
     let mut encoder_availability = EncoderAvailability {
         h264_nvenc: false,
         hevc_nvenc: false,
@@ -916,7 +915,6 @@ pub async fn main() -> Result<()> {
         av1_vulkan: false,
     };
 
-    // 测试每个硬件编码器并收集错误
     let encoders_to_test = [
         ("h264_nvenc", hw_detected.h264_nvenc, &mut encoder_availability.h264_nvenc),
         ("hevc_nvenc", hw_detected.hevc_nvenc, &mut encoder_availability.hevc_nvenc),
@@ -955,7 +953,6 @@ pub async fn main() -> Result<()> {
         }
     }
 
-    // 测试 cuvid 解码器（单独处理）
     let cuvid_to_test = [
         ("h264_cuvid", hw_detected.h264_cuvid, &mut encoder_availability.h264_cuvid),
         ("hevc_cuvid", hw_detected.hevc_cuvid, &mut encoder_availability.hevc_cuvid),
@@ -964,14 +961,11 @@ pub async fn main() -> Result<()> {
 
     for (name, detected, availability_flag) in cuvid_to_test {
         if detected {
-            // 1. 生成测试用的编码视频（内存中）
-            // 使用 yuv420p 格式，因为 cuvid 解码器只支持 yuv420p
             let (encoder_name, container_format) = if name == "h264_cuvid" {
                 ("libx264", "mpegts")
             } else if name == "hevc_cuvid" {
                 ("libx265", "mpegts")
             } else {
-                // AV1 使用 matroska 容器，因为 libaom-av1 不支持 mpegts
                 ("libaom-av1", "matroska")
             };
             
@@ -999,11 +993,10 @@ pub async fn main() -> Result<()> {
                 "-f", "null",
                 "-"  // 输出到null
             ])
-                .stdin(Stdio::piped())  // 接收编码后的视频
+                .stdin(Stdio::piped())
                 .stdout(Stdio::null())
                 .stderr(Stdio::piped());
 
-            // 执行管道操作
             let encoded = match encode_cmd.spawn() {
                 Ok(child) => child,
                 Err(e) => {
@@ -1013,7 +1006,7 @@ pub async fn main() -> Result<()> {
                 }
             };
 
-            decode_cmd.stdin(encoded.stdout.unwrap());  // 连接管道
+            decode_cmd.stdin(encoded.stdout.unwrap());
 
             match decode_cmd.output() {
                 Ok(output) => {
@@ -1036,11 +1029,7 @@ pub async fn main() -> Result<()> {
         }
     }
     let mut dummy_flag = false;
-
-    // 构建候选编码器列表，根据用户选择的编码器类型调整优先级
     let encoder_type = params.config.encoder.as_str();
-    
-    // 根据用户选择构建编码器列表
     let candidates: Vec<(&str, bool, &mut bool)> = match params.config.video_codec.as_str() {
         "hevc" => {
             match encoder_type {
@@ -1105,8 +1094,6 @@ pub async fn main() -> Result<()> {
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
                 "vulkan" => vec![
-                    // 注意：AV1 Vulkan 编码器有已知问题会导致卡死，暂时禁用
-                    // 如果需要 AV1 编码，建议使用 nvenc 或其他编码器
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
@@ -1119,7 +1106,6 @@ pub async fn main() -> Result<()> {
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
-                    // AV1 Vulkan 编码器有已知问题，从 auto 中排除
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
             }
@@ -1360,33 +1346,9 @@ pub async fn main() -> Result<()> {
             bail!(detailed_error);
         }
     }
-
-    // 构建FFmpeg命令参数
-    let mut args = String::new();
-
-    // 添加硬件加速选项（如果启用）
-    if params.config.hardware_accel {
-        // 优先使用 cuvid 进行硬件加速解码
-        if params.config.video_codec == "hevc" && encoder_availability.hevc_cuvid {
-            args.push_str("-hwaccel cuvid -c:v hevc_cuvid ");
-        } else if params.config.video_codec != "hevc" && encoder_availability.h264_cuvid {
-            args.push_str("-hwaccel cuvid -c:v h264_cuvid ");
-        }
-        // 设置硬件加速输出格式
-        else if ffmpeg_encoder.contains("nvenc") {
-            args.push_str("-hwaccel_output_format cuda ");
-        } else if ffmpeg_encoder.contains("qsv") {
-            args.push_str("-hwaccel qsv ");
-        }
-    }
-
-    args.push_str("-y -f rawvideo -c:v rawvideo");
-    if ffmpeg_encoder.contains("nvenc") && !args.contains("cuda") {
-        args.push_str(" -hwaccel_output_format cuda");
-    }
-
-    // 输入格式：RGBA，让 FFmpeg 处理格式转换
-    write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
+    let global_args = "-y";
+    let mut input_args = String::new();
+    write!(&mut input_args, "-f rawvideo -c:v rawvideo -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
 
     let ffmpeg_thread = if params.config.ffmpeg_thread {
         "-thread_queue_size 2048 "
@@ -1404,26 +1366,15 @@ pub async fn main() -> Result<()> {
     } else {
         ""
     };
-
-    // Vulkan 编码器需要初始化硬件设备
     let is_vulkan_encoder = ffmpeg_encoder.ends_with("_vulkan");
-    
-    // 根据编码器类型选择最佳的格式转换方式
-    // 只有 Vulkan 编码器需要 NV12 格式，其他编码器可以直接使用 yuv420p
-    let (final_args, video_filter) = if is_vulkan_encoder {
-        // Vulkan 编码器：RGBA 输入，先翻转，再转换为 NV12 后 hwupload 到 Vulkan
-        (
-            format!("-init_hw_device vulkan=vk -filter_hw_device vk {}", args),
-            "vflip,format=nv12,hwupload"
-        )
+    let video_filter = if is_vulkan_encoder {
+        "vflip,format=nv12,hwupload"
     } else {
-        // NVENC/QSV/AMF/CPU 编码器：直接使用 yuv420p 格式
-        // 这些编码器都支持 yuv420p 输入，不需要转换成 NV12
-        (args, "format=yuv420p,vflip")
+        "format=yuv420p,vflip"
     };
 
     let args2 = if is_vulkan_encoder {
-        // Vulkan 编码器
+        // Vulkan
         format!(
             "-c:a {} -c:v {} {} {} -map 0:v:0 -map 1:a:0 {} {} {} -vf {} -f {}",
             audio_codec,
@@ -1441,7 +1392,6 @@ pub async fn main() -> Result<()> {
             video,
         )
     } else {
-        // 其他编码器
         format!(
             "-c:a {} -c:v {} {} {} {} {} -map 0:v:0 -map 1:a:0 {} {} {} -vf {} -f {}",
             audio_codec,
@@ -1462,17 +1412,25 @@ pub async fn main() -> Result<()> {
         )
     };
 
-    let mut proc = cmd_hidden(&ffmpeg)
-        .args(final_args.split_whitespace())
-        .arg(mixing_output.path())
-        .args(args2.split_whitespace())
-        .arg(output_path)
-        .arg("-loglevel")
-        .arg("warning")
-        .stdin(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .with_context(|| tl!("run-ffmpeg-failed"))?;
+    let mut proc = {
+        let mut cmd = cmd_hidden(&ffmpeg);
+        cmd.args(global_args.split_whitespace());
+        if is_vulkan_encoder
+        {
+            cmd.arg("-init_hw_device").arg("vulkan=vk")
+               .arg("-filter_hw_device").arg("vk");
+        }
+        cmd.args(input_args.split_whitespace())
+            .arg(mixing_output.path())
+            .args(args2.split_whitespace())
+            .arg(output_path)
+            .arg("-loglevel")
+            .arg("warning")
+            .stdin(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .with_context(|| tl!("run-ffmpeg-failed"))?
+    };
     let mut input = proc.stdin.take().unwrap();
 
     // 使用 RGBA 格式，FFmpeg 处理格式转换
