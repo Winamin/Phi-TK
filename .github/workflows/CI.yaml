@@ -10,9 +10,7 @@ on:
 
 
 jobs:
-  release:
-    permissions:
-      contents: write
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -65,13 +63,20 @@ jobs:
           cwd: ./static-lib
           files: prpr-avc-static-lib.tar.gz
 
-      - name: Build the app
+      - name: Build the app (Windows)
+        if: matrix.platform == 'windows-latest'
         uses: tauri-apps/tauri-action@v0
         with:
-          # 移除 tagName, releaseName 和 releaseBody 参数来防止创建 Release
-          args: --bundles msi,nsis,appimage,deb,rpm
+          args: --bundles msi --bundles nsis
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRPR_AVC_LIBS: ${{ github.workspace }}/static-lib
+
+      - name: Build the app (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: --bundles appimage --bundles deb --bundles rpm
+        env:
           PRPR_AVC_LIBS: ${{ github.workspace }}/static-lib
 
       - name: Upload Windows Installer
