@@ -256,11 +256,7 @@ impl TaskQueue {
     pub fn new() -> Self {
         let (sender, mut receiver) = mpsc::unbounded_channel::<Arc<Task>>();
         let task = tokio::spawn(async move {
-            loop {
-                let Ok(task) = receiver.try_recv() else {
-                    std::thread::sleep(std::time::Duration::from_millis(200));
-                    continue;
-                };
+            while let Some(task) = receiver.recv().await {
                 if let Err(err) = task.run().await {
                     error!("Failed to render: {err:?}");
                     *task.status.lock().await = TaskStatus::Failed {
