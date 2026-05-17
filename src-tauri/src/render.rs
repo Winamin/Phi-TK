@@ -3,7 +3,15 @@ prpr::tl_file!("render");
 
 use crate::Path;
 use anyhow::{bail, Context, Result};
-use macroquad::{miniquad::{gl::GLuint, RenderPass as MQRenderPass}, prelude::*};
+use macroquad::{miniquad::{gl::{
+    GLuint, GL_RGBA, GL_UNSIGNED_BYTE, GL_READ_FRAMEBUFFER, GL_PIXEL_PACK_BUFFER,
+    GL_STREAM_READ, GL_MAP_READ_BIT,
+    GLsizeiptr, GLsizei, GLvoid,
+    glGenBuffers, glBindBuffer, glBufferData, glDeleteBuffers,
+    glViewport, glReadPixels, glReadBuffer,
+    glMapBufferRange, glUnmapBuffer,
+    GL_COLOR_ATTACHMENT0,glBindFramebuffer,GL_FRAMEBUFFER
+}, RenderPass as MQRenderPass}, prelude::*};
 use prpr::{
     config::{ChallengeModeColor, Config, Mods},
     core::{internal_id, MSRenderTarget, NoteKind},
@@ -470,7 +478,7 @@ pub async fn main() -> Result<()> {
     let Some(ffmpeg) = find_ffmpeg()? else {
         bail!("FFmpeg not found")
     };
-    dbg!(&ffmpeg);
+    info!("Using ffmpeg: {}", ffmpeg);
 
     let mut painter = TextPainter::new(font);
 
@@ -496,7 +504,8 @@ pub async fn main() -> Result<()> {
     let sfx_drag = ld!("drag.ogg");
     let sfx_flick = ld!("flick.ogg");
 
-    let mut gl = unsafe { get_internal_gl() };
+    //let mut gl = unsafe { get_internal_gl() };
+    let gl = unsafe { get_internal_gl() };
 
     let volume_music = std::mem::take(&mut config.volume_music);
     let volume_sfx = std::mem::take(&mut config.volume_sfx);
@@ -546,19 +555,20 @@ pub async fn main() -> Result<()> {
             warn!("Music start position {} exceeds output buffer length {}", start_index, output.len());
         } else {
             let output_ptr = output.as_mut_ptr();
-            for i in 0..count {
-                let position = i as f64 * ratio;
-                let frame = music.sample(position as f32).unwrap_or_default();
+            let max_i = (output.len() - start_index) / 2;
+            let effective_count = count.min(max_i);
+            let mut time = 0.0_f64;
+            for i in 0..effective_count {
+                let frame = music.sample(time as f32).unwrap_or_default();
                 let left = frame.0 * volume_music;
                 let right = frame.1 * volume_music;
 
                 unsafe {
                     let idx = start_index + i * 2;
-                    if idx + 1 < output.len() {
-                        *output_ptr.add(idx) += left;
-                        *output_ptr.add(idx + 1) += right;
-                    }
+                    *output_ptr.add(idx) += left;
+                    *output_ptr.add(idx + 1) += right;
                 }
+                time += ratio;
             }
         }
         info!("music Time:{:?}", start_time.elapsed());
@@ -742,7 +752,7 @@ pub async fn main() -> Result<()> {
             let mst = Rc::clone(&mst);
             move || {
                 cnt += 1;
-                if cnt % 2 == 1{
+                if cnt % 2 == 1 {
                     MSAA.store(true, Ordering::SeqCst);
                     Some(mst.input())
                 } else {
@@ -826,7 +836,7 @@ pub async fn main() -> Result<()> {
 
     fn test_encoder(ffmpeg: &Path, encoder: &str) -> Result<(bool, String)> {
         let mut cmd = Command::new(ffmpeg);
-        
+
         // Vulkan 编码器需要特殊的初始化命令
         if encoder.ends_with("_vulkan") {
             // Vulkan 编码器只支持 NV12 格式，使用 hwupload 上传
@@ -847,7 +857,7 @@ pub async fn main() -> Result<()> {
                 "-f", "null", "-",
             ]);
         }
-        
+
         cmd.arg("-loglevel")
             .arg("warning")
             .arg("-hide_banner")
@@ -968,7 +978,7 @@ pub async fn main() -> Result<()> {
             } else {
                 ("libaom-av1", "matroska")
             };
-            
+
             let mut encode_cmd = Command::new(&ffmpeg);
             encode_cmd.args(&[
                 "-f", "lavfi",
@@ -1368,7 +1378,9 @@ pub async fn main() -> Result<()> {
     };
     let is_vulkan_encoder = ffmpeg_encoder.ends_with("_vulkan");
     let video_filter = if is_vulkan_encoder {
-        "vflip,format=nv12,hwupload"
+        // Vulkan encoders need NV12 format uploaded to Vulkan device memory
+        // vflip is needed because OpenGL renders top-to-bottom but video expects bottom-to-top
+        "format=nv12,vflip,hwupload"
     } else {
         "format=yuv420p,vflip"
     };
@@ -1435,8 +1447,6 @@ pub async fn main() -> Result<()> {
 
     // 使用 RGBA 格式，FFmpeg 处理格式转换
     let rgba_size = vw as usize * vh as usize * 4;
-    
-    info!("Using FFmpeg format conversion (RGBA -> NV12)");
     info!("RGBA buffer size: {}", rgba_size);
 
     // PBO 用于异步读取 RGBA
@@ -1449,7 +1459,8 @@ pub async fn main() -> Result<()> {
     let mut pbos: Vec<GLuint> = vec![0; n];
     info!("Using {} PBOs for rendering", n);
 
-    unsafe {
+    unsafe
+    {
         use miniquad::gl::*;
         glGenBuffers(n as _, pbos.as_mut_ptr());
         for pbo in &pbos {
@@ -1472,9 +1483,11 @@ pub async fn main() -> Result<()> {
 
     let frames10 = total_frames / 10;
     let mut step_time = Instant::now();
-
-    for frame in 0..total_frames {
-        if frame % frames10 == 0 || frame == total_frames - 1 {
+    for frame in 0..total_frames
+    {
+        if frame % frames10 == 0 ||
+            frame == total_frames - 1
+        {
             let progress = (frame as f64 / total_frames as f64).min(1.0);
             let percent = (progress * 100.).ceil() as i8;
             let bar_width = 20;
@@ -1498,23 +1511,18 @@ pub async fn main() -> Result<()> {
             );
             step_time = Instant::now();
         }
-
-        // frame * frame_duration 而不是 frame / fps
         let current_frame_time = frame as f64 * frame_duration;
         *my_time.borrow_mut() = current_frame_time;
-
-        // Use the render_pass from the output and convert to the expected type
         let output = mst.output();
         let render_pass: MQRenderPass = unsafe { std::mem::transmute(output.render_pass) };
         gl.quad_gl.render_pass(Some(render_pass));
         main.update()?;
         main.render(&mut painter)?;
-
         if current_frame_time <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading {
             draw_rectangle(0., 0., 0., 0., Color::default());
         }
 
-        gl.flush();
+        //gl.flush();
 
         if MSAA.load(Ordering::SeqCst) {
             mst.blit();
@@ -1522,11 +1530,9 @@ pub async fn main() -> Result<()> {
 
         unsafe {
             use miniquad::gl::*;
-            
-            // 读取 RGBA 数据，直接传给 FFmpeg
             glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(&mst.output()));
             glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[0]);
-            glFinish();
+            //glFinish();
 
             glReadPixels(
                 0, 0,
@@ -1537,7 +1543,6 @@ pub async fn main() -> Result<()> {
 
             let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
             if !src.is_null() {
-                // 直接写入 RGBA 数据，FFmpeg 会处理格式转换
                 input.write_all(std::slice::from_raw_parts(
                     src as *const u8,
                     rgba_size
