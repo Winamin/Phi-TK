@@ -140,6 +140,7 @@ import { useRouter } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { event } from '@tauri-apps/api';
+import moment from 'moment';
 
 import { toast, toastError, RULES } from './common';
 import type { ChartInfo, RenderConfig } from './model';
@@ -160,6 +161,7 @@ interface BatchChart {
   chartInfo?: ChartInfo;
   aspectWidth?: string;
   aspectHeight?: string;
+  originalIndex?: number;
 }
 
 const charts = ref<BatchChart[]>([]);
@@ -279,7 +281,7 @@ async function addFolder() {
 
 async function addChart(path: string) {
   if (charts.value.some((c) => c.path === path)) return;
-  const newChart: BatchChart = { id: generateId(), path, name: t('adding-charts'), level: '...', charter: '...', status: 'pending', selected: true };
+  const newChart: BatchChart = { id: generateId(), path, name: t('adding-charts'), level: '...', charter: '...', status: 'pending', selected: true, originalIndex: charts.value.length };
   const placeholderIndex = charts.value.push(newChart) - 1;
   try {
     const chartInfo = (await invoke('parse_chart', { path })) as ChartInfo;
@@ -369,7 +371,7 @@ function toggleSelectAll() {
 event.listen('render-msg', (msg) => { renderMsg.value = msg.payload as string; });
 event.listen('render-progress', (msg) => {
   const p = msg.payload as { progress: number; fps: number; estimate: number };
-  renderMsg.value = `FPS: ${p.fps} | ${t('eta')}: ${p.estimate}s`;
+  renderMsg.value = `FPS: ${p.fps} | ${t('eta')}: ${moment.duration(p.estimate, 'seconds').humanize(true, { ss: 1 })}`;
   renderProgress.value = p.progress * 100;
 });
 
@@ -512,7 +514,7 @@ watch(charts, (val) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
           class="chart-row"
           :class="{ 'is-rendering': item.status === 'rendering', 'is-failed': item.status === 'failed' }"
         >
-          <div v-if="item.status === 'rendering'" class="progress-bg" :style="{ width: `${renderProgress}%` }"></div>
+          <div v-if="item.status === 'rendering' && item.originalIndex === currentRenderingIndex" class="progress-bg" :style="{ width: `${renderProgress}%` }"></div>
 
           <div class="row-content">
             <v-checkbox-btn v-model="item.selected" :disabled="item.status === 'rendering'" color="primary" />
@@ -525,7 +527,7 @@ watch(charts, (val) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
               <div class="row-sub">
                 <v-icon icon="mdi-account-music" size="14" />
                 <span>{{ item.charter }}</span>
-                <template v-if="item.status === 'rendering'">
+                <template v-if="item.status === 'rendering' && item.originalIndex === currentRenderingIndex">
                   <span class="render-status">{{ renderProgress.toFixed(1) }}% - {{ renderMsg }}</span>
                 </template>
                 <template v-else-if="item.error">
@@ -541,10 +543,10 @@ watch(charts, (val) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
             >{{ t(item.status) }}</v-chip>
 
             <div class="row-actions">
-              <button class="icon-btn" :disabled="!item.chartInfo || item.status === 'rendering'" @click="openEditDialog(charts.indexOf(item))" :title="t('edit')">
+              <button class="icon-btn" :disabled="!item.chartInfo || item.status === 'rendering'" @click="openEditDialog(item.originalIndex ?? -1)" :title="t('edit')">
                 <v-icon icon="mdi-pencil-outline" size="18" />
               </button>
-              <button class="icon-btn" :disabled="!item.chartInfo || item.status === 'rendering'" @click="previewChart(charts.indexOf(item))" :title="t('preview')">
+              <button class="icon-btn" :disabled="!item.chartInfo || item.status === 'rendering'" @click="previewChart(item.originalIndex ?? -1)" :title="t('preview')">
                 <v-icon icon="mdi-play-circle-outline" size="18" />
               </button>
               <button class="icon-btn icon-btn-danger" :disabled="item.status === 'rendering'" @click="removeChart(item.id)" :title="t('close')">
