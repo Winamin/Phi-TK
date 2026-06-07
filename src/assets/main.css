@@ -1,13 +1,266 @@
-
 @font-face {
   font-family: 'Ubuntu';
   font-display: swap;
   src: url('./Ubuntu-Regular.ttf');
 }
 
-@layer base {
-  html {
-    font-family: ubuntu, sans-serif, system-ui !important;
-    transition: background-color 0.5s;
-  }
+:root {
+  --glass-bg: rgba(30, 30, 30, 0.72);
+  --glass-bg-heavy: rgba(24, 24, 24, 0.88);
+  --glass-blur: blur(24px) saturate(180%);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+  --glass-border-active: 1px solid rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --glass-shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.3);
+  --glass-radius: 16px;
+  --glass-radius-sm: 12px;
+  --glass-radius-lg: 28px;
+
+  --md3-ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --md3-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md3-ease-decelerate: cubic-bezier(0, 0, 0, 1);
+}
+
+html {
+  font-family: 'Ubuntu', 'Roboto', sans-serif, system-ui !important;
+  transition: background-color 0.5s;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: #0F0F0F;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.glass-card {
+  background: var(--glass-bg) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border) !important;
+  border-radius: var(--glass-radius) !important;
+  box-shadow: var(--glass-shadow-sm);
+  transition: transform 0.2s var(--md3-ease-standard),
+              box-shadow 0.2s var(--md3-ease-standard),
+              border-color 0.2s var(--md3-ease-standard);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-card-elevated {
+  background: rgba(35, 35, 35, 0.8) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border) !important;
+  border-radius: var(--glass-radius) !important;
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-nav {
+  background: rgba(24, 24, 24, 0.82) !important;
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+.glass-dialog {
+  background: rgba(28, 28, 28, 0.92) !important;
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.md3-text-display {
+  font-size: 3.5rem;
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.25px;
+}
+
+.md3-text-headline {
+  font-size: 2rem;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.md3-text-title-lg {
+  font-size: 1.375rem;
+  font-weight: 500;
+  line-height: 1.27;
+}
+
+.md3-text-title {
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.md3-text-label-lg {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.43;
+  letter-spacing: 0.1px;
+}
+
+.v-main {
+  background: transparent !important;
+}
+
+.v-main__wrap {
+  background: transparent !important;
+}
+
+/* ===== MD3 Dark Theme Global Overrides ===== */
+
+/* Filled form fields - MD3 surface-container-high */
+.v-field--variant-filled {
+  background: rgba(42, 42, 42, 0.8) !important;
+  border-radius: 12px !important;
+}
+.v-field--variant-filled .v-field__overlay {
+  background: transparent !important;
+}
+.v-field--variant-filled:hover {
+  background: rgba(50, 50, 50, 0.85) !important;
+}
+.v-field--variant-filled.v-field--focused {
+  background: rgba(55, 55, 55, 0.9) !important;
+}
+
+/* Outlined fields - MD3 outline style */
+.v-field--variant-outlined .v-field__outline__start,
+.v-field--variant-outlined .v-field__outline__end,
+.v-field--variant-outlined .v-field__outline__notch {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+.v-field--variant-outlined.v-field--focused .v-field__outline__start,
+.v-field--variant-outlined.v-field--focused .v-field__outline__end,
+.v-field--variant-outlined.v-field--focused .v-field__outline__notch {
+  border-color: #82b1ff !important;
+}
+
+/* Labels */
+.v-label {
+  color: rgba(255, 255, 255, 0.55) !important;
+  opacity: 1 !important;
+}
+
+/* Input text */
+.v-field__input {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Cards - MD3 surface container */
+.v-card--variant-flat {
+  background: rgba(30, 30, 30, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Dialogs */
+.v-dialog .v-overlay__content > .v-card,
+.v-dialog .v-overlay__content > form > .v-card {
+  background: rgba(28, 28, 28, 0.97) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 28px !important;
+}
+
+/* Chips - MD3 tonal style */
+.v-chip--variant-tonal {
+  background: rgba(130, 177, 255, 0.12) !important;
+  color: #82b1ff !important;
+}
+
+/* Sliders - MD3 style */
+.v-slider-track__fill {
+  background: #82b1ff !important;
+}
+.v-slider-thumb__surface {
+  background: #82b1ff !important;
+}
+
+/* Switches - MD3 inset style */
+.v-switch .v-selection-control__wrapper {
+  width: 52px !important;
+  height: 32px !important;
+}
+
+/* Progress linear - rounded */
+.v-progress-linear__background,
+.v-progress-linear__determinate {
+  border-radius: 4px !important;
+}
+
+/* Overlay scrim */
+.v-overlay--active .v-overlay__scrim {
+  background: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Selection controls */
+.v-selection-control--dirty .v-selection-control__input > .v-icon {
+  color: #82b1ff !important;
+}
+
+/* List items */
+.v-list-item {
+  border-radius: 12px !important;
+  margin: 2px 8px !important;
+}
+.v-list-item:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Alerts */
+.v-alert--variant-tonal {
+  border-radius: 16px !important;
+}
+
+/* Snackbar */
+.v-snackbar__wrapper {
+  border-radius: 16px !important;
+  background: rgba(40, 40, 40, 0.95) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+/* Dividers */
+.v-divider {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Toolbar */
+.v-toolbar {
+  background: transparent !important;
+}
+
+/* Tabs */
+.v-tab {
+  border-radius: 12px !important;
+  text-transform: none !important;
+}
+
+/* Button text transform */
+.v-btn {
+  text-transform: none !important;
+  letter-spacing: 0.1px !important;
 }

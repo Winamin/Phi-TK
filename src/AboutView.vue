@@ -19,7 +19,6 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getVersion } from '@tauri-apps/api/app'
 import { open } from '@tauri-apps/plugin-shell'
-import TextType from "./TextType.vue";
 
 const { t } = useI18n()
 
@@ -56,26 +55,10 @@ onMounted(() => {
     <div class="about-content">
       <!-- Logo 和标题 -->
       <div class="app-header">
-        <div class="logo-container">
-          <div class="app-logo">
-            <v-icon size="64" icon="mdi-alpha-p-circle-outline" class="logo-icon" />
-          </div>
-        </div>
-        
-        <div class="title-container">
-          <TextType
-            :text="[t('app')]"
-            :typingSpeed="150"
-            :pauseDuration="2000"
-            :showCursor="true"
-            cursorCharacter="|"
-            class="app-title"
-            aria-label="Phi TK"
-          />
-          <div class="version-badge">
-            <v-icon size="16" icon="mdi-tag-outline" class="version-icon" />
-            <span class="version-text">v{{ appVersion }}</span>
-          </div>
+        <img src="/phi-tklogo.png" alt="Phi TK" class="app-logo-img" />
+        <div class="version-badge">
+          <v-icon size="16" icon="mdi-tag-outline" class="version-icon" />
+          <span class="version-text">v{{ appVersion }}</span>
         </div>
       </div>
 
@@ -130,7 +113,7 @@ onMounted(() => {
 
       <!-- 底部信息 -->
       <div class="about-footer">
-        <p class="footer-text">{{ t('footer.made') || 'Made with ❤️ by the Phi TK team' }}</p>
+        <!--<p class="footer-text">{{ t('footer.made') || 'Made with ❤️ by the Phi TK team' }}</p> -->
         <p class="footer-copyright">{{ t('footer.copyright') || '© 2025 Phi TK. All rights reserved.' }}</p>
       </div>
     </div>
@@ -215,50 +198,19 @@ onMounted(() => {
   text-align: center;
 }
 
-.logo-container {
-  position: relative;
+/* Logo image */
+.app-logo-img {
+  width: 140px;
+  max-width: 80vw;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.4));
+  transition: transform 0.3s ease, filter 0.3s ease;
 }
 
-.app-logo {
-  width: 120px;
-  height: 120px;
-  border-radius: 24px;
-  background: rgba(30, 30, 30, 0.8);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.app-logo:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-}
-
-.logo-icon {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.title-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-.app-title {
-  font-size: 4rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #ffffff, #909090);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-align: center;
-  line-height: 1.2;
+.app-logo-img:hover {
+  transform: translateY(-4px) scale(1.02);
+  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.5));
 }
 
 .version-badge {
@@ -405,47 +357,29 @@ onMounted(() => {
   .about-container {
     padding: 16px;
   }
-  
-  .app-title {
-    font-size: 3rem;
+
+  .app-logo-img {
+    width: 220px;
   }
-  
-  .app-logo {
-    width: 100px;
-    height: 100px;
-  }
-  
-  .logo-icon {
-    size: 48px;
-  }
-  
+
   .info-cards {
     grid-template-columns: 1fr;
   }
-  
+
   .about-content {
     gap: 32px;
   }
 }
 
 @media (max-width: 480px) {
-  .app-title {
-    font-size: 2.5rem;
+  .app-logo-img {
+    width: 180px;
   }
-  
-  .app-logo {
-    width: 80px;
-    height: 80px;
-  }
-  
-  .logo-icon {
-    size: 40px;
-  }
-  
+
   .card-content {
     padding: 16px;
   }
-  
+
   .card-icon {
     width: 48px;
     height: 48px;

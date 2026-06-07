@@ -89,6 +89,23 @@ const vuetify = createVuetify({
       mdi,
     },
   },
+  defaults: {
+    VCard: { rounded: 'lg', flat: true },
+    VBtn: { rounded: 'xl' },
+    VTextField: { variant: 'filled', rounded: 'lg', density: 'comfortable' },
+    VSelect: { variant: 'filled', rounded: 'lg', density: 'comfortable' },
+    VCombobox: { variant: 'filled', rounded: 'lg', density: 'comfortable' },
+    VTextarea: { variant: 'filled', rounded: 'lg', density: 'comfortable' },
+    VAutocomplete: { variant: 'filled', rounded: 'lg', density: 'comfortable' },
+    VChip: { rounded: 'lg' },
+    VDialog: { scrollable: true },
+    VList: { rounded: 'lg' },
+    VSlider: { color: 'primary' },
+    VSwitch: { color: 'primary', inset: true },
+    VCheckboxBtn: { color: 'primary' },
+    VProgressLinear: { rounded: true },
+    VProgressCircular: { color: 'primary' },
+  },
 });
 
 const app = createApp(App);

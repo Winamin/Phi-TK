@@ -19,6 +19,7 @@
 
     chart-name: Chart name
     charter: Charter
+    composer: Composer
     illustrator: Illustrator
     level: Level
     aspect: Aspect ratio
@@ -93,27 +94,24 @@
   </i18n>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
-
 import { useI18n } from 'vue-i18n';
-const { t } = useI18n();
 import { watch } from 'vue';
-
 import { invoke } from '@tauri-apps/api/core';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { event } from '@tauri-apps/api';
-
 import { toastError, RULES, toast, anyFilter, isString } from './common';
-import type { ChartInfo, FileDropEvent } from './model';
-
+import type { ChartInfo, FileDropEvent, Task } from './model';
 import { VForm } from 'vuetify/components';
-
 import ConfigView from './components/ConfigView.vue';
-
 import moment from 'moment';
 import * as dialog from '@tauri-apps/plugin-dialog';
 import * as shell from '@tauri-apps/plugin-shell';
 import { listen } from '@tauri-apps/api/event';
+import gsap from 'gsap';
+
+const { t } = useI18n();
 
 if (!(await invoke('is_the_only_instance'))) {
   await dialog.message(t('already-running'));
@@ -127,11 +125,14 @@ const stepIndex = ref(1),
   step = computed(() => steps[stepIndex.value - 1]);
 
 const chartInfo = ref<ChartInfo>();
-
 let chartPath = '';
 
 const choosingChart = ref(false),
   parsingChart = ref(false);
+
+const flipCardRef = ref<HTMLElement>();
+const bookshelfRef = ref<HTMLElement>();
+
 async function chooseChart(folder?: boolean) {
   if (choosingChart.value) return;
   choosingChart.value = true;
@@ -159,7 +160,6 @@ async function loadChart(file: string) {
     parsingChart.value = true;
     chartPath = file;
     chartInfo.value = (await invoke('parse_chart', { path: file })) as ChartInfo;
-    stepIndex.value++;
     aspectWidth.value = String(chartInfo.value.aspectRatio);
     aspectHeight.value = '1.0';
     for (let asp of [
@@ -174,11 +174,33 @@ async function loadChart(file: string) {
         break;
       }
     }
+
+    await nextTick();
+    performFlip();
   } catch (e) {
     toastError(e);
   } finally {
     parsingChart.value = false;
   }
+}
+
+function performFlip() {
+  stepIndex.value = 2;
+  nextTick(() => {
+    if (flipCardRef.value) {
+      gsap.from(flipCardRef.value, {
+        scale: 0.9,
+        opacity: 0,
+        y: 20,
+        duration: 0.5,
+        ease: 'power2.out',
+      });
+    }
+  });
+}
+
+function unflipCard() {
+  stepIndex.value = 1;
 }
 
 const aspectWidth = ref('0'),
@@ -190,13 +212,10 @@ const configView = ref<typeof ConfigView>();
 async function buildParams() {
   let config = await configView.value!.buildConfig();
   if (!config) return null;
-
-  // 同步宽高比到 chartInfo
   const aspect = tryParseAspect();
   if (aspect !== undefined) {
     chartInfo.value!.aspectRatio = aspect;
   }
-
   return {
     path: chartPath,
     info: chartInfo.value,
@@ -264,6 +283,7 @@ async function playChart() {
 const renderMsg = ref(''),
   renderProgress = ref<number>(),
   renderDuration = ref<number>();
+const renderCover = ref<string | null>(null);
 event.listen('render-msg', (msg) => (renderMsg.value = msg.payload as string));
 event.listen('render-progress', (msg) => {
   let payload = msg.payload as { progress: number; fps: number; estimate: number };
@@ -273,18 +293,30 @@ event.listen('render-progress', (msg) => {
     estimate: moment.duration(payload.estimate, 'seconds').humanize(true, { ss: 1 }),
   });
   renderProgress.value = payload.progress * 100;
-  console.log(renderProgress.value);
 });
 event.listen('render-done', (msg) => {
   stepIndex.value++;
   renderDuration.value = Math.round(msg.payload as number);
 });
 
+async function fetchRenderCover() {
+  try {
+    const tasks = await invoke<Task[]>('get_tasks');
+    if (tasks && tasks.length > 0) {
+      const latest = tasks[tasks.length - 1];
+      if (latest.cover) {
+        renderCover.value = latest.cover;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to fetch render cover:', e);
+  }
+}
+
 async function moveNext() {
   if (step.value === 'config') {
     if ((await form.value!.validate()).valid) {
       stepIndex.value++;
-      configView.value!.onEnter();
     } else {
       toast(t('has-error'), 'error');
     }
@@ -293,8 +325,19 @@ async function moveNext() {
   if (step.value === 'options') {
     if (await postRender()) {
       stepIndex.value++;
+      fetchRenderCover();
     }
     return;
+  }
+}
+
+function goBack() {
+  if (step.value === 'config') {
+    unflipCard();
+    return;
+  }
+  if (stepIndex.value > 1) {
+    stepIndex.value--;
   }
 }
 
@@ -315,13 +358,10 @@ function tryParseAspect(): number | undefined {
 }
 
 const fileHovering = ref(false);
-
 listen('tauri://drag-over', () => (fileHovering.value = step.value === 'choose'));
 listen('tauri://drag-leave', () => (fileHovering.value = false));
-
 listen('tauri://drag-drop', async (event) => {
   const files = (event.payload as FileDropEvent).paths;
-
   if (step.value === 'choose') {
     fileHovering.value = false;
     await loadChart(files[0]);
@@ -332,1212 +372,754 @@ listen('tauri://drag-drop', async (event) => {
   }
 });
 
-const hoverContainer = ref<HTMLElement>();
-const moveOffset = ref({ x: 0, y: 0 });
-
-function resetHover() {
-  moveOffset.value = { x: 0, y: 0 };
+function resetAndGoChoose() {
+  stepIndex.value = 1;
+  chartInfo.value = undefined;
+  chartPath = '';
+  renderCover.value = null;
 }
-
-function onHoverMove(e: MouseEvent) {
-  if (!hoverContainer.value) return;
-
-  const rect = hoverContainer.value.getBoundingClientRect();
-  const centerX = rect.width / 2;
-  const centerY = rect.height / 2;
-
-  const offsetX = (e.clientX - rect.left - centerX) * 0.01;
-  const offsetY = (e.clientY - rect.top - centerY) * 0.01;
-
-  moveOffset.value = {
-    x: offsetX * (window.innerWidth / 1280),
-    y: offsetY * (window.innerHeight / 720),
-  };
-}
-const archiveStyle = computed(() => ({
-  transform: `translate(
-      ${moveOffset.value.x * 1.2}px,
-      ${moveOffset.value.y * 1.2}px
-    ) rotate3d(
-      ${moveOffset.value.y / 20},
-      ${-moveOffset.value.x / 20},
-      0,
-      ${Math.sqrt(moveOffset.value.x ** 2 + moveOffset.value.y ** 2) / 4}deg
-    )`,
-  filter: `drop-shadow(${moveOffset.value.x / 4}px ${moveOffset.value.y / 4}px 6px rgba(0, 0, 0, 0.3))`,
-}));
-
-const folderStyle = computed(() => ({
-  transform: `translate(
-      ${-moveOffset.value.x * 0.8}px,
-      ${-moveOffset.value.y * 0.8}px
-    ) rotate3d(
-      ${-moveOffset.value.y / 20},
-      ${moveOffset.value.x / 20},
-      0,
-      ${Math.sqrt(moveOffset.value.x ** 2 + moveOffset.value.y ** 2) / 6}deg
-    )`,
-  filter: `drop-shadow(${-moveOffset.value.x / 4}px ${-moveOffset.value.y / 4}px 6px rgba(0, 0, 0, 0.3))`,
-}));
 </script>
 
 <template>
-  <div class="hmcl-container">
-    <!-- 主内容区域 -->
-    <div class="hmcl-main">
-      <!-- 内容区域 -->
-      <div class="hmcl-content">
-        <!-- 步骤1: 选择谱面 -->
-        <div class="step-content" :class="{ 'active': step === 'choose' }">
-          <div class="choose-content">
-            <div class="choose-cards">
-              <div
-                class="choose-card"
-                @click="chooseChart(false)"
-                @mousemove="onHoverMove"
-                @mouseleave="resetHover"
-                ref="hoverContainer"
-              >
-                <div class="card-icon" :style="archiveStyle">
-                  <v-icon size="48">mdi-folder-zip</v-icon>
-                </div>
-                <h4>{{ t('choose.archive') }}</h4>
-                <p>选择 .zip 或 .pez 格式的谱面压缩包</p>
-              </div>
-              <div
-                class="choose-card"
-                @click="chooseChart(true)"
-              >
-                <div class="card-icon" :style="folderStyle">
-                  <v-icon size="48">mdi-folder</v-icon>
-                </div>
-                <h4>{{ t('choose.folder') }}</h4>
-                <p>选择包含谱面文件的文件夹</p>
+  <div class="render-container">
+    <!-- MD3 Top Action Bar -->
+    <header class="md3-top-bar" v-if="step !== 'choose'">
+      <div class="bar-left">
+        <button class="bar-btn bar-btn-text" v-if="step === 'config' || step === 'options'" @click="goBack">
+          <v-icon icon="mdi-arrow-left" size="20" />
+          <span>{{ t('prev-step') }}</span>
+        </button>
+      </div>
+
+      <div class="bar-center">
+        <div class="step-chips">
+          <span
+            v-for="(s, i) in steps"
+            :key="s"
+            class="step-chip"
+            :class="{ 'is-active': step === s, 'is-done': stepIndex > i + 1 }"
+          >
+            <span class="chip-dot"></span>
+            <span class="chip-label" v-if="step === s">{{ t('steps.' + s) }}</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="bar-right">
+        <button class="bar-btn bar-btn-tonal" v-if="step === 'options'" @click="playChart">
+          <v-icon icon="mdi-gamepad-variant" size="18" />
+          <span>{{ t('play') }}</span>
+        </button>
+        <button class="bar-btn bar-btn-tonal" v-if="step === 'options'" @click="previewChart">
+          <v-icon icon="mdi-eye" size="18" />
+          <span>{{ t('preview') }}</span>
+        </button>
+        <button class="bar-btn bar-btn-filled" v-if="step === 'config' || step === 'options'" @click="moveNext">
+          <span>{{ step === 'options' ? t('render') : t('next-step') }}</span>
+          <v-icon icon="mdi-arrow-right" size="18" />
+        </button>
+      </div>
+    </header>
+
+    <!-- Content area -->
+    <main class="render-content">
+      <!-- Step 1: Choose (Bookshelf) -->
+      <div class="step-panel" :class="{ 'is-active': step === 'choose' }">
+        <div class="bookshelf" ref="bookshelfRef">
+          <div class="shelf-label">{{ t('steps.choose') }}</div>
+          <div class="shelf-row">
+            <!-- Archive card (book-style) -->
+            <div class="book-card" @click="chooseChart(false)">
+              <div class="book-spine"></div>
+              <div class="book-face">
+                <v-icon icon="mdi-folder-zip-outline" size="40" class="book-icon" />
+                <span class="book-title">{{ t('choose.archive') }}</span>
+                <span class="book-desc">.zip / .pez</span>
               </div>
             </div>
-            <v-overlay v-model="parsingChart" contained class="align-center justify-center hmcl-loading" persistent :close-on-content-click="false">
-              <v-card class="loading-card">
-                <v-card-text class="text-center pa-6">
-                  <v-progress-circular
-                    indeterminate
-                    color="primary"
-                    size="40"
-                    width="4"
-                    class="mb-4"
-                  ></v-progress-circular>
-                  <p>正在解析谱面文件...</p>
-                </v-card-text>
-              </v-card>
-            </v-overlay>
+            <!-- Folder card (book-style) -->
+            <div class="book-card book-card-alt" @click="chooseChart(true)">
+              <div class="book-spine book-spine-alt"></div>
+              <div class="book-face">
+                <v-icon icon="mdi-folder-outline" size="40" class="book-icon" />
+                <span class="book-title">{{ t('choose.folder') }}</span>
+                <span class="book-desc">{{ t('choose.folder') }}</span>
+              </div>
+            </div>
           </div>
         </div>
+      </div>
 
-        <!-- 步骤2: 配置谱面 -->
-        <div class="step-content" :class="{ 'active': step === 'config' }">
-          <div class="config-panel" v-if="chartInfo">
-            <v-form ref="form" class="config-form-neo">
-              <!-- 标题区 -->
-              <div class="config-header">
-                <h2 class="config-title">Configure Chart</h2>
-                <p class="config-subtitle">设置谱面基本信息与显示参数</p>
-              </div>
-
-              <!-- 内容网格布局 -->
-              <div class="config-grid">
-                <!-- 左栏 - 基本信息 -->
-                <div class="config-section">
-                  <div class="section-header">
-                    <span class="section-number">01</span>
-                    <h3 class="section-title">基本信息</h3>
-                  </div>
-                  <div class="section-body">
-                    <div class="neo-field">
-                      <label class="neo-label required">{{ t('chart-name') }}</label>
-                      <input
-                        v-model="chartInfo.name"
-                        class="neo-input"
-                        :class="{ 'has-value': chartInfo.name }"
-                        placeholder=" "
-                      />
+      <!-- Step 2: Config -->
+      <div class="step-panel" :class="{ 'is-active': step === 'config' }">
+        <div class="config-card-wrapper" ref="flipCardRef">
+          <div class="config-card" v-if="chartInfo">
+            <v-form ref="form" class="config-form" @submit.prevent>
+                <h2 class="config-title">{{ t('steps.config') }}</h2>
+                <div class="config-grid">
+                  <div class="config-section">
+                    <div class="field-group">
+                      <label class="field-label">{{ t('chart-name') }} *</label>
+                      <input v-model="chartInfo.name" class="md3-field" :class="{ 'has-value': chartInfo.name }" />
                     </div>
-                    <div class="neo-field">
-                      <label class="neo-label required">{{ t('level') }}</label>
-                      <input
-                        v-model="chartInfo.level"
-                        class="neo-input"
-                        :class="{ 'has-value': chartInfo.level }"
-                        placeholder=" "
-                      />
+                    <div class="field-group">
+                      <label class="field-label">{{ t('level') }} *</label>
+                      <input v-model="chartInfo.level" class="md3-field" :class="{ 'has-value': chartInfo.level }" />
                     </div>
-                    <div class="neo-field">
-                      <label class="neo-label required">{{ t('charter') }}</label>
-                      <input
-                        v-model="chartInfo.charter"
-                        class="neo-input"
-                        :class="{ 'has-value': chartInfo.charter }"
-                        placeholder=" "
-                      />
+                    <div class="field-group">
+                      <label class="field-label">{{ t('charter') }} *</label>
+                      <input v-model="chartInfo.charter" class="md3-field" :class="{ 'has-value': chartInfo.charter }" />
                     </div>
-                    <div class="neo-field">
-                      <label class="neo-label">{{ t('composer') }}</label>
-                      <input
-                        v-model="chartInfo.composer"
-                        class="neo-input"
-                        :class="{ 'has-value': chartInfo.composer }"
-                        placeholder=" "
-                      />
+                    <div class="field-group">
+                      <label class="field-label">{{ t('composer') }}</label>
+                      <input v-model="chartInfo.composer" class="md3-field" :class="{ 'has-value': chartInfo.composer }" />
                     </div>
-                    <div class="neo-field">
-                      <label class="neo-label">{{ t('illustrator') }}</label>
-                      <input
-                        v-model="chartInfo.illustrator"
-                        class="neo-input"
-                        :class="{ 'has-value': chartInfo.illustrator }"
-                        placeholder=" "
-                      />
+                    <div class="field-group">
+                      <label class="field-label">{{ t('illustrator') }}</label>
+                      <input v-model="chartInfo.illustrator" class="md3-field" :class="{ 'has-value': chartInfo.illustrator }" />
                     </div>
                   </div>
-                </div>
-
-                <!-- 右栏 - 显示设置 -->
-                <div class="config-section">
-                  <div class="section-header">
-                    <span class="section-number">02</span>
-                    <h3 class="section-title">显示设置</h3>
-                  </div>
-                  <div class="section-body">
-                    <!-- 宽高比 -->
-                    <div class="neo-field">
-                      <label class="neo-label">{{ t('aspect') }}</label>
+                  <div class="config-section">
+                    <div class="field-group">
+                      <label class="field-label">{{ t('aspect') }}</label>
                       <div class="aspect-row">
-                        <input
-                          type="number"
-                          v-model="aspectWidth"
-                          class="neo-input aspect-input"
-                        />
-                        <span class="aspect-colon">:</span>
-                        <input
-                          type="number"
-                          v-model="aspectHeight"
-                          class="neo-input aspect-input"
-                        />
+                        <input type="number" v-model="aspectWidth" class="md3-field aspect-field" />
+                        <span class="aspect-sep">:</span>
+                        <input type="number" v-model="aspectHeight" class="md3-field aspect-field" />
                       </div>
                     </div>
-
-                    <!-- 背景暗度 -->
-                    <div class="neo-field">
-                      <label class="neo-label">{{ t('dim') }}</label>
-                      <div class="slider-container">
-                        <input
-                          type="range"
-                          v-model="chartInfo.backgroundDim"
-                          min="0"
-                          max="1"
-                          step="0.01"
-                          class="neo-slider"
-                        />
-                        <span class="slider-value">{{ Math.round(chartInfo.backgroundDim * 100) }}%</span>
-                      </div>
+                    <div class="field-group">
+                      <label class="field-label">{{ t('dim') }} — {{ Math.round(chartInfo.backgroundDim * 100) }}%</label>
+                      <input type="range" v-model="chartInfo.backgroundDim" min="0" max="1" step="0.01" class="md3-slider" />
                     </div>
-
-                    <!-- Hold遮罩开关 -->
-                    <div class="neo-field toggle-field">
-                      <label class="neo-label">{{ t('hold_cover') }}</label>
+                    <div class="field-group field-toggle">
+                      <label class="field-label">{{ t('hold_cover') }}</label>
                       <button
                         type="button"
-                        class="neo-toggle"
-                        :class="{ 'active': chartInfo.HoldPartialCover }"
+                        class="md3-switch"
+                        :class="{ 'is-on': chartInfo.HoldPartialCover }"
                         @click="chartInfo.HoldPartialCover = !chartInfo.HoldPartialCover"
                       >
-                        <span class="toggle-indicator"></span>
+                        <span class="switch-thumb"></span>
                       </button>
                     </div>
-
-                    <!-- Tip -->
-                    <div class="neo-field">
-                      <label class="neo-label">{{ t('tip') }}</label>
-                      <input
-                        v-model="chartInfo.tip"
-                        class="neo-input"
-                        :placeholder="t('tip-placeholder')"
-                      />
+                    <div class="field-group">
+                      <label class="field-label">{{ t('tip') }}</label>
+                      <input v-model="chartInfo.tip" class="md3-field" :placeholder="t('tip-placeholder')" />
                     </div>
                   </div>
                 </div>
-              </div>
-            </v-form>
+              </v-form>
           </div>
         </div>
+      </div>
 
-        <!-- 步骤3: 渲染选项 -->
-        <div class="step-content" :class="{ 'active': step === 'options' }">
-          <div class="options-panel">
-            <!-- 标题区 -->
-            <div class="options-header">
-              <h2 class="options-title">Render Options</h2>
-              <p class="options-subtitle">配置视频输出参数与渲染设置</p>
+      <!-- Step 3: Options -->
+      <div class="step-panel" :class="{ 'is-active': step === 'options' }">
+        <div class="options-wrapper">
+          <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()" />
+        </div>
+      </div>
+
+      <!-- Step 4: Render -->
+      <div class="step-panel" :class="{ 'is-active': step === 'render' }">
+        <div class="render-card" v-if="chartInfo">
+          <!-- Left: Illustration -->
+          <div class="render-cover">
+            <img v-if="renderCover" :src="convertFileSrc(renderCover)" class="cover-img" />
+            <div v-else class="cover-placeholder">
+              <v-icon icon="mdi-music-note-outline" size="48" color="rgba(255,255,255,0.15)" />
             </div>
-            <div class="options-content">
-              <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()" class="hmcl-config"></ConfigView>
+          </div>
+          <!-- Right: Info -->
+          <div class="render-info">
+            <div class="render-header">
+              <v-icon icon="mdi-video" size="24" color="primary" />
+              <h3>{{ t('render-started') }}</h3>
+            </div>
+            <div class="info-rows">
+              <div class="info-row"><span class="info-label">{{ t('chart-name') }}</span><span class="info-value">{{ chartInfo.name }}</span></div>
+              <div class="info-row"><span class="info-label">{{ t('level') }}</span><span class="info-value">{{ chartInfo.level }}</span></div>
+              <div class="info-row"><span class="info-label">{{ t('charter') }}</span><span class="info-value">{{ chartInfo.charter }}</span></div>
+              <div class="info-row" v-if="chartInfo.composer"><span class="info-label">{{ t('composer') }}</span><span class="info-value">{{ chartInfo.composer }}</span></div>
+              <div class="info-row" v-if="chartInfo.illustrator"><span class="info-label">{{ t('illustrator') }}</span><span class="info-value">{{ chartInfo.illustrator }}</span></div>
+              <div class="info-row"><span class="info-label">{{ t('aspect') }}</span><span class="info-value">{{ aspectWidth }}:{{ aspectHeight }}</span></div>
+            </div>
+            <div v-if="renderProgress !== undefined" class="render-progress">
+              <v-progress-linear :model-value="renderProgress" color="primary" height="6" rounded />
+              <p class="progress-text">{{ renderMsg }}</p>
+            </div>
+            <div class="render-actions">
+              <button class="bar-btn bar-btn-tonal" @click="router.push({ name: 'tasks' })">
+                <v-icon icon="mdi-view-list" size="18" />
+                <span>{{ t('see-tasks') }}</span>
+              </button>
+              <button class="bar-btn bar-btn-filled" @click="resetAndGoChoose">
+                <v-icon icon="mdi-plus" size="18" />
+                <span>{{ t('next-chart') }}</span>
+              </button>
             </div>
           </div>
         </div>
-
-        <!-- 步骤4: 渲染中 -->
-        <div class="step-content" :class="{ 'active': step === 'render' }">
-          <div class="render-content">
-            <v-card class="hmcl-card">
-              <v-card-title class="card-title">
-                <v-icon class="mr-2">mdi-render</v-icon>
-                {{ t('render-started') }}
-              </v-card-title>
-              <v-divider></v-divider>
-              <v-card-text>
-                <div class="info-list">
-                  <div class="info-item">
-                    <span class="info-label">{{ t('chart-name') }}</span>
-                    <span class="info-value">{{ chartInfo?.name }}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="info-label">{{ t('level') }}</span>
-                    <span class="info-value">{{ chartInfo?.level }}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="info-label">{{ t('charter') }}</span>
-                    <span class="info-value">{{ chartInfo?.charter }}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="info-label">{{ t('composer') }}</span>
-                    <span class="info-value">{{ chartInfo?.composer }}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="info-label">{{ t('illustrator') }}</span>
-                    <span class="info-value">{{ chartInfo?.illustrator }}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="info-label">{{ t('aspect') }}</span>
-                    <span class="info-value">{{ aspectWidth }}:{{ aspectHeight }}</span>
-                  </div>
-                </div>
-
-                <div v-if="renderProgress !== undefined" class="progress-area">
-                  <v-progress-linear
-                    :model-value="renderProgress"
-                    color="primary"
-                    height="8"
-                    rounded
-                  ></v-progress-linear>
-                  <p class="progress-text">{{ renderMsg }}</p>
-                </div>
-              </v-card-text>
-              <v-divider></v-divider>
-              <v-card-actions class="card-actions">
-                <v-btn @click="router.push({ name: 'tasks' })" variant="outlined">
-                  <v-icon class="mr-1">mdi-view-list</v-icon>
-                  {{ t('see-tasks') }}
-                </v-btn>
-                <v-btn @click="stepIndex = 1" variant="flat" color="primary">
-                  <v-icon class="mr-1">mdi-plus</v-icon>
-                  {{ t('next-chart') }}
-                </v-btn>
-              </v-card-actions>
-            </v-card>
-          </div>
-        </div>
       </div>
-    </div>
+    </main>
 
-    <!-- 底部操作栏 -->
-    <div class="bottom-action-bar" v-if="step === 'config' || step === 'options' || step === 'render'">
-      <div class="action-buttons-left">
-        <v-btn
-          v-if="step === 'config' || step === 'options'"
-          variant="outlined"
-          @click="stepIndex && stepIndex--"
-          class="action-btn"
-          size="small"
-        >
-          <v-icon class="mr-1">mdi-arrow-left</v-icon>
-          {{ t('prev-step') }}
-        </v-btn>
-      </div>
-      <div class="action-buttons-right">
-        <v-btn
-          v-if="step === 'options'"
-          variant="outlined"
-          @click="playChart"
-          class="action-btn"
-          size="small"
-        >
-          <v-icon class="mr-1">mdi-gamepad-variant</v-icon>
-          {{ t('play') }}
-        </v-btn>
-        <v-btn
-          v-if="step === 'options'"
-          variant="outlined"
-          @click="previewChart"
-          class="action-btn"
-          size="small"
-        >
-          <v-icon class="mr-1">mdi-eye</v-icon>
-          {{ t('preview') }}
-        </v-btn>
-        <v-btn
-          v-if="step === 'config' || step === 'options'"
-          variant="flat"
-          @click="moveNext"
-          class="action-btn primary-btn"
-          size="small"
-        >
-          {{ step === 'options' ? t('render') : t('next-step') }}
-          <v-icon class="ml-1">mdi-arrow-right</v-icon>
-        </v-btn>
-      </div>
-    </div>
-
-    <!-- 文件拖放覆盖层 -->
-    <v-overlay v-model="fileHovering" contained class="align-center justify-center hmcl-drop-overlay" persistent :close-on-content-click="false">
+    <!-- File drag overlay -->
+    <v-overlay v-model="fileHovering" contained class="align-center justify-center drop-overlay" persistent :close-on-content-click="false">
       <div class="drop-zone">
         <v-icon size="48" class="mb-2">mdi-download</v-icon>
         <p>{{ t('choose-drop') }}</p>
+      </div>
+    </v-overlay>
+
+    <!-- Parsing overlay -->
+    <v-overlay v-model="parsingChart" contained class="align-center justify-center parse-overlay" persistent :close-on-content-click="false">
+      <div class="parse-card">
+        <v-progress-circular indeterminate color="primary" size="36" width="3" />
+        <span>解析谱面中...</span>
       </div>
     </v-overlay>
   </div>
 </template>
 
 <style scoped>
-.hmcl-container {
-  display: flex;
-  height: 100%;
-  width: 100%;
-  background-color: transparent;
-  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
-  color: #e0e0e0;
-  position: relative;
-  z-index: 3;
-}
-
-/* 主内容区 */
-.hmcl-main {
-  flex-grow: 1;
+.render-container {
   display: flex;
   flex-direction: column;
-  background-color: transparent;
-  position: relative;
-  z-index: 3;
+  height: 100vh;
+  width: 100%;
+  background: transparent;
+  font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  color: #e3e2e6;
 }
 
-/* 主内容区 */
-/* 步骤内容 */
-.hmcl-content {
-  flex-grow: 1;
-  padding: 24px;
+/* ===== MD3 Top Action Bar ===== */
+.md3-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 20px;
+  background: rgba(20, 20, 20, 0.88);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.bar-left, .bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.step-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 16px;
+  transition: all 0.3s ease;
+}
+
+.chip-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  transition: all 0.3s ease;
+}
+
+.step-chip.is-active {
+  background: rgba(130, 177, 255, 0.12);
+}
+.step-chip.is-active .chip-dot {
+  background: #82b1ff;
+  box-shadow: 0 0 8px rgba(130, 177, 255, 0.5);
+}
+.step-chip.is-done .chip-dot {
+  background: #7dd87d;
+}
+
+.chip-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* MD3 Button variants */
+.bar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  white-space: nowrap;
+  font-family: inherit;
+  letter-spacing: 0.1px;
+}
+
+.bar-btn-text {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+}
+.bar-btn-text:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.bar-btn-tonal {
+  background: rgba(130, 177, 255, 0.12);
+  color: #82b1ff;
+}
+.bar-btn-tonal:hover {
+  background: rgba(130, 177, 255, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.bar-btn-filled {
+  background: #82b1ff;
+  color: #002f65;
+  font-weight: 600;
+}
+.bar-btn-filled:hover {
+  background: #a0c4ff;
+  box-shadow: 0 2px 8px rgba(130, 177, 255, 0.3);
+}
+
+/* ===== Content Area ===== */
+.render-content {
+  flex: 1;
   overflow-y: auto;
-  background-color: transparent;
   position: relative;
-  z-index: 3;
+  padding: 24px;
 }
 
-/* 步骤切换动画 */
-.step-content {
+.step-panel {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   padding: 24px;
   opacity: 0;
-  transform: translateX(20px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transform: translateY(16px);
   pointer-events: none;
+  transition: opacity 0.35s cubic-bezier(0.2, 0, 0, 1), transform 0.35s cubic-bezier(0.2, 0, 0, 1);
   overflow-y: auto;
-  z-index: 4;
-  max-height: 100%;
-  box-sizing: border-box;
 }
-
-.step-content.active {
+.step-panel.is-active {
   opacity: 1;
-  transform: translateX(0);
+  transform: translateY(0);
   pointer-events: auto;
 }
 
-/* 选择内容 */
-.choose-content {
+/* ===== Bookshelf (Step 1) ===== */
+.bookshelf {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
-  position: relative;
-  z-index: 4;
 }
 
-.choose-cards {
-  display: flex;
-  gap: 24px;
-  margin-top: 40px;
-}
-
-.choose-card {
-  width: 220px;
-  height: 260px;
-  background: rgba(26, 26, 26, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  position: relative;
-  z-index: 4;
-}
-
-.choose-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
-  border-color: rgba(255, 255, 255, 0.15);
-  background: rgba(34, 34, 34, 0.9);
-  position: relative;
-  z-index: 5;
-}
-
-.card-icon {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: rgba(42, 42, 42, 0.9);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 16px;
-  color: #cccccc;
-  position: relative;
-  z-index: 5;
-}
-
-.choose-card h4 {
-  margin: 0 0 8px;
+.shelf-label {
   font-size: 18px;
-  font-weight: 500;
-  color: #cccccc;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 32px;
+  letter-spacing: 0.5px;
 }
 
-.choose-card p {
-  margin: 0;
-  font-size: 14px;
-  color: #9d9d9d;
-  text-align: center;
+.shelf-row {
+  display: flex;
+  gap: 32px;
+  perspective: 1000px;
 }
 
-/* 配置面板 - Neo-Brutalism 风格 */
-.config-panel {
-  width: 100%;
+.book-card {
+  width: 200px;
+  height: 320px;
+  border-radius: 6px 16px 16px 6px;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 4px 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.book-card:hover {
+  transform: translateY(-8px) rotateY(-5deg);
+  box-shadow: 8px 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+.book-spine {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 12px;
+  border-radius: 6px 0 0 6px;
+  background: linear-gradient(180deg, #5a3e8e, #3a2660);
+}
+.book-spine-alt {
+  background: linear-gradient(180deg, #2e7d5e, #1a4a38);
+}
+
+.book-face {
+  position: absolute;
+  left: 12px; top: 0; right: 0; bottom: 0;
+  border-radius: 0 16px 16px 0;
+  background: linear-gradient(160deg, #2a2040, #1a1430);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+}
+
+.book-card-alt .book-face {
+  background: linear-gradient(160deg, #1a3030, #0f2020);
+}
+
+.book-icon {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.book-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.book-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* ===== Config Card (Step 2) ===== */
+.config-card-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 100%;
-  max-height: calc(100vh - 180px);
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  overflow-y: auto;
+  padding: 8px;
 }
 
-.config-form-neo {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
+.config-card {
+  width: 100%;
+  background: rgba(28, 28, 28, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  padding: 32px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
-.config-header {
-  margin-bottom: 24px;
-  flex-shrink: 0;
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .config-title {
-  font-size: 28px;
-  font-weight: 800;
-  color: var(--text-primary, #f5f5f5);
-  margin: 0 0 8px;
-  letter-spacing: -0.5px;
-}
-
-.config-subtitle {
-  font-size: 14px;
-  color: var(--text-secondary, #a0a0a0);
+  font-size: 22px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
   margin: 0;
 }
 
 .config-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 24px;
-  flex: 1;
-  min-height: 0;
 }
 
 .config-section {
-  background: rgba(20, 20, 22, 0.9);
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 24px;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  overflow-y: auto;
+  gap: 16px;
 }
 
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.08);
-}
-
-.section-number {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--brand-primary, #6366f1);
-  background: rgba(99, 102, 241, 0.15);
-  padding: 4px 10px;
-  border-radius: 6px;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary, #f5f5f5);
-  margin: 0;
-}
-
-.section-body {
+.field-group {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  flex: 1;
+  gap: 6px;
 }
 
-/* Neo 表单字段 */
-.neo-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.neo-label {
+.field-label {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-secondary, #a0a0a0);
+  color: rgba(255, 255, 255, 0.55);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.neo-label.required::after {
-  content: '*';
-  color: #ef4444;
-  margin-left: 4px;
-}
-
-.neo-input {
+.md3-field {
   width: 100%;
   padding: 12px 16px;
-  background: rgba(40, 40, 44, 0.8);
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: var(--text-primary, #f5f5f5);
+  background: rgba(45, 45, 45, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 14px;
-  transition: all 0.2s ease;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-
-.neo-input:focus {
+.md3-field:focus {
   outline: none;
-  border-color: var(--brand-primary, #6366f1);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  border-color: #82b1ff;
+  box-shadow: 0 0 0 3px rgba(130, 177, 255, 0.15);
+}
+.md3-field::placeholder {
+  color: rgba(255, 255, 255, 0.3);
 }
 
-.neo-input::placeholder {
-  color: var(--text-muted, #666);
-}
-
-/* 宽高比输入 */
 .aspect-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-
-.aspect-input {
+.aspect-field {
   flex: 1;
   text-align: center;
 }
-
-.aspect-colon {
-  font-size: 20px;
+.aspect-sep {
+  font-size: 18px;
   font-weight: 700;
-  color: var(--text-secondary, #a0a0a0);
+  color: rgba(255, 255, 255, 0.4);
 }
 
-/* 滑块 */
-.slider-container {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.neo-slider {
-  flex: 1;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+.md3-slider {
+  width: 100%;
+  height: 4px;
   appearance: none;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
   cursor: pointer;
 }
-
-.neo-slider::-webkit-slider-thumb {
+.md3-slider::-webkit-slider-thumb {
   appearance: none;
-  width: 18px;
-  height: 18px;
-  background: var(--brand-primary, #6366f1);
-  border: 2px solid white;
+  width: 20px; height: 20px;
+  background: #82b1ff;
   border-radius: 50%;
   cursor: pointer;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
-  transition: transform 0.15s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-.neo-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-}
-
-.slider-value {
-  min-width: 50px;
-  text-align: right;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary, #f5f5f5);
-}
-
-/* 开关 */
-.toggle-field {
+.field-toggle {
   flex-direction: row !important;
   align-items: center;
   justify-content: space-between;
 }
 
-.neo-toggle {
-  width: 52px;
-  height: 28px;
-  background: rgba(40, 40, 44, 0.8);
-  border: 2px solid rgba(255, 255, 255, 0.1);
+.md3-switch {
+  width: 52px; height: 28px;
+  background: rgba(60, 60, 60, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.15);
   border-radius: 14px;
   cursor: pointer;
   position: relative;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
 }
-
-.neo-toggle.active {
-  background: var(--brand-primary, #6366f1);
-  border-color: var(--brand-primary, #6366f1);
+.md3-switch.is-on {
+  background: #82b1ff;
+  border-color: #82b1ff;
 }
-
-.toggle-indicator {
+.switch-thumb {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  background: white;
+  top: 2px; left: 2px;
+  width: 20px; height: 20px;
+  background: #fff;
   border-radius: 50%;
-  transition: transform 0.2s ease;
-  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+  transition: transform 0.25s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
-
-.neo-toggle.active .toggle-indicator {
+.md3-switch.is-on .switch-thumb {
   transform: translateX(24px);
 }
 
-/* 响应式 */
-@media (max-width: 768px) {
-  .config-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .config-section {
-    padding: 16px;
-  }
-
-  .config-title {
-    font-size: 22px;
-  }
-
-  .section-header {
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-  }
-}
-
-/* 配置内容 - 保留旧样式兼容 */
-.config-content {
-  width: 100%;
+/* ===== Options (Step 3) ===== */
+.options-wrapper {
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  z-index: 4;
 }
 
-.config-form {
-  flex-grow: 1;
+/* ===== Render Card (Step 4) ===== */
+.render-card {
   display: flex;
-  flex-direction: column;
-  position: relative;
-  z-index: 4;
-}
-
-/* 配置布局 */
-.config-layout {
-  display: flex;
-  gap: 24px;
-  flex-grow: 1;
-  position: relative;
-  z-index: 4;
-}
-
-.config-column {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.field-group {
-  background: rgba(26, 26, 26, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-radius: 8px;
+  flex-direction: row;
+  max-width: 900px;
+  margin: 24px auto;
+  background: rgba(28, 28, 28, 0.95);
+  backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 16px;
-  height: 100%;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  min-height: 360px;
 }
 
-.field-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: #cccccc;
-  margin-bottom: 16px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.field-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.field-item {
-  display: flex;
-  flex-direction: column;
-}
-
-.field-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #cccccc;
-  margin-bottom: 6px;
-}
-
-.field-input {
-  background-color: #2a2a2a !important;
-}
-
-.field-input :deep(.v-field) {
-  border-radius: 4px;
-  background-color: #2a2a2a !important;
-  color: #cccccc !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.field-input :deep(.v-field-label) {
-  color: #9d9d9d !important;
-}
-
-.field-input :deep(.v-input__control) {
-  color: #cccccc !important;
-}
-
-/* 宽高比输入 */
-.aspect-inputs {
+.render-cover {
+  width: 40%;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.2);
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
 }
 
-.aspect-input {
-  width: 80px;
-}
-
-.aspect-input :deep(.v-field) {
-  border-radius: 4px;
-  background-color: #2a2a2a !important;
-  color: #cccccc !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.aspect-separator {
-  font-size: 16px;
-  font-weight: 500;
-  color: #cccccc;
-  margin: 0 4px;
-}
-
-/* 滑块和开关 */
-.field-slider {
-  margin: 8px 0;
-}
-
-.field-slider :deep(.v-slider-track__background) {
-  background-color: #2a2a2a !important;
-  opacity: 0.6; /* 可选：调整轨道背景透明度 */
-}
-
-.field-slider :deep(.v-slider-track__fill) {
-  background-color: #505050 !important;
-}
-
-.field-slider :deep(.v-slider-thumb .v-slider-thumb__surface) {
-  border-radius: 50% !important;
-  width: 20px !important;
-  height: 20px !important;
-  background-color: #606060 !important;
-  border: 2px solid white !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
-  transition: all 0.2s ease !important;
-}
-
-.field-slider :deep(.v-slider-thumb--focused .v-slider-thumb__surface),
-.field-slider :deep(.v-slider-thumb:hover .v-slider-thumb__surface),
-.field-slider :deep(.v-slider-thumb--active .v-slider-thumb__surface) {
-  border-radius: 50% !important;
-  background-color: #808080 !important;
-  transform: scale(1.2) !important;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5) !important;
-}
-
-.field-switch :deep(.v-switch__track) {
-  background-color: #2a2a2a !important;
-  border-radius: 10px !important;
-}
-
-.field-switch :deep(.v-switch__thumb) {
-  background-color: #666 !important;
-  border-radius: 50% !important;
-  transition: all 0.2s ease !important;
-}
-
-.field-switch :deep(.v-switch--selected .v-switch__track) {
-  background-color: #505050 !important;
-}
-
-.field-switch :deep(.v-switch--selected .v-switch__thumb) {
-  background-color: #fff !important;
-}
-
-/* 选项面板 - Neo-Brutalism 风格 */
-.options-panel {
+.cover-img {
   width: 100%;
   height: 100%;
+  object-fit: cover;
+}
+
+.cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+}
+
+.render-info {
+  width: 60%;
+  padding: 28px;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 180px);
-  overflow-y: auto;
+  gap: 12px;
 }
 
-.options-header {
-  margin-bottom: 24px;
-  flex-shrink: 0;
+.render-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
 }
-
-.options-title {
-  font-size: 28px;
-  font-weight: 800;
-  color: var(--text-primary, #f5f5f5);
-  margin: 0 0 8px;
-  letter-spacing: -0.5px;
-}
-
-.options-subtitle {
-  font-size: 14px;
-  color: var(--text-secondary, #a0a0a0);
+.render-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
   margin: 0;
 }
 
-.options-content {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.hmcl-config {
-  height: 100%;
-}
-
-/* 渲染内容 */
-.render-content {
+.info-rows {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  position: relative;
-  z-index: 4;
+  gap: 2px;
+  flex: 1;
 }
-
-.hmcl-card {
-  width: 100%;
-  max-width: 600px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-  overflow: hidden;
-  background: rgba(26, 26, 26, 0.9);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  position: relative;
-  z-index: 4;
-}
-
-.card-title {
-  font-size: 18px;
-  font-weight: 500;
-  color: #cccccc;
-}
-
-.info-list {
-  margin-bottom: 16px;
-}
-
-.info-item {
+.info-row {
   display: flex;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
+.info-row:last-child { border-bottom: none; }
+.info-label { color: rgba(255, 255, 255, 0.5); font-size: 13px; }
+.info-value { color: rgba(255, 255, 255, 0.85); font-size: 13px; text-align: right; }
 
-.info-item:last-child {
-  border-bottom: none;
+.render-progress {
+  margin-top: 8px;
 }
-
-.info-label {
-  width: 120px;
-  font-weight: 500;
-  color: #9d9d9d;
-}
-
-.info-value {
-  flex-grow: 1;
-  color: #cccccc;
-}
-
-.progress-area {
-  margin-top: 16px;
-  position: relative;
-  z-index: 6;
-}
-
 .progress-text {
   text-align: center;
-  margin-top: 8px;
-  font-size: 14px;
-  color: #9d9d9d;
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
 }
 
-.card-actions {
+.render-actions {
+  display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  background: rgba(31, 31, 31, 0.85);
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 12px;
 }
 
-.card-actions .v-btn {
-  background-color: #2a2a2a !important;
-  color: #cccccc !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+/* ===== Overlays ===== */
+.drop-overlay {
+  background-color: rgba(0, 0, 0, 0.85);
+  z-index: 200;
 }
-
-.card-actions .v-btn.v-btn--flat {
-  background-color: #404040 !important;
-  color: white !important;
-  border-color: #404040 !important;
-}
-
-/* 加载和拖放覆盖层 */
-.hmcl-loading {
-  background-color: rgba(0, 0, 0, 0.8);
-  z-index: 10;
-}
-
-.loading-card {
-  border-radius: 8px;
-  overflow: hidden;
-  background-color: #1a1a1a;
-}
-
-.hmcl-drop-overlay {
-  background-color: rgba(0, 0, 0, 0.8);
-  z-index: 10;
-}
-
 .drop-zone {
-  background-color: #1a1a1a;
-  border-radius: 8px;
-  padding: 40px;
+  background: rgba(28, 28, 28, 0.95);
+  border-radius: 28px;
+  padding: 48px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  color: #cccccc;
-  border: 2px dashed rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+  border: 2px dashed rgba(130, 177, 255, 0.4);
 }
-
 .drop-zone p {
   margin: 0;
   font-size: 16px;
   font-weight: 500;
 }
 
-/* 底部操作栏 */
-.bottom-action-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 60px;
+.parse-overlay {
+  background-color: rgba(0, 0, 0, 0.85);
+  z-index: 200;
+}
+.parse-card {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  background: rgba(18, 18, 18, 0.95);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(8px);
-  z-index: 100;
+  gap: 16px;
+  background: rgba(28, 28, 28, 0.95);
+  border-radius: 28px;
+  padding: 24px 32px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
 }
 
-.action-buttons-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.action-buttons-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.action-btn {
-  border-radius: 8px;
-  text-transform: none;
-  font-weight: 500;
-  background: rgba(50, 50, 50, 0.5) !important;
-  color: #e0e0e0 !important;
-  border: 1px solid rgba(80, 80, 80, 0.4) !important;
-  transition: all 0.3s ease;
-  padding: 0 16px;
-}
-
-.action-btn:hover {
-  background: rgba(70, 70, 70, 0.6) !important;
-  border-color: rgba(120, 120, 120, 0.5) !important;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.primary-btn {
-  background: linear-gradient(135deg, #404040, #505050) !important;
-  color: white !important;
-  border: none !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.primary-btn:hover {
-  background: linear-gradient(135deg, #505050, #606060) !important;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
+/* ===== Responsive ===== */
 @media (max-width: 768px) {
-  .hmcl-sidebar {
-    width: 60px;
+  .config-grid {
+    grid-template-columns: 1fr;
   }
-
-  .step-nav {
-    gap: 12px;
-  }
-
-  .step-nav-item {
-    width: 36px;
-    height: 36px;
-  }
-
-  .step-icon {
-    font-size: 14px;
-  }
-
-  .choose-cards {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .config-layout {
-    flex-direction: column;
+  .shelf-row {
     gap: 16px;
   }
-}
-
-@media (max-width: 600px) {
-  .hmcl-container {
-    flex-direction: column;
+  .book-card {
+    width: 160px;
+    height: 260px;
   }
-
-  .hmcl-sidebar {
+  .md3-top-bar {
+    padding: 0 12px;
+    height: 48px;
+  }
+  .bar-btn span {
+    display: none;
+  }
+  .config-card {
+    padding: 20px;
+    border-radius: 20px;
+  }
+  .render-card {
+    flex-direction: column;
+    margin: 16px;
+  }
+  .render-cover {
     width: 100%;
-    height: auto;
-    flex-direction: row;
-    border-right: none;
-    border-bottom: 1px solid #3e3e42;
+    min-height: 200px;
   }
-
-  .step-nav {
-    flex-direction: row;
-    padding: 10px 0;
-    gap: 8px;
-  }
-
-  .step-nav-item {
-    width: 32px;
-    height: 32px;
-  }
-
-  .step-icon {
-    font-size: 12px;
-  }
-
-  .step-nav-item.active::after {
-    left: 50%;
-    top: -8px;
-    transform: translateX(-50%);
-    width: 24px;
-    height: 4px;
-  }
-
-  .config-layout {
-    flex-direction: column;
+  .render-info {
+    width: 100%;
+    padding: 20px;
   }
 }
 </style>

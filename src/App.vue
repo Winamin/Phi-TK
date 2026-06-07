@@ -50,44 +50,30 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
-// 导航项配置
 const navItems = [
-  { key: 'render', icon: 'mdi-play-circle' },
-  { key: 'rpe', icon: 'mdi-book-open-page-variant' },
-  { key: 'tasks', icon: 'mdi-server' },
-  { key: 'setting', icon: 'mdi-cog-outline' },
+  { key: 'render', icon: 'mdi-play-circle-outline', activeIcon: 'mdi-play-circle' },
+  { key: 'rpe', icon: 'mdi-book-open-page-variant-outline', activeIcon: 'mdi-book-open-page-variant' },
+  { key: 'tasks', icon: 'mdi-server-network-outline', activeIcon: 'mdi-server-network' },
+  { key: 'batch-render', icon: 'mdi-timeline-clock-outline', activeIcon: 'mdi-timeline-clock' },
+  { key: 'setting', icon: 'mdi-cog-outline', activeIcon: 'mdi-cog' },
+  { key: 'about', icon: 'mdi-information-outline', activeIcon: 'mdi-information' },
 ];
 
-// 下拉菜单项配置
-const dropdownItems = [
-  { key: 'batch-render', icon: 'mdi-timeline' },
-  { key: 'about', icon: 'mdi-information-outline' },
-];
-
-// 导航处理函数
 const navigateTo = (name: string) => {
   router.push({ name });
 };
 
 window.goto = navigateTo;
 
-// 下拉菜单状态
-const showDropdown = ref(false);
-
-// 自定义背景
 const customBackground = ref<string | null>(null);
 
 onMounted(() => {
-  // 从 localStorage 读取自定义背景
   customBackground.value = localStorage.getItem('customBackground');
-
-  // 监听自定义背景变化事件
   window.addEventListener('customBackgroundChanged', ((event: CustomEvent) => {
     customBackground.value = event.detail;
   }) as EventListener);
 });
 
-// 计算背景样式（使用convertFileSrc转换路径）
 const backgroundStyle = computed(() => {
   if (customBackground.value) {
     try {
@@ -108,65 +94,43 @@ const backgroundStyle = computed(() => {
 </script>
 
 <template>
-  <v-app id="phi-tk" class="dark-theme">
-    <!-- 自定义背景层 -->
-    <div v-if="customBackground" class="custom-background-layer" :style="backgroundStyle"></div>
-
-    <!-- 自定义背景遮罩层 -->
-    <div v-if="customBackground" class="background-overlay"></div>
+  <v-app id="phi-tk">
+    <div v-if="customBackground" class="custom-bg-layer" :style="backgroundStyle"></div>
+    <div v-if="customBackground" class="custom-bg-overlay"></div>
 
     <v-sonner position="top-center" />
 
-    <!-- 顶部导航栏 -->
-    <v-app-bar :elevation="0" class="app-bar-glass blur-background">
-      <!-- 左侧标题 -->
-      <v-app-bar-title class="text-gradient glow-title">Phi TK</v-app-bar-title>
+    <!-- MD3 NavigationRail (left side) -->
+    <nav class="md3-nav-rail">
+      <div class="rail-brand">
+        <span class="brand-text">Phi TK</span>
+      </div>
 
-      <v-spacer></v-spacer>
-
-      <!-- 右侧导航图标 -->
-      <div class="nav-icons-container">
-        <v-btn
+      <div class="rail-items">
+        <button
           v-for="item in navItems"
           :key="item.key"
-          :icon="item.icon"
-          :active="route.name === item.key"
-          variant="text"
-          size="large"
-          class="nav-icon-btn"
+          class="rail-item"
+          :class="{ 'is-active': route.name === item.key }"
           @click="navigateTo(item.key)"
-          v-tooltip:bottom="t(item.key)" />
-
-        <!-- 更多选项下拉菜单 -->
-        <v-menu v-model="showDropdown" :close-on-content-click="false" location="bottom end" transition="slide-y-transition">
-          <template v-slot:activator="{ props }">
-            <v-btn icon="mdi-chevron-down" variant="text" size="large" class="nav-icon-btn" v-bind="props" v-tooltip:bottom="t('more')" />
-          </template>
-
-          <v-list class="dropdown-menu-glass">
-            <v-list-item
-              v-for="item in dropdownItems"
-              :key="item.key"
-              :active="route.name === item.key"
-              :prepend-icon="item.icon"
-              :title="t(item.key)"
-              @click="navigateTo(item.key)"
-              class="dropdown-item" />
-          </v-list>
-        </v-menu>
+        >
+          <span class="rail-indicator"></span>
+          <v-icon :icon="route.name === item.key ? item.activeIcon : item.icon" size="24" class="rail-icon" />
+          <span class="rail-label">{{ t(item.key) }}</span>
+        </button>
       </div>
-    </v-app-bar>
+    </nav>
 
-    <!-- 主内容区域 -->
-    <v-main class="d-flex justify-center animated-background">
+    <!-- Main content area -->
+    <v-main class="md3-main">
       <router-view v-slot="{ Component }">
         <Suspense timeout="0">
           <template #default>
-            <component :is="Component" ref="component" class="route-transition" />
+            <component :is="Component" ref="component" class="route-view" />
           </template>
           <template #fallback>
-            <div class="flex justify-center pa-8">
-              <v-progress-circular indeterminate size="large" class="glow-spinner" />
+            <div class="loading-container">
+              <v-progress-circular indeterminate size="48" color="primary" />
             </div>
           </template>
         </Suspense>
@@ -176,285 +140,174 @@ const backgroundStyle = computed(() => {
 </template>
 
 <style>
-.dark-theme {
-  background-color: #0d0d0d;
-  min-height: 100vh;
-  position: relative !important;
+/* ===== MD3 Global Resets ===== */
+* { box-sizing: border-box; }
+
+.v-main { background: transparent !important; }
+.v-main__wrap { background: transparent !important; }
+</style>
+
+<style scoped>
+/* ===== Custom Background ===== */
+.custom-bg-layer {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0;
+}
+.custom-bg-overlay {
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, rgba(13,13,13,0.4) 40%, rgba(13,13,13,0.92) 100%);
+  pointer-events: none; z-index: 0;
 }
 
-/* 自定义背景层 */
-.custom-background-layer {
+/* ===== MD3 NavigationRail ===== */
+.md3-nav-rail {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: -1;
+  left: 0; top: 0; bottom: 0;
+  width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(20, 20, 20, 0.92);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  z-index: 100;
+  padding: 12px 0;
 }
 
-/* 自定义背景渐变遮罩层 - 从边缘暗到中心亮的过渡 */
-.background-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
+.rail-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.brand-text {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #82b1ff, #d1e4ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.rail-items {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   width: 100%;
-  height: 100%;
-  background:
-    radial-gradient(
-      ellipse at center,
-      transparent 0%,
-      rgba(13, 13, 13, 0.3) 30%,
-      rgba(13, 13, 13, 0.6) 50%,
-      rgba(13, 13, 13, 0.8) 70%,
-      rgba(13, 13, 13, 0.95) 100%
-    );
-  pointer-events: none;
+  flex: 1;
+}
+
+/* MD3 NavRail Destination */
+.rail-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 16px;
+  transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rail-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* MD3 pill indicator */
+.rail-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scaleX(0);
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  background: rgba(130, 177, 255, 0.15);
+  transition: transform 0.35s cubic-bezier(0.2, 0, 0, 1);
   z-index: 0;
 }
 
-/* 确保内容在背景之上 */
-.dark-theme > * {
+.rail-item.is-active .rail-indicator {
+  transform: translate(-50%, -50%) scaleX(1);
+  background: rgba(130, 177, 255, 0.25);
+}
+
+.rail-icon {
+  position: relative;
+  z-index: 1;
+  color: rgba(255, 255, 255, 0.6);
+  transition: color 0.25s ease;
+}
+
+.rail-item.is-active .rail-icon {
+  color: #82b1ff;
+}
+
+.rail-label {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.2px;
+  transition: color 0.25s ease;
+  white-space: nowrap;
+}
+
+.rail-item.is-active .rail-label {
+  color: #82b1ff;
+  font-weight: 600;
+}
+
+/* ===== Main Content ===== */
+.md3-main {
+  margin-left: 80px !important;
+  min-height: 100vh;
   position: relative;
   z-index: 1;
 }
 
-.app-bar-glass {
-  backdrop-filter: blur(40px) saturate(200%);
-  background: rgba(18, 18, 18, 0.9) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
-  position: relative;
-  z-index: 10;
+.route-view {
+  width: 100%;
+  min-height: 100vh;
+  animation: routeEnter 0.35s cubic-bezier(0.2, 0, 0, 1) both;
 }
 
-.blur-background {
-  backdrop-filter: blur(40px) saturate(200%);
-  background: rgba(18, 18, 18, 0.85) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
-
-.nav-icons-container {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-right: 16px;
-}
-
-/* 修改现有的 .nav-icon-btn 样式 */
-.nav-icon-btn {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 12px; /* 基础圆角 */
-  position: relative;
-  overflow: hidden;
-  background: rgba(40, 40, 40, 0.5);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-/* 确保所有导航按钮都有圆角 */
-.nav-icon-btn,
-.nav-icon-btn:hover,
-.nav-icon-btn.v-btn--active {
-  border-radius: 12px !important; /* 强制圆角 */
-}
-
-/* 下拉菜单触发器的特殊样式 */
-.nav-icon-btn[icon='mdi-chevron-down'] {
-  border-radius: 12px !important; /* 确保更多按钮本身有圆角 */
-}
-
-/* 增强更多按钮的hover效果 */
-.nav-icon-btn[icon='mdi-chevron-down']:hover {
-  border-radius: 12px !important; /* 确保hover时保持圆角 */
-  transform: translateY(-2px) scale(1.05);
-  background: rgba(60, 60, 60, 0.8) !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-  color: #fff;
-}
-
-/* 下拉菜单打开时（激活状态） */
-.nav-icon-btn[icon='mdi-chevron-down'].v-btn--active {
-  border-radius: 12px !important;
-  background: rgba(80, 80, 80, 0.9) !important;
-  color: #fff;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-}
-
-/* 如果想让更多按钮更突出，可以添加特殊标记 */
-.nav-icon-btn[icon='mdi-chevron-down']::after {
-  content: '';
-  position: absolute;
-  bottom: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.4);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-/* hover时显示小圆点 */
-.nav-icon-btn[icon='mdi-chevron-down']:hover::after {
-  opacity: 1;
-}
-
-/* 或者使用边框发光效果 */
-.nav-icon-btn[icon='mdi-chevron-down']:hover {
-  box-shadow:
-    0 4px 20px rgba(0, 0, 0, 0.4),
-    0 0 0 2px rgba(80, 80, 80, 0.3) inset; /* 内边框效果 */
-}
-
-.dropdown-menu-glass {
-  backdrop-filter: blur(40px) saturate(200%);
-  background: rgba(18, 18, 18, 0.95) !important; /* 增加透明度 */
-  border: 1px solid rgba(255, 255, 255, 0.1) !important; /* 增加边框透明度 */
-  border-radius: 16px !important; /* 添加圆角 */
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-  margin-top: 8px; /* 增加与按钮的间距 */
-}
-
-/* 下拉菜单的动画效果 */
-.v-menu__content {
-  border-radius: 16px !important;
-  overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* 确保列表项也适应圆角 */
-.dropdown-menu-glass .v-list {
-  border-radius: inherit;
-}
-
-/* 下拉菜单项样式优化 */
-.dropdown-item {
-  transition: all 0.2s ease;
-  margin: 4px 8px;
-  border-radius: 10px; /* 增加列表项圆角 */
-  min-height: 48px;
-}
-
-/* 第一个和最后一个菜单项的特殊圆角处理 */
-.dropdown-menu-glass .v-list-item:first-child {
-  border-radius: 10px 10px 0 0;
-}
-
-.dropdown-menu-glass .v-list-item:last-child {
-  border-radius: 0 0 10px 10px;
-}
-
-/* 鼠标悬停在菜单项上时 */
-.dropdown-item:hover {
-  background: rgba(50, 50, 50, 0.8) !important;
-  transform: translateX(4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-/* 激活状态的菜单项 */
-.dropdown-item.v-list-item--active {
-  background: rgba(70, 70, 70, 0.9) !important;
-  color: #fff;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
-/* 分割线样式 */
-.dropdown-menu-glass .v-divider {
-  border-color: rgba(255, 255, 255, 0.1);
-  margin: 4px 12px;
-}
-
-/* 如果需要在下拉菜单上添加图标效果 */
-.dropdown-item .v-icon {
-  transition: transform 0.2s ease;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.dropdown-item:hover .v-icon {
-  transform: scale(1.1);
-  color: #fff;
-}
-.route-transition {
-  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-}
-
-.text-gradient {
-  background: linear-gradient(45deg, #ffffff, #b0b0b0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
-  animation: glow-pulse 3s ease-in-out infinite;
-}
-
-@keyframes glow-pulse {
-  0%,
-  100% {
-    text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+@keyframes routeEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
   }
-  50% {
-    text-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-.glow-spinner {
-  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.3));
-}
-
-.animated-background::after {
-  content: none;
-}
-
-.v-main {
+.loading-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 100%;
-  height: 100%;
-  position: relative;
-  z-index: 3 !important;
-  background: transparent !important;
+  min-height: 100vh;
 }
 
-.v-main__wrap {
-  background: transparent !important;
-}
-
-@keyframes particleFlow {
-  0% {
-    transform: translate(0, 0);
-  }
-  100% {
-    transform: translate(-50%, -50%);
-  }
-}
-
-@media (max-width: 768px) {
-  .nav-icon-btn {
-    size: medium;
-  }
-
-  .text-gradient {
-    font-size: 1.2rem;
-  }
-
-  .blur-background {
-    backdrop-filter: blur(20px);
-  }
-}
-
-/* 全局隐藏滚动条 */
-::-webkit-scrollbar {
-  display: none;
-  width: 0 !important;
-}
-
-html {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+/* ===== Responsive: collapse rail on narrow ===== */
+@media (max-width: 600px) {
+  .md3-nav-rail { width: 64px; }
+  .md3-main { margin-left: 64px !important; }
+  .rail-label { font-size: 9px; }
+  .rail-item { width: 48px; }
+  .brand-text { font-size: 11px; }
 }
 </style>
