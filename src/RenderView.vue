@@ -96,7 +96,7 @@
   </i18n>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { watch } from 'vue';
@@ -161,6 +161,7 @@ async function loadChart(file: string) {
   try {
     parsingChart.value = true;
     chartPath = file;
+    renderCover.value = null;
     chartInfo.value = (await invoke('parse_chart', { path: file })) as ChartInfo;
     aspectWidth.value = String(chartInfo.value.aspectRatio);
     aspectHeight.value = '1.0';
@@ -286,6 +287,7 @@ const renderMsg = ref(''),
   renderProgress = ref<number>(),
   renderDuration = ref<number>();
 const renderCover = ref<string | null>(null);
+let coverPollInterval: ReturnType<typeof setInterval> | null = null;
 event.listen('render-msg', (msg) => (renderMsg.value = msg.payload as string));
 event.listen('render-progress', (msg) => {
   let payload = msg.payload as { progress: number; fps: number; estimate: number };
@@ -305,15 +307,35 @@ async function fetchRenderCover() {
   try {
     const tasks = await invoke<Task[]>('get_tasks');
     if (tasks && tasks.length > 0) {
-      const latest = tasks[tasks.length - 1];
-      if (latest.cover) {
-        renderCover.value = latest.cover;
+      const task = tasks.find(t => t.path === chartPath);
+      if (task?.cover) {
+        renderCover.value = task.cover;
       }
     }
   } catch (e) {
     console.error('Failed to fetch render cover:', e);
   }
 }
+
+function startCoverPolling() {
+  stopCoverPolling();
+  fetchRenderCover();
+  coverPollInterval = setInterval(fetchRenderCover, 700);
+}
+
+function stopCoverPolling() {
+  if (coverPollInterval) {
+    clearInterval(coverPollInterval);
+    coverPollInterval = null;
+  }
+}
+
+watch(step, (s) => {
+  if (s === 'render') startCoverPolling();
+  else stopCoverPolling();
+});
+
+onUnmounted(() => stopCoverPolling());
 
 async function moveNext() {
   if (step.value === 'config') {
@@ -327,7 +349,6 @@ async function moveNext() {
   if (step.value === 'options') {
     if (await postRender()) {
       stepIndex.value++;
-      fetchRenderCover();
     }
     return;
   }
