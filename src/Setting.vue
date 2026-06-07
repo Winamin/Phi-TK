@@ -59,7 +59,6 @@ import { useI18n } from 'vue-i18n';
 import { open } from '@tauri-apps/plugin-dialog';
 import { appConfigDir } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/core';
-//import type { BaseDirectory } from '@tauri-apps/plugin-fs';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
 defineOptions({ name: 'SettingsPanel' });
@@ -72,18 +71,12 @@ const saved = ref(false);
 const warning = ref('');
 const selectedInfo = ref<string | null>(null);
 
-// 自定义背景
 const backgroundPath = ref<string>(localStorage.getItem('customBackground') || '');
 const backgroundSaved = ref(false);
 
-// 背景预览URL（用于Tauri文件路径转换）
 const backgroundPreviewUrl = computed(() => {
   if (backgroundPath.value) {
-    try {
-      return convertFileSrc(backgroundPath.value);
-    } catch {
-      return backgroundPath.value;
-    }
+    try { return convertFileSrc(backgroundPath.value); } catch { return backgroundPath.value; }
   }
   return '';
 });
@@ -91,17 +84,9 @@ const backgroundPreviewUrl = computed(() => {
 async function selectFolder() {
   warning.value = '';
   selectedInfo.value = null;
-
   try {
-    const selected = await open({
-      directory: true,
-      multiple: false,
-      // 使用 appConfigDir 作为默认起始目录
-      defaultPath: await appConfigDir(),
-    });
-
-    if (selected === null) return; // 用户取消
-
+    const selected = await open({ directory: true, multiple: false, defaultPath: await appConfigDir() });
+    if (selected === null) return;
     const path = Array.isArray(selected) ? selected[0] : selected;
     outputPath.value = path;
     const rootName = path.split(/[\\/]/).pop() || path;
@@ -112,10 +97,7 @@ async function selectFolder() {
 }
 
 function saveOutputPath() {
-  if (!rules.non_empty(outputPath.value)) {
-    warning.value = t('settings.outputPath.warning.empty');
-    return;
-  }
+  if (!rules.non_empty(outputPath.value)) { warning.value = t('settings.outputPath.warning.empty'); return; }
   localStorage.setItem('outputPath', outputPath.value);
   saved.value = true;
   setTimeout(() => (saved.value = false), 1500);
@@ -123,13 +105,8 @@ function saveOutputPath() {
 
 async function copyPath() {
   if (!outputPath.value) return;
-  try {
-    await writeText(outputPath.value);
-    saved.value = true;
-    setTimeout(() => (saved.value = false), 1500);
-  } catch {
-    warning.value = t('settings.outputPath.warning.copy_error');
-  }
+  try { await writeText(outputPath.value); saved.value = true; setTimeout(() => (saved.value = false), 1500); }
+  catch { warning.value = t('settings.outputPath.warning.copy_error'); }
 }
 
 function clearPath() {
@@ -138,36 +115,20 @@ function clearPath() {
   localStorage.removeItem('outputPath');
 }
 
-// 自定义背景相关函数
 async function selectBackground() {
   try {
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: 'Image', extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] }],
-      defaultPath: await appConfigDir(),
-    });
-
+    const selected = await open({ multiple: false, filters: [{ name: 'Image', extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] }], defaultPath: await appConfigDir() });
     if (selected === null) return;
-
     const path = Array.isArray(selected) ? selected[0] : selected;
     backgroundPath.value = path as string;
-    // 选择后立即保存并应用
     saveBackground();
-  } catch (err: any) {
-    console.error('Failed to select background:', err);
-  }
+  } catch (err: any) { console.error('Failed to select background:', err); }
 }
 
 function saveBackground() {
-  if (backgroundPath.value) {
-    localStorage.setItem('customBackground', backgroundPath.value);
-  } else {
-    localStorage.removeItem('customBackground');
-  }
-  // 触发自定义事件通知 App.vue 更新背景
-  window.dispatchEvent(new CustomEvent('customBackgroundChanged', { 
-    detail: backgroundPath.value 
-  }));
+  if (backgroundPath.value) localStorage.setItem('customBackground', backgroundPath.value);
+  else localStorage.removeItem('customBackground');
+  window.dispatchEvent(new CustomEvent('customBackgroundChanged', { detail: backgroundPath.value }));
   backgroundSaved.value = true;
   setTimeout(() => (backgroundSaved.value = false), 1500);
 }
@@ -175,321 +136,192 @@ function saveBackground() {
 function clearBackground() {
   backgroundPath.value = '';
   localStorage.removeItem('customBackground');
-  // 触发自定义事件通知 App.vue 更新背景
-  window.dispatchEvent(new CustomEvent('customBackgroundChanged', { 
-    detail: null 
-  }));
+  window.dispatchEvent(new CustomEvent('customBackgroundChanged', { detail: null }));
   backgroundSaved.value = true;
   setTimeout(() => (backgroundSaved.value = false), 1500);
 }
 </script>
 
 <template>
-  <v-card class="pa-6 app-card">
-    <!-- 输出路径设置 -->
-    <div class="section-title">输出设置</div>
-    <div class="controls-grid">
-      <v-text-field
-        v-model="outputPath"
-        :label="t('settings.outputPath.label')"
-        :placeholder="t('settings.outputPath.placeholder')"
-        :rules="[rules.non_empty]"
-        clearable
-        dense
-        :hint="t('settings.outputPath.hint')"
-        persistent-hint
-        append-outer-icon="mdi-folder-open"
-        @click:append-outer="selectFolder"
-        :aria-label="t('settings.outputPath.aria')"
-      />
-
-      <div class="select-button">
-        <v-btn small @click="selectFolder" :title="t('settings.selectFolder')" class="select-btn">
-          <v-icon left>mdi-folder</v-icon>
-          {{ t('settings.selectFolder') }}
-        </v-btn>
+  <div class="settings-container">
+    <div class="settings-scroll">
+      <!-- Output Path -->
+      <div class="md3-card">
+        <div class="card-label">{{ t('settings.outputPath.label') }}</div>
+        <v-text-field
+          v-model="outputPath"
+          :label="t('settings.outputPath.label')"
+          :placeholder="t('settings.outputPath.placeholder')"
+          :rules="[rules.non_empty]"
+          clearable
+          density="compact"
+          :hint="t('settings.outputPath.hint')"
+          persistent-hint
+          variant="outlined"
+          append-outer-icon="mdi-folder-open"
+          @click:append-outer="selectFolder"
+        />
+        <div v-if="selectedInfo" class="hint-text">{{ selectedInfo }}</div>
+        <div class="card-actions">
+          <button class="md3-btn md3-btn-tonal" @click="selectFolder">
+            <v-icon icon="mdi-folder-outline" size="18" />
+            <span>{{ t('settings.selectFolder') }}</span>
+          </button>
+          <button class="md3-btn md3-btn-filled" @click="saveOutputPath">
+            <v-icon icon="mdi-content-save-outline" size="18" />
+            <span>{{ t('settings.save') }}</span>
+          </button>
+          <button class="md3-btn md3-btn-text" @click="copyPath" :disabled="!outputPath" :title="t('settings.copy')">
+            <v-icon icon="mdi-content-copy" size="18" />
+          </button>
+          <button class="md3-btn md3-btn-text" @click="clearPath" :disabled="!outputPath" :title="t('settings.clear')">
+            <v-icon icon="mdi-close" size="18" />
+          </button>
+        </div>
       </div>
 
-      <div v-if="selectedInfo" class="mt-2 caption" role="status" aria-live="polite">
-        {{ selectedInfo }}
-      </div>
-    </div>
+      <!-- Background -->
+      <div class="md3-card">
+        <div class="card-label">{{ t('settings.background.label') }}</div>
+        <v-text-field
+          v-model="backgroundPath"
+          :label="t('settings.background.label')"
+          :placeholder="t('settings.background.placeholder')"
+          clearable
+          density="compact"
+          :hint="t('settings.background.hint')"
+          persistent-hint
+          variant="outlined"
+          append-outer-icon="mdi-image"
+          @click:append-outer="selectBackground"
+          readonly
+        />
 
-    <div class="button-area" role="group" :aria-label="t('settings.selectFolder')">
-      <v-btn small color="primary" @click="saveOutputPath">
-        {{ t('settings.save') }}
-      </v-btn>
-      <v-btn small icon @click="copyPath" :disabled="!outputPath" :title="t('settings.copy')">
-        <v-icon>mdi-content-copy</v-icon>
-      </v-btn>
-      <v-btn small icon @click="clearPath" :disabled="!outputPath" :title="t('settings.clear')">
-        <v-icon>mdi-close</v-icon>
-      </v-btn>
-    </div>
+        <div v-if="backgroundPath" class="bg-preview">
+          <img :src="backgroundPreviewUrl" alt="Background preview" class="preview-img" />
+        </div>
 
-    <v-divider class="my-6"></v-divider>
-
-    <!-- 自定义背景设置 -->
-    <div class="section-title">{{ t('settings.background.label') }}</div>
-    <div class="controls-grid">
-      <v-text-field
-        v-model="backgroundPath"
-        :label="t('settings.background.label')"
-        :placeholder="t('settings.background.placeholder')"
-        clearable
-        dense
-        :hint="t('settings.background.hint')"
-        persistent-hint
-        append-outer-icon="mdi-image"
-        @click:append-outer="selectBackground"
-        readonly
-      />
-
-      <div class="select-button">
-        <v-btn small @click="selectBackground" :title="t('settings.background.selectFile')" class="select-btn">
-          <v-icon left>mdi-image</v-icon>
-          {{ t('settings.background.selectFile') }}
-        </v-btn>
-      </div>
-    </div>
-
-    <!-- 背景预览 -->
-    <div v-if="backgroundPath" class="background-preview mt-4">
-      <div class="preview-label">预览</div>
-      <div class="preview-container">
-        <img :src="backgroundPreviewUrl" alt="Background preview" class="preview-image" />
+        <div class="card-actions">
+          <button class="md3-btn md3-btn-tonal" @click="selectBackground">
+            <v-icon icon="mdi-image-outline" size="18" />
+            <span>{{ t('settings.background.selectFile') }}</span>
+          </button>
+          <button class="md3-btn md3-btn-filled" @click="saveBackground">
+            <v-icon icon="mdi-content-save-outline" size="18" />
+            <span>{{ t('settings.save') }}</span>
+          </button>
+          <button class="md3-btn md3-btn-text" @click="clearBackground" :disabled="!backgroundPath" :title="t('settings.background.clear')">
+            <v-icon icon="mdi-close" size="18" />
+          </button>
+        </div>
       </div>
     </div>
 
-    <div class="button-area mt-4">
-      <v-btn small color="primary" @click="saveBackground">
-        {{ t('settings.save') }}
-      </v-btn>
-      <v-btn small icon @click="clearBackground" :disabled="!backgroundPath" :title="t('settings.background.clear')">
-        <v-icon>mdi-close</v-icon>
-      </v-btn>
-    </div>
-
-    <v-snackbar v-model="saved" :timeout="1500" color="success" top right>
-      {{ t('settings.saved') }}
-    </v-snackbar>
-
-    <v-snackbar v-model="backgroundSaved" :timeout="1500" color="success" top right>
-      {{ t('settings.background.saved') }}
-    </v-snackbar>
-
-    <v-alert v-if="warning" type="warning" class="mt-4">
+    <v-alert v-if="warning" type="warning" class="mt-4" density="compact" variant="tonal">
       {{ warning }}
     </v-alert>
-  </v-card>
+
+    <v-snackbar v-model="saved" :timeout="1500" color="success" location="top">
+      {{ t('settings.saved') }}
+    </v-snackbar>
+    <v-snackbar v-model="backgroundSaved" :timeout="1500" color="success" location="top">
+      {{ t('settings.background.saved') }}
+    </v-snackbar>
+  </div>
 </template>
 
 <style scoped>
-.app-card {
-  max-width: 980px;
-  margin: 18px auto;
-  width: 95%;
-  background: rgba(18, 18, 18, 0.95) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  color: #ffffff;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
-  border-radius: 16px !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  max-height: calc(100vh - 150px);
-  overflow-y: auto;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 16px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.controls-grid {
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.select-button {
-  display: flex;
-  align-items: center;
-}
-
-.select-btn {
-  white-space: nowrap;
-  background: rgba(50, 50, 50, 0.9) !important;
-  color: #fff !important;
-  font-weight: 500;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.select-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-  background: rgba(70, 70, 70, 0.9) !important;
-}
-
-.path-area .path-field {
+.settings-container {
   width: 100%;
-  box-sizing: border-box;
-}
-
-.button-area {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px;
+  height: 100vh;
   display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 12px;
-  margin-top: 8px;
+  flex-direction: column;
 }
 
-.button-wrapper {
+.settings-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ===== MD3 Card ===== */
+.md3-card {
+  background: rgba(30, 30, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.card-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(130, 177, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.card-actions {
   display: flex;
   gap: 8px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 2px;
+  flex-wrap: wrap;
 }
 
-/* 自定义按钮样式 */
-.button-area .v-btn {
-  border-radius: 8px;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  text-transform: none;
-}
-
-.button-area .v-btn[color="primary"] {
-  background: rgba(60, 60, 60, 0.9) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.button-area .v-btn[color="primary"]:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-  background: rgba(80, 80, 80, 0.9) !important;
-}
-
-.button-area .v-btn.v-btn--icon {
-  background: rgba(255, 255, 255, 0.1) !important;
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-
-.button-area .v-btn.v-btn--icon:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
-  color: #fff !important;
-}
-
-/* 文本框样式 */
-:deep(.v-text-field) {
-  margin-bottom: 8px;
-}
-
-:deep(.v-text-field .v-field) {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border-radius: 8px !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  color: #fff !important;
-}
-
-:deep(.v-text-field .v-field__input) {
-  color: #fff !important;
-}
-
-:deep(.v-text-field .v-label) {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-
-:deep(.v-text-field .v-field__outline) {
-  color: rgba(255, 255, 255, 0.2) !important;
-}
-
-/* 提示文本样式 */
-:deep(.v-text-field .v-messages__message) {
-  color: rgba(255, 255, 255, 0.6) !important;
-}
-
-/* 警告提示样式 */
-:deep(.v-alert) {
-  background: rgba(255, 82, 82, 0.15) !important;
-  color: #ff8a80 !important;
-  border: 1px solid rgba(255, 82, 82, 0.3) !important;
-  border-radius: 8px !important;
-}
-
-/* 成功提示样式 */
-:deep(.v-snackbar .v-snackbar__wrapper) {
-  background: rgba(76, 175, 80, 0.9) !important;
-  backdrop-filter: blur(8px) !important;
-  border-radius: 8px !important;
-}
-
-/* 背景预览样式 */
-.background-preview {
-  margin-top: 16px;
-}
-
-.preview-label {
+.hint-text {
   font-size: 12px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.6);
-  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.5);
 }
 
-.preview-container {
+/* ===== MD3 Buttons ===== */
+.md3-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  white-space: nowrap;
+  font-family: inherit;
+}
+.md3-btn:disabled { opacity: 0.5; cursor: default; }
+.md3-btn-text { background: transparent; color: rgba(255, 255, 255, 0.7); }
+.md3-btn-text:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
+.md3-btn-tonal { background: rgba(130, 177, 255, 0.12); color: #82b1ff; }
+.md3-btn-tonal:hover:not(:disabled) { background: rgba(130, 177, 255, 0.2); }
+.md3-btn-filled { background: #82b1ff; color: #002f65; font-weight: 600; }
+.md3-btn-filled:hover:not(:disabled) { background: #a0c4ff; }
+
+/* ===== Background Preview ===== */
+.bg-preview {
   width: 100%;
-  max-width: 400px;
-  height: 150px;
-  border-radius: 12px;
+  max-width: 360px;
+  height: 140px;
+  border-radius: 16px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(0, 0, 0, 0.3);
 }
 
-.preview-image {
+.preview-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-/* 分隔线样式 */
-:deep(.v-divider) {
-  border-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-@media (max-width: 720px) {
-  .controls-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .button-area {
-    margin-top: 16px;
-    justify-content: flex-start;
-  }
-
-  .button-wrapper {
-    flex-wrap: wrap;
-    overflow-x: visible;
-  }
-
-  .preview-container {
-    height: 120px;
-  }
-}
-
-.caption {
-  color: rgba(255,255,255,0.7);
-  font-size: 0.875rem;
-  margin-top: 4px;
-  display: block;
+/* ===== Responsive ===== */
+@media (max-width: 600px) {
+  .settings-container { padding: 16px; }
 }
 </style>

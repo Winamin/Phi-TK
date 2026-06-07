@@ -4,6 +4,7 @@ export interface ChartInfo {
   charter: string;
   composer: string;
   illustrator: string;
+  illustration?: string;
 
   tip: string | null;
 

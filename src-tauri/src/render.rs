@@ -5,7 +5,7 @@ use crate::Path;
 use anyhow::{bail, Context, Result};
 use macroquad::{miniquad::{gl::{
     GLuint, GL_RGBA, GL_UNSIGNED_BYTE, GL_READ_FRAMEBUFFER, GL_PIXEL_PACK_BUFFER,
-    GL_STREAM_READ, GL_MAP_READ_BIT,
+    GL_STREAM_READ, GL_MAP_READ_BIT, GL_MAP_UNSYNCHRONIZED_BIT,
     GLsizeiptr, GLsizei, GLvoid,
     glGenBuffers, glBindBuffer, glBufferData, glDeleteBuffers,
     glViewport, glReadPixels, glReadBuffer,
@@ -547,7 +547,7 @@ pub async fn main() -> Result<()> {
 
         info!("Music mixing: original_pos={:.6}s, delayed_pos={:.6}s", original_pos, pos);
 
-        let count = (music.length() as f64 * sample_rate_f64) as usize;
+        //let count = (music.length() as f64 * sample_rate_f64) as usize;
         let start_index = (pos * sample_rate_f64).round() as usize * 2;
         let ratio = 1.0 / sample_rate_f64;
 
@@ -556,7 +556,7 @@ pub async fn main() -> Result<()> {
         } else {
             let output_ptr = output.as_mut_ptr();
             let max_i = (output.len() - start_index) / 2;
-            let effective_count = count.min(max_i);
+            let effective_count = ((music.length() as f64 * sample_rate_f64) as usize).min(max_i);
             let mut time = 0.0_f64;
             for i in 0..effective_count {
                 let frame = music.sample(time as f32).unwrap_or_default();
@@ -600,7 +600,7 @@ pub async fn main() -> Result<()> {
         let start_time = Instant::now();
 
         let offset_f64 = offset as f64;
-        let o_offset = O + offset_f64 + audio_delay;  // 应用音频延迟( audio_delay应用为3 frames )
+        let o_offset = O + offset_f64 + audio_delay;
 
         info!("SFX mixing: offset={:.6}s (includes {:.6}s delay)", o_offset, audio_delay);
 
@@ -619,7 +619,8 @@ pub async fn main() -> Result<()> {
                 for j in 0..notes_len {
                     let note = &*notes_ptr.add(j);
                     if !note.fake {
-                        let sfx = match note.kind {
+                        let sfx = match note.kind
+                        {
                             NoteKind::Click | NoteKind::Hold { .. } => &*sfx_click_ptr,
                             NoteKind::Drag => &*sfx_drag_ptr,
                             NoteKind::Flick => &*sfx_flick_ptr,
@@ -655,26 +656,26 @@ pub async fn main() -> Result<()> {
     }
 
     if let Some(bit) = audio_bit {
-        if ![16, 24, 32].contains(&bit) {
+        if ![16, 24, 32].contains(&bit)
+        {
             bail!("Invalid audio bit depth: {}. Supported values are 16, 24, 32.", bit);
         }
-        // PCM 格式强制使用 WAV 容器
-        if audio_format != "wav" {
+        if audio_format != "wav"
+        {
             return Err(anyhow::anyhow!("PCM audio bit depth requires WAV format, but {} was specified", audio_format));
         }
     }
 
-    // 构建编码器和格式
     let (audio_codec, output_format) = if let Some(bit) = audio_bit {
         (format!("pcm_f{}le", bit), "wav".to_string())
     } else {
-        match audio_format.as_str() {
+        match audio_format.as_str()
+        {
             "flac" => ("flac".to_string(), "flac".to_string()),
             "mp3" => ("libmp3lame".to_string(), "mp3".to_string()),
             "aac" => ("aac".to_string(), "mp4".to_string()),
             "opus" => ("libopus".to_string(), "opus".to_string()),
             "wav" => ("pcm_f16le".to_string(), "wav".to_string()),
-            // 修正默认值
             _ => {
                 warn!("Unknown audio format '{}', using AAC/MP4 as default", audio_format);
                 ("aac".to_string(), "mp4".to_string())
@@ -1171,23 +1172,38 @@ pub async fn main() -> Result<()> {
         .map(|&(name, _, _)| name)
         .expect("At least one software encoder is available.");
 
-    // 打印编码器选择信息
-    info!("=== Encoder Selection ===");
-    info!("  Video codec: {}", params.config.video_codec);
-    info!("  User preference: {}", params.config.encoder);
-    info!("  --- Encoder Availability ---");
-    info!("    h264_nvenc: {}", encoder_availability.h264_nvenc);
-    info!("    h264_qsv: {}", encoder_availability.h264_qsv);
-    info!("    h264_amf: {}", encoder_availability.h264_amf);
-    info!("    h264_vulkan: {}", encoder_availability.h264_vulkan);
-    info!("    hevc_nvenc: {}", encoder_availability.hevc_nvenc);
-    info!("    hevc_qsv: {}", encoder_availability.hevc_qsv);
-    info!("    hevc_amf: {}", encoder_availability.hevc_amf);
-    info!("    hevc_vulkan: {}", encoder_availability.hevc_vulkan);
-    info!("    av1_nvenc: {}", encoder_availability.av1_nvenc);
-    info!("    av1_qsv: {}", encoder_availability.av1_qsv);
-    info!("    av1_amf: {}", encoder_availability.av1_amf);
-    info!("    av1_vulkan: {}", encoder_availability.av1_vulkan);
+    info!(
+    "=== Encoder Selection ===\n\
+     Video codec: {}\n\
+     User preference: {}\n\
+     --- Encoder Availability ---\n\
+       h264_nvenc: {}\n\
+       h264_qsv: {}\n\
+       h264_amf: {}\n\
+       h264_vulkan: {}\n\
+       hevc_nvenc: {}\n\
+       hevc_qsv: {}\n\
+       hevc_amf: {}\n\
+       hevc_vulkan: {}\n\
+       av1_nvenc: {}\n\
+       av1_qsv: {}\n\
+       av1_amf: {}\n\
+       av1_vulkan: {}",
+    params.config.video_codec,
+    params.config.encoder,
+    encoder_availability.h264_nvenc,
+    encoder_availability.h264_qsv,
+    encoder_availability.h264_amf,
+    encoder_availability.h264_vulkan,
+    encoder_availability.hevc_nvenc,
+    encoder_availability.hevc_qsv,
+    encoder_availability.hevc_amf,
+    encoder_availability.hevc_vulkan,
+    encoder_availability.av1_nvenc,
+    encoder_availability.av1_qsv,
+    encoder_availability.av1_amf,
+    encoder_availability.av1_vulkan,
+    );
     if !hw_errors.is_empty() {
         info!("  --- Encoder Errors ---");
         for error in &hw_errors {
@@ -1445,19 +1461,13 @@ pub async fn main() -> Result<()> {
     };
     let mut input = proc.stdin.take().unwrap();
 
-    // 使用 RGBA 格式，FFmpeg 处理格式转换
     let rgba_size = vw as usize * vh as usize * 4;
     info!("RGBA buffer size: {}", rgba_size);
 
-    // PBO 用于异步读取 RGBA
-    const MAX_PBO_COUNT: usize = 20;
-    let mut n = MAX_PBO_COUNT;
-    while n > 0 && fps as usize % n != 0 {
-        n -= 1;
-    }
-    let n = if n == 0 { 1 } else { n };
+    const MAX_PBO_COUNT: usize = 4;
+    let n = MAX_PBO_COUNT.min(fps as usize).max(2);
     let mut pbos: Vec<GLuint> = vec![0; n];
-    info!("Using {} PBOs for rendering", n);
+    info!("Using {} PBOs for async readback (buffering strategy)", n);
 
     unsafe
     {
@@ -1483,6 +1493,7 @@ pub async fn main() -> Result<()> {
 
     let frames10 = total_frames / 10;
     let mut step_time = Instant::now();
+
     for frame in 0..total_frames
     {
         if frame % frames10 == 0 ||
@@ -1521,8 +1532,6 @@ pub async fn main() -> Result<()> {
         if current_frame_time <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading {
             draw_rectangle(0., 0., 0., 0., Color::default());
         }
-
-        //gl.flush();
 
         if MSAA.load(Ordering::SeqCst) {
             mst.blit();
