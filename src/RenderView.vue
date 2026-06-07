@@ -45,6 +45,7 @@
     render-started: Rendering has started!
     see-tasks: See tasks
     next-chart: Render Next Chart
+    render-status: 'Progress: {progress}% | FPS: {fps} | ETA: {estimate}'
 
     ffmpeg-not-found: You haven't installed ffmpeg yet. Please download FFmpeg.exe and put it in the specific folder.
 
@@ -88,6 +89,7 @@
     render-started: 视频开始渲染了！
     see-tasks: 查看任务列表
     next-chart: 渲染下一个谱面
+    render-status: '进度：{progress}% | FPS: {fps} | 预计：{estimate}'
 
     ffmpeg-not-found: 笨蛋怎么没安装 FFmpeg。请下载 FFmpeg.exe 并放置在指定文件夹内。
 
