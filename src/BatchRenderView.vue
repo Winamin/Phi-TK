@@ -161,7 +161,6 @@ interface BatchChart {
   chartInfo?: ChartInfo;
   aspectWidth?: string;
   aspectHeight?: string;
-  originalIndex?: number;
 }
 
 const charts = ref<BatchChart[]>([]);
@@ -171,11 +170,12 @@ const configViewRef = ref<InstanceType<typeof ConfigView> | null>(null);
 const configDialog = ref(false);
 const editDialog = ref(false);
 const bulkEditDialog = ref(false);
-const editingChartIndex = ref(-1);
+const editingChartId = ref<string | null>(null);
+const editingChart = computed(() => editingChartId.value ? charts.value.find(c => c.id === editingChartId.value) : undefined);
 const form = ref<any>();
 const bulkForm = ref<any>();
 
-const currentRenderingIndex = ref<number>(-1);
+const currentRenderingId = ref<string | null>(null);
 const isRenderingQueue = ref(false);
 const renderMsg = ref('');
 const renderProgress = ref<number>(0);
@@ -197,9 +197,9 @@ function generateId() {
   return Math.random().toString(36).substring(2, 9);
 }
 
-async function previewChart(index: number) {
-  const chart = charts.value[index];
-  if (!chart.chartInfo) return toast(t('chart-info-missing'), 'error');
+async function previewChart(id: string) {
+  const chart = charts.value.find(c => c.id === id);
+  if (!chart?.chartInfo) return toast(t('chart-info-missing'), 'error');
   try {
     const config = await buildRenderParams();
     await invoke('preview_chart', {
@@ -281,7 +281,7 @@ async function addFolder() {
 
 async function addChart(path: string) {
   if (charts.value.some((c) => c.path === path)) return;
-  const newChart: BatchChart = { id: generateId(), path, name: t('adding-charts'), level: '...', charter: '...', status: 'pending', selected: true, originalIndex: charts.value.length };
+  const newChart: BatchChart = { id: generateId(), path, name: t('adding-charts'), level: '...', charter: '...', status: 'pending', selected: true };
   const placeholderIndex = charts.value.push(newChart) - 1;
   try {
     const chartInfo = (await invoke('parse_chart', { path })) as ChartInfo;
@@ -327,7 +327,7 @@ async function startRender() {
       if (!isRenderingQueue.value) break;
       const chart = charts.value[i];
       if (!chart.selected || chart.status !== 'pending') continue;
-      currentRenderingIndex.value = i;
+      currentRenderingId.value = chart.id;
       chart.status = 'rendering';
       renderProgress.value = 0;
       try {
@@ -343,7 +343,7 @@ async function startRender() {
     if (isRenderingQueue.value) toast(t('batch-completed', { count: pendingCount }), 'success');
   } catch (error) { toastError(error); } finally {
     isRenderingQueue.value = false;
-    currentRenderingIndex.value = -1;
+    currentRenderingId.value = null;
     renderMsg.value = '';
     renderProgress.value = 0;
   }
@@ -375,13 +375,14 @@ event.listen('render-progress', (msg) => {
   renderProgress.value = p.progress * 100;
 });
 
-function openEditDialog(index: number) { editingChartIndex.value = index; editDialog.value = true; }
+function openEditDialog(id: string) { editingChartId.value = id; editDialog.value = true; }
 
 async function saveChartInfo() {
-  if (!form.value || editingChartIndex.value === -1) return;
+  if (!form.value || !editingChartId.value) return;
   const { valid } = await form.value.validate();
   if (!valid) return;
-  const chart = charts.value[editingChartIndex.value];
+  const chart = charts.value.find(c => c.id === editingChartId.value);
+  if (!chart) return;
   const aspect = tryParseAspect(chart.aspectWidth, chart.aspectHeight);
   if (aspect && chart.chartInfo) chart.chartInfo.aspectRatio = aspect;
   if (chart.chartInfo) { chart.name = chart.chartInfo.name; chart.level = chart.chartInfo.level; chart.charter = chart.chartInfo.charter; }
@@ -514,7 +515,7 @@ watch(charts, (val) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
           class="chart-row"
           :class="{ 'is-rendering': item.status === 'rendering', 'is-failed': item.status === 'failed' }"
         >
-          <div v-if="item.status === 'rendering' && item.originalIndex === currentRenderingIndex" class="progress-bg" :style="{ width: `${renderProgress}%` }"></div>
+          <div v-if="item.status === 'rendering' && item.id === currentRenderingId" class="progress-bg" :style="{ width: `${renderProgress}%` }"></div>
 
           <div class="row-content">
             <v-checkbox-btn v-model="item.selected" :disabled="item.status === 'rendering'" color="primary" />
@@ -527,7 +528,7 @@ watch(charts, (val) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
               <div class="row-sub">
                 <v-icon icon="mdi-account-music" size="14" />
                 <span>{{ item.charter }}</span>
-                <template v-if="item.status === 'rendering' && item.originalIndex === currentRenderingIndex">
+                <template v-if="item.status === 'rendering' && item.id === currentRenderingId">
                   <span class="render-status">{{ renderProgress.toFixed(1) }}% - {{ renderMsg }}</span>
                 </template>
                 <template v-else-if="item.error">
@@ -543,10 +544,10 @@ watch(charts, (val) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
             >{{ t(item.status) }}</v-chip>
 
             <div class="row-actions">
-              <button class="icon-btn" :disabled="!item.chartInfo || item.status === 'rendering'" @click="openEditDialog(item.originalIndex ?? -1)" :title="t('edit')">
+              <button class="icon-btn" :disabled="!item.chartInfo || item.status === 'rendering'" @click="openEditDialog(item.id)" :title="t('edit')">
                 <v-icon icon="mdi-pencil-outline" size="18" />
               </button>
-              <button class="icon-btn" :disabled="!item.chartInfo || item.status === 'rendering'" @click="previewChart(item.originalIndex ?? -1)" :title="t('preview')">
+              <button class="icon-btn" :disabled="!item.chartInfo || item.status === 'rendering'" @click="previewChart(item.id)" :title="t('preview')">
                 <v-icon icon="mdi-play-circle-outline" size="18" />
               </button>
               <button class="icon-btn icon-btn-danger" :disabled="item.status === 'rendering'" @click="removeChart(item.id)" :title="t('close')">
@@ -579,7 +580,7 @@ watch(charts, (val) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
 
     <!-- Edit Dialog -->
     <v-dialog v-model="editDialog" max-width="600">
-      <v-card class="md3-dialog" v-if="editingChartIndex >= 0 && charts[editingChartIndex]?.chartInfo">
+      <v-card class="md3-dialog" v-if="editingChart?.chartInfo">
         <v-toolbar color="transparent" class="border-b">
           <v-toolbar-title>{{ t('chart-info') }}</v-toolbar-title>
           <v-spacer />
@@ -588,30 +589,30 @@ watch(charts, (val) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
         <v-card-text class="pa-6">
           <v-form ref="form" @submit.prevent>
             <v-row dense>
-              <v-col cols="8"><v-text-field :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="charts[editingChartIndex].chartInfo!.name" variant="outlined" density="comfortable" /></v-col>
-              <v-col cols="4"><v-text-field :label="t('level')" :rules="[RULES.non_empty]" v-model="charts[editingChartIndex].chartInfo!.level" variant="outlined" density="comfortable" /></v-col>
-              <v-col cols="4"><v-text-field :label="t('charter')" :rules="[RULES.non_empty]" v-model="charts[editingChartIndex].chartInfo!.charter" variant="outlined" density="comfortable" /></v-col>
-              <v-col cols="4"><v-text-field :label="t('composer')" v-model="charts[editingChartIndex].chartInfo!.composer" variant="outlined" density="comfortable" /></v-col>
-              <v-col cols="4"><v-text-field :label="t('illustrator')" v-model="charts[editingChartIndex].chartInfo!.illustrator" variant="outlined" density="comfortable" /></v-col>
+              <v-col cols="8"><v-text-field :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="editingChart.chartInfo!.name" variant="outlined" density="comfortable" /></v-col>
+              <v-col cols="4"><v-text-field :label="t('level')" :rules="[RULES.non_empty]" v-model="editingChart.chartInfo!.level" variant="outlined" density="comfortable" /></v-col>
+              <v-col cols="4"><v-text-field :label="t('charter')" :rules="[RULES.non_empty]" v-model="editingChart.chartInfo!.charter" variant="outlined" density="comfortable" /></v-col>
+              <v-col cols="4"><v-text-field :label="t('composer')" v-model="editingChart.chartInfo!.composer" variant="outlined" density="comfortable" /></v-col>
+              <v-col cols="4"><v-text-field :label="t('illustrator')" v-model="editingChart.chartInfo!.illustrator" variant="outlined" density="comfortable" /></v-col>
             </v-row>
             <v-divider class="my-4" />
             <v-row dense align="center">
               <v-col cols="12" sm="5">
                 <div class="field-label-sm">{{ t('aspect') }}</div>
                 <div class="d-flex align-center gap-2">
-                  <v-text-field type="number" :rules="[RULES.positive]" v-model="charts[editingChartIndex].aspectWidth" hide-details variant="outlined" density="compact" />
+                  <v-text-field type="number" :rules="[RULES.positive]" v-model="editingChart.aspectWidth" hide-details variant="outlined" density="compact" />
                   <span>:</span>
-                  <v-text-field type="number" :rules="[RULES.positive]" v-model="charts[editingChartIndex].aspectHeight" hide-details variant="outlined" density="compact" />
+                  <v-text-field type="number" :rules="[RULES.positive]" v-model="editingChart.aspectHeight" hide-details variant="outlined" density="compact" />
                 </div>
               </v-col>
               <v-col cols="12" sm="7">
-                <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01" v-model="charts[editingChartIndex].chartInfo!.backgroundDim" hide-details class="mt-4" />
+                <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01" v-model="editingChart.chartInfo!.backgroundDim" hide-details class="mt-4" />
               </v-col>
               <v-col cols="12">
-                <v-switch color="primary" :label="t('hold_cover')" v-model="charts[editingChartIndex].chartInfo!.HoldPartialCover" :true-value="1" :false-value="0" hide-details />
+                <v-switch color="primary" :label="t('hold_cover')" v-model="editingChart.chartInfo!.HoldPartialCover" :true-value="1" :false-value="0" hide-details />
               </v-col>
               <v-col cols="12">
-                <v-text-field :label="t('tip')" v-model="charts[editingChartIndex].chartInfo!.tip" variant="outlined" density="comfortable" hide-details class="mt-2" />
+                <v-text-field :label="t('tip')" v-model="editingChart.chartInfo!.tip" variant="outlined" density="comfortable" hide-details class="mt-2" />
               </v-col>
             </v-row>
           </v-form>

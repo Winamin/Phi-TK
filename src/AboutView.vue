@@ -3,57 +3,50 @@ en:
   app: Phi TK
   license: Licensed by GPLv3
   footer:
-    made: Made with ❤️ by the Phi TK team
     copyright: © 2025 Phi TK. All rights reserved.
 
 zh-CN:
   app: Phi TK
   license: 基于 GPLv3 协议授权
   footer:
-    made: 用 ❤️ 制作的 Phi TK
     copyright: © 2025 Phi TK. 保留所有权利。
 </i18n>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { getVersion } from '@tauri-apps/api/app'
-import { open } from '@tauri-apps/plugin-shell'
+import { ref, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { getVersion } from '@tauri-apps/api/app';
+import { open } from '@tauri-apps/plugin-shell';
 
-const { t } = useI18n()
+const { t } = useI18n();
 
-const appVersion = ref('0.1.63')
+const appVersion = ref('0.1.63');
 const fetchVersion = async () => {
   try {
-    appVersion.value = await getVersion()
+    appVersion.value = await getVersion();
   } catch (e) {
-    console.error('Failed to get version:', e)
+    console.error('Failed to get version:', e);
   }
-}
+};
 
 const openGitHub = () => {
   open('https://github.com/Winamin/Phi-TK.git').catch((e) => {
-    console.error('Failed to open GitHub:', e)
-  })
-}
+    console.error('Failed to open GitHub:', e);
+  });
+};
 
 onMounted(() => {
-  fetchVersion()
-})
+  fetchVersion();
+});
 </script>
 
 <template>
   <div class="about-container">
-    <!-- 顶部装饰 -->
-    <div class="about-decoration">
-      <div class="decoration-circle circle-1"></div>
-      <div class="decoration-circle circle-2"></div>
-      <div class="decoration-circle circle-3"></div>
-    </div>
+    <!-- 极简的时间线背景线 -->
+    <div class="timeline-bg"></div>
 
-    <!-- 主要内容 -->
     <div class="about-content">
-      <!-- Logo 和标题 -->
+      <!-- Logo 和版本号，带进入动画 -->
       <div class="app-header">
         <img src="/phi-tklogo.png" alt="Phi TK" class="app-logo-img" />
         <div class="version-badge">
@@ -62,17 +55,12 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 信息卡片 -->
+      <!-- 信息卡片，纵向排列，依次滑入 -->
       <div class="info-cards">
-        <!-- GitHub 卡片 -->
-        <v-card 
-          class="info-card github-card"
-          @click="openGitHub"
-          ripple
-        >
+        <v-card class="info-card" :style="{ '--i': 0 }" @click="openGitHub" ripple>
           <div class="card-content">
             <div class="card-icon">
-              <v-icon size="32" icon="mdi-github" class="github-icon" />
+              <v-icon size="28" icon="mdi-github" />
             </div>
             <div class="card-text">
               <h3 class="card-title">GitHub</h3>
@@ -84,11 +72,10 @@ onMounted(() => {
           </div>
         </v-card>
 
-        <!-- 许可证卡片 -->
-        <v-card class="info-card license-card">
+        <v-card class="info-card" :style="{ '--i': 1 }">
           <div class="card-content">
             <div class="card-icon">
-              <v-icon size="32" icon="mdi-license" class="license-icon" />
+              <v-icon size="28" icon="mdi-license" />
             </div>
             <div class="card-text">
               <h3 class="card-title">License</h3>
@@ -97,11 +84,10 @@ onMounted(() => {
           </div>
         </v-card>
 
-        <!-- 版本信息卡片 -->
-        <v-card class="info-card version-card">
+        <v-card class="info-card" :style="{ '--i': 2 }">
           <div class="card-content">
             <div class="card-icon">
-              <v-icon size="32" icon="mdi-information-outline" class="info-icon" />
+              <v-icon size="28" icon="mdi-information-outline" />
             </div>
             <div class="card-text">
               <h3 class="card-title">Version</h3>
@@ -111,16 +97,16 @@ onMounted(() => {
         </v-card>
       </div>
 
-      <!-- 底部信息 -->
+      <!-- 底部版权 -->
       <div class="about-footer">
-        <!--<p class="footer-text">{{ t('footer.made') || 'Made with ❤️ by the Phi TK team' }}</p> -->
-        <p class="footer-copyright">{{ t('footer.copyright') || '© 2025 Phi TK. All rights reserved.' }}</p>
+        <p class="footer-copyright">{{ t('footer.copyright') }}</p>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* 容器：居中布局，暗色背景 */
 .about-container {
   width: 100%;
   height: 100vh;
@@ -133,175 +119,150 @@ onMounted(() => {
   position: relative;
   overflow: hidden;
   padding: 24px;
+  background-color: #121212;
 }
 
-/* 装饰元素 */
-.about-decoration {
+/* 隐形的时间线背景：一条从左到右快速扫过的极细线，仅作氛围 */
+.timeline-bg {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.decoration-circle {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.3;
-}
-
-.circle-1 {
-  width: 300px;
-  height: 300px;
-  background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
-  top: -100px;
-  left: -100px;
-}
-
-.circle-2 {
-  width: 400px;
-  height: 400px;
-  background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
-  bottom: -150px;
-  right: -150px;
-}
-
-.circle-3 {
-  width: 250px;
-  height: 250px;
-  background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
   top: 50%;
-  right: 10%;
-  transform: translateY(-50%);
+  left: -50%;
+  width: 200%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+  animation: scanLine 4s linear infinite;
+  pointer-events: none;
 }
 
-/* 主要内容 */
+@keyframes scanLine {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0%);
+  }
+}
+
+/* 主要内容区域 */
 .about-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 48px;
+  gap: 40px;
   z-index: 1;
   width: 100%;
-  max-width: 800px;
+  max-width: 450px;
 }
 
-/* 应用头部 */
+/* 应用头部：Logo 和版本标签 */
 .app-header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
-  text-align: center;
+  gap: 16px;
+  opacity: 0;
+  transform: translateY(-20px);
+  animation: headerAppear 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation-delay: 0.2s;
 }
 
-/* Logo image */
+@keyframes headerAppear {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .app-logo-img {
-  width: 140px;
-  max-width: 80vw;
+  width: 120px;
+  max-width: 70vw;
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.4));
-  transition: transform 0.3s ease, filter 0.3s ease;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.6));
+  transition:
+    transform 0.3s ease,
+    filter 0.3s ease;
 }
 
 .app-logo-img:hover {
-  transform: translateY(-4px) scale(1.02);
-  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.5));
+  transform: translateY(-4px) scale(1.03);
+  filter: drop-shadow(0 10px 25px rgba(0, 0, 0, 0.7));
 }
 
 .version-badge {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 16px;
-  background: rgba(40, 40, 40, 0.8);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 4px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 20px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.85);
 }
 
-.version-icon {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.version-text {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-/* 信息卡片 */
+/* 信息卡片容器：纵向排列 */
 .info-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   width: 100%;
 }
 
+/* 卡片基础样式与进入动画 */
 .info-card {
-  background: rgba(25, 25, 25, 0.8);
-  backdrop-filter: blur(10px);
+  background: rgba(30, 30, 30, 0.85);
+  backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  border-radius: 14px;
   overflow: hidden;
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
   cursor: pointer;
+  opacity: 0;
+  transform: translateX(-30px);
+  animation: cardSlideIn 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation-delay: calc(0.15s * var(--i) + 0.6s);
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+/* 偶数卡片从右侧滑入，增加节奏变化 */
+.info-card:nth-child(even) {
+  transform: translateX(30px);
+}
+
+@keyframes cardSlideIn {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .info-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.5);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-.github-card:hover {
-  border-color: rgba(60, 60, 60, 0.8);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-}
-
+/* 卡片内部布局 */
 .card-content {
   display: flex;
   align-items: center;
-  padding: 20px;
+  padding: 18px 20px;
   gap: 16px;
 }
 
 .card-icon {
-  width: 56px;
-  height: 56px;
+  width: 50px;
+  height: 50px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
   flex-shrink: 0;
-}
-
-.github-card .card-icon {
-  background: rgba(50, 50, 50, 0.5);
-}
-
-.license-card .card-icon {
-  background: rgba(50, 50, 50, 0.5);
-}
-
-.version-card .card-icon {
-  background: rgba(50, 50, 50, 0.5);
-}
-
-.github-icon {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.license-icon {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.info-icon {
-  color: rgba(255, 255, 255, 0.8);
 }
 
 .card-text {
@@ -310,15 +271,15 @@ onMounted(() => {
 }
 
 .card-title {
-  font-size: 1.125rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: white;
   margin: 0 0 4px 0;
 }
 
 .card-subtitle {
-  font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.65);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -326,63 +287,57 @@ onMounted(() => {
 }
 
 .card-arrow {
-  color: rgba(255, 255, 255, 0.5);
-  transition: transform 0.2s ease;
+  color: rgba(255, 255, 255, 0.4);
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease;
 }
 
 .info-card:hover .card-arrow {
   transform: translateX(4px);
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.85);
 }
 
-/* 底部信息 */
+/* 底部版权 */
 .about-footer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
+  margin-top: 8px;
+  opacity: 0;
+  animation: fadeIn 0.5s ease forwards;
+  animation-delay: 1.4s;
 }
 
-.footer-text,
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
 .footer-copyright {
-  font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.45);
   margin: 0;
   text-align: center;
 }
 
-/* 响应式设计 */
+/* 响应式微调 */
 @media (max-width: 768px) {
   .about-container {
     padding: 16px;
   }
-
   .app-logo-img {
-    width: 220px;
+    width: 100px;
   }
-
-  .info-cards {
-    grid-template-columns: 1fr;
-  }
-
-  .about-content {
-    gap: 32px;
+  .card-content {
+    padding: 14px 16px;
   }
 }
 
 @media (max-width: 480px) {
-  .app-logo-img {
-    width: 180px;
+  .about-content {
+    gap: 28px;
   }
-
-  .card-content {
-    padding: 16px;
-  }
-
-  .card-icon {
-    width: 48px;
-    height: 48px;
+  .info-cards {
+    gap: 10px;
   }
 }
 </style>

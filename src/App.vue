@@ -114,7 +114,6 @@ const backgroundStyle = computed(() => {
           :class="{ 'is-active': route.name === item.key }"
           @click="navigateTo(item.key)"
         >
-          <span class="rail-indicator"></span>
           <v-icon :icon="route.name === item.key ? item.activeIcon : item.icon" size="24" class="rail-icon" />
           <span class="rail-label">{{ t(item.key) }}</span>
         </button>
