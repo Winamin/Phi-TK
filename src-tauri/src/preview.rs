@@ -52,11 +52,7 @@ pub async fn main() -> Result<()> {
     let fs = fs::fs_from_file(&params.path)?;
     let info = params.info;
     let mut config = params.config.to_config();
-    if config.autoplay.unwrap_or(false) {
-        config.mods |= Mods::AUTOPLAY;
-    } else {
-        config.mods &= !Mods::AUTOPLAY;
-    }
+    config.mods = config.autoplay.unwrap_or(false).then(|| config.mods | Mods::AUTOPLAY).unwrap_or_else(|| config.mods & !Mods::AUTOPLAY);
 
     let font = FontArc::try_from_vec(load_file("font.ttf").await?)?;
     let mut painter = TextPainter::new(font);
@@ -102,14 +98,12 @@ pub async fn main() -> Result<()> {
         if main.should_exit()
         { break 'app; }
         let t = tm.real_time();
-        let frame_time = t - frame_start; // 当前帧耗时（秒）
-        // 存储帧时间
+        let frame_time = t - frame_start;
         frame_times.push(frame_time);
         if frame_times.len() > 100
         {
             frame_times.remove(0);
         }
-        // 计算平均帧时间
         let avg_frame_time: f64 = frame_times.iter().sum::<f64>() / frame_times.len() as f64;
         let current_fps = 1.0 / frame_time;
         let avg_fps = 1.0 / avg_frame_time;
