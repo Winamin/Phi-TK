@@ -110,7 +110,7 @@ impl Default for RenderConfig {
             disable_loading: true,
             chart_debug: false,
             //this is the shit
-            audio_delay_frames: 4,
+            audio_delay_frames: 0,
             flid_x: false,
             chart_ratio: 1.0,
             buffer_size: 256.0,
