@@ -179,8 +179,12 @@ const categories = [
 ];
 
 const hoveredField = ref<string | null>(null);
-function setHover(field: string) { hoveredField.value = field; }
-function clearHover() { hoveredField.value = null; }
+function setHover(field: string) {
+  hoveredField.value = field;
+}
+function clearHover() {
+  hoveredField.value = null;
+}
 
 const resolution = ref('1920x1080');
 const fps = ref('60');
@@ -233,11 +237,21 @@ const disableLoading = ref(false);
 
 const video = ref(false);
 watch([audioFormat, video], ([newAudio, newVideo]) => {
-  if (newAudio === 'flac' && newVideo) { video.value = false; videoFormat.value = 'mp4'; toast(t('video-format-flac-error'), 'error'); }
+  if (newAudio === 'flac' && newVideo) {
+    video.value = false;
+    videoFormat.value = 'mp4';
+    toast(t('video-format-flac-error'), 'error');
+  }
 });
-watch(videoFormat, (val) => { video.value = val === 'mov'; });
+watch(videoFormat, (val) => {
+  video.value = val === 'mov';
+});
 
-interface Respack { name: string; path: string | null; index: number; }
+interface Respack {
+  name: string;
+  path: string | null;
+  index: number;
+}
 const DEFAULT_RESPACK: Respack = { name: t('respack-default'), path: null, index: 0 };
 const respacks = ref([DEFAULT_RESPACK]);
 const respack = ref(DEFAULT_RESPACK);
@@ -248,20 +262,65 @@ async function updateRespacks() {
 }
 updateRespacks();
 
-interface Preset { name: string; key: string; config: RenderConfig; }
+interface Preset {
+  name: string;
+  key: string;
+  config: RenderConfig;
+}
 const DEFAULT_PRESET: Preset = {
-  name: t('default-preset'), key: 'default',
+  name: t('default-preset'),
+  key: 'default',
   config: {
-    resolution: [1920, 1080], ffmpegPreset: 'medium', endingLength: -2.0, disableLoading: true,
-    chartDebug: false, flidX: false, chartRatio: 1, bufferSize: 256, fps: 60, hardwareAccel: true,
-    videoCodec: 'h264', encoder: 'auto', bitrateControl: 'CRF', bitrate: '28', targetAudio: 48000,
-    video: false, audioBit: undefined, audioFormat: 'flac', background: false, aggressive: false,
-    challengeColor: 'golden', challengeRank: 45, disableEffect: false, doubleHint: true, fxaa: false,
-    noteScale: 1, particle: true, playerAvatar: null, playerName: '', playerRks: 15, sampleCount: 1,
-    resPackPath: null, speed: 1, volumeMusic: 1, volumeSfx: 1, combo: 'AUTOPLAY', watermark: '',
-    ffmpegThread: false, showProgressText: false, showTimeText: false, handSplit: false,
-    noteSpeedFactor: 1.0, uiLine: true, uiScore: true, uiCombo: true, uiLevel: true, uiName: true,
-    uiPb: true, uiPause: true, bar: false,
+    resolution: [1920, 1080],
+    ffmpegPreset: 'medium',
+    endingLength: -2.0,
+    disableLoading: true,
+    chartDebug: false,
+    flidX: false,
+    chartRatio: 1,
+    bufferSize: 256,
+    fps: 60,
+    hardwareAccel: true,
+    videoCodec: 'h264',
+    encoder: 'auto',
+    bitrateControl: 'CRF',
+    bitrate: '28',
+    targetAudio: 48000,
+    video: false,
+    audioBit: undefined,
+    audioFormat: 'flac',
+    background: false,
+    aggressive: false,
+    challengeColor: 'golden',
+    challengeRank: 45,
+    disableEffect: false,
+    doubleHint: true,
+    fxaa: false,
+    noteScale: 1,
+    particle: true,
+    playerAvatar: null,
+    playerName: '',
+    playerRks: 15,
+    sampleCount: 1,
+    resPackPath: null,
+    speed: 1,
+    volumeMusic: 1,
+    volumeSfx: 1,
+    combo: 'AUTOPLAY',
+    watermark: '',
+    ffmpegThread: false,
+    showProgressText: false,
+    showTimeText: false,
+    handSplit: false,
+    noteSpeedFactor: 1.0,
+    uiLine: true,
+    uiScore: true,
+    uiCombo: true,
+    uiLevel: true,
+    uiName: true,
+    uiPb: true,
+    uiPause: true,
+    bar: false,
   },
 };
 const presets = ref([DEFAULT_PRESET]);
@@ -270,7 +329,12 @@ const preset = ref(DEFAULT_PRESET);
 async function updatePresets() {
   const currentKey = preset.value.key;
   const pairs = (await invoke('get_presets')) as Record<string, RenderConfig>;
-  presets.value = [DEFAULT_PRESET, ...Object.keys(pairs).sort().map((key) => ({ name: key, key, config: pairs[key] }))];
+  presets.value = [
+    DEFAULT_PRESET,
+    ...Object.keys(pairs)
+      .sort()
+      .map((key) => ({ name: key, key, config: pairs[key] })),
+  ];
   const found = presets.value.find((x) => x.key === currentKey);
   preset.value = found || presets.value[0];
   applyConfig(preset.value.config);
@@ -281,13 +345,19 @@ async function chooseAvatar() {
   const file = await open({ filters: [{ name: 'Image', extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] }, anyFilter()] });
   if (file) playerAvatar.value = file as string;
 }
-async function openRespackFolder() { try { await invoke('open_respack_folder'); } catch (e) { toastError(e); } }
+async function openRespackFolder() {
+  try {
+    await invoke('open_respack_folder');
+  } catch (e) {
+    toastError(e);
+  }
+}
 
 // Preview computations
 const aspectPreview = computed(() => {
   const [w, h] = resolution.value.split('x').map(Number);
   if (!w || !h || isNaN(w) || isNaN(h)) return { w: 16, h: 9, label: '16:9' };
-  const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
   const g = gcd(w, h);
   return { w: w / g, h: h / g, label: `${w / g}:${h / g}` };
 });
@@ -309,32 +379,66 @@ const presetSpeed = computed(() => {
 const presetQuality = computed(() => 100 - presetSpeed.value);
 
 const challengeColorHex = computed(() => {
-  const colors: Record<string, string> = { white: '#e0e0e0', green: '#4caf50', blue: '#2196f3', red: '#f44336', golden: '#ffc107', rainbow: 'linear-gradient(90deg, #f44336, #ff9800, #ffeb3b, #4caf50, #2196f3, #9c27b0)' };
+  const colors: Record<string, string> = {
+    white: '#e0e0e0',
+    green: '#4caf50',
+    blue: '#2196f3',
+    red: '#f44336',
+    golden: '#ffc107',
+    rainbow: 'linear-gradient(90deg, #f44336, #ff9800, #ffeb3b, #4caf50, #2196f3, #9c27b0)',
+  };
   const idx = t('challenge-colors').split(',').indexOf(challengeColor.value);
   return colors[STD_CHALLENGE_COLORS[idx]] || colors.golden;
 });
 
 async function buildConfig(): Promise<RenderConfig | null> {
-  if (!(await form.value!.validate()).valid) { toast(t('has-error'), 'error'); return null; }
+  if (!(await form.value!.validate()).valid) {
+    toast(t('has-error'), 'error');
+    return null;
+  }
   const [w, h] = resolution.value.split('x').map(Number);
   return {
-    resolution: [w, h], ffmpegPreset: ffmpegPreset.value, endingLength: parseFloat(endingLength.value),
-    disableLoading: disableLoading.value, chartDebug: chartDebug.value, flidX: flidX.value,
-    chartRatio: chartRatio.value, bufferSize: bufferSize.value, fps: parseInt(fps.value),
-    hardwareAccel: hwAccel.value, videoCodec: videoCodec.value, encoder: encoder.value,
-    bitrateControl: bitrateControl.value, bitrate: bitrate.value, targetAudio: targetAudio.value,
-    background: background.value, handSplit: handSplit.value, noteSpeedFactor: noteSpeedFactor.value,
-    video: video.value, audioBit: audioFormat.value === 'wav' ? audioBit.value : undefined,
-    audioFormat: audioFormat.value, bar: bar.value, aggressive: aggressive.value,
+    resolution: [w, h],
+    ffmpegPreset: ffmpegPreset.value,
+    endingLength: parseFloat(endingLength.value),
+    disableLoading: disableLoading.value,
+    chartDebug: chartDebug.value,
+    flidX: flidX.value,
+    chartRatio: chartRatio.value,
+    bufferSize: bufferSize.value,
+    fps: parseInt(fps.value),
+    hardwareAccel: hwAccel.value,
+    videoCodec: videoCodec.value,
+    encoder: encoder.value,
+    bitrateControl: bitrateControl.value,
+    bitrate: bitrate.value,
+    targetAudio: targetAudio.value,
+    background: background.value,
+    handSplit: handSplit.value,
+    noteSpeedFactor: noteSpeedFactor.value,
+    video: video.value,
+    audioBit: audioFormat.value === 'wav' ? audioBit.value : undefined,
+    audioFormat: audioFormat.value,
+    bar: bar.value,
+    aggressive: aggressive.value,
     challengeColor: STD_CHALLENGE_COLORS[t('challenge-colors').split(',').indexOf(challengeColor.value)],
-    challengeRank: parseInt(challengeRank.value), disableEffect: disableEffect.value,
-    doubleHint: doubleHint.value, fxaa: fxaa.value, noteScale: noteScale.value,
+    challengeRank: parseInt(challengeRank.value),
+    disableEffect: disableEffect.value,
+    doubleHint: doubleHint.value,
+    fxaa: fxaa.value,
+    noteScale: noteScale.value,
     particle: !disableParticle.value,
     playerAvatar: playerAvatar.value?.length ? playerAvatar.value : null,
-    playerName: playerName.value, playerRks: parseFloat(playerRks.value),
-    sampleCount: parseInt(sampleCount.value), resPackPath: respack.value.path,
-    speed: 1, volumeMusic: volumeMusic.value, volumeSfx: volumeSfx.value,
-    combo: combo.value, watermark: watermark.value, ffmpegThread: ffmpegThread.value,
+    playerName: playerName.value,
+    playerRks: parseFloat(playerRks.value),
+    sampleCount: parseInt(sampleCount.value),
+    resPackPath: respack.value.path,
+    speed: 1,
+    volumeMusic: volumeMusic.value,
+    volumeSfx: volumeSfx.value,
+    combo: combo.value,
+    watermark: watermark.value,
+    ffmpegThread: ffmpegThread.value,
     uiLine: render.value.includes(renderList.value[0]),
     uiScore: render.value.includes(renderList.value[1]),
     uiCombo: render.value.includes(renderList.value[2]),
@@ -407,19 +511,39 @@ async function createPreset() {
   if (!config) return;
   const name = prompt(t('preset-create-title'));
   if (!name) return;
-  if (name === 'default') { toast(t('preset-cannot-use-default'), 'error'); return; }
-  try { await invoke('add_preset', { name, config }); await updatePresets(); preset.value = presets.value.find((x) => x.key === name) || presets.value[0]; toast(t('preset-created'), 'success'); }
-  catch (e) { toastError(e); }
+  if (name === 'default') {
+    toast(t('preset-cannot-use-default'), 'error');
+    return;
+  }
+  try {
+    await invoke('add_preset', { name, config });
+    await updatePresets();
+    preset.value = presets.value.find((x) => x.key === name) || presets.value[0];
+    toast(t('preset-created'), 'success');
+  } catch (e) {
+    toastError(e);
+  }
 }
 async function deletePreset() {
-  try { await invoke('remove_preset', { name: preset.value.key }); await updatePresets(); toast(t('preset-deleted'), 'success'); }
-  catch (e) { toastError(e); }
+  try {
+    await invoke('remove_preset', { name: preset.value.key });
+    await updatePresets();
+    toast(t('preset-deleted'), 'success');
+  } catch (e) {
+    toastError(e);
+  }
 }
 async function replacePreset() {
   const config = await buildConfig();
   if (!config) return;
-  try { await invoke('remove_preset', { name: preset.value.key }); await invoke('add_preset', { name: preset.value.key, config }); await updatePresets(); toast(t('preset-replaced'), 'success'); }
-  catch (e) { toastError(e); }
+  try {
+    await invoke('remove_preset', { name: preset.value.key });
+    await invoke('add_preset', { name: preset.value.key, config });
+    await updatePresets();
+    toast(t('preset-replaced'), 'success');
+  } catch (e) {
+    toastError(e);
+  }
 }
 </script>
 
@@ -427,8 +551,7 @@ async function replacePreset() {
   <v-form ref="form" class="config-root" @submit.prevent>
     <!-- Category chips -->
     <div class="cat-bar">
-      <button v-for="cat in categories" :key="cat.key" type="button" class="cat-chip"
-        :class="{ 'is-active': activeCategory === cat.key }" @click="activeCategory = cat.key">
+      <button v-for="cat in categories" :key="cat.key" type="button" class="cat-chip" :class="{ 'is-active': activeCategory === cat.key }" @click="activeCategory = cat.key">
         <v-icon :icon="cat.icon" size="18" />
         <span>{{ cat.label }}</span>
       </button>
@@ -439,7 +562,6 @@ async function replacePreset() {
       <!-- LEFT: Settings scroll -->
       <div class="settings-col">
         <div class="settings-scroll">
-
           <!-- OUTPUT -->
           <div v-show="activeCategory === 'output'" class="settings-stack">
             <div class="md3-card">
@@ -453,8 +575,24 @@ async function replacePreset() {
             <div class="md3-card">
               <div class="card-label">编码器</div>
               <div class="field-row two-col">
-                <v-select v-model="videoCodec" :items="VIDEO_CODECS" item-title="title" item-value="value" :label="t('video-codec')" density="compact" variant="outlined" hide-details />
-                <v-select v-model="encoder" :items="ENCODERS" item-title="title" item-value="value" :label="t('encoder-select')" density="compact" variant="outlined" hide-details />
+                <v-select
+                  v-model="videoCodec"
+                  :items="VIDEO_CODECS"
+                  item-title="title"
+                  item-value="value"
+                  :label="t('video-codec')"
+                  density="compact"
+                  variant="outlined"
+                  hide-details />
+                <v-select
+                  v-model="encoder"
+                  :items="ENCODERS"
+                  item-title="title"
+                  item-value="value"
+                  :label="t('encoder-select')"
+                  density="compact"
+                  variant="outlined"
+                  hide-details />
               </div>
               <div class="field-row two-col">
                 <v-select v-model="ffmpegPreset" :items="FFMPEG_PRESETS" :label="t('ffmpeg-preset')" density="compact" variant="outlined" hide-details />
@@ -499,7 +637,14 @@ async function replacePreset() {
               <div class="card-label">音频格式</div>
               <div class="field-row two-col">
                 <v-select v-model="audioFormat" :items="AUDIO_FORMATS" :label="t('audio-format')" density="compact" variant="outlined" hide-details />
-                <v-select v-model="audioBit" :items="AUDIO_BITS" :label="t('audio-bit-depth')" density="compact" variant="outlined" hide-details :disabled="audioFormat !== 'wav'" />
+                <v-select
+                  v-model="audioBit"
+                  :items="AUDIO_BITS"
+                  :label="t('audio-bit-depth')"
+                  density="compact"
+                  variant="outlined"
+                  hide-details
+                  :disabled="audioFormat !== 'wav'" />
               </div>
               <div class="field-row two-col">
                 <v-select v-model="targetAudio" :items="SAMPLE_RATES" :label="t('target_audio')" density="compact" variant="outlined" hide-details />
@@ -513,11 +658,17 @@ async function replacePreset() {
             <div class="md3-card">
               <div class="card-label">谱面缩放与流速</div>
               <div class="slider-block">
-                <div class="slider-header"><span>{{ t('chart_ratio') }}</span><span class="slider-val">{{ chartRatio.toFixed(2) }}</span></div>
+                <div class="slider-header">
+                  <span>{{ t('chart_ratio') }}</span
+                  ><span class="slider-val">{{ chartRatio.toFixed(2) }}</span>
+                </div>
                 <v-slider v-model="chartRatio" :min="0.05" :max="1" :step="0.01" hide-details color="primary" />
               </div>
               <div class="slider-block">
-                <div class="slider-header"><span>{{ t('note-speed-factor') }}</span><span class="slider-val">{{ noteSpeedFactor.toFixed(2) }}</span></div>
+                <div class="slider-header">
+                  <span>{{ t('note-speed-factor') }}</span
+                  ><span class="slider-val">{{ noteSpeedFactor.toFixed(2) }}</span>
+                </div>
                 <v-slider v-model="noteSpeedFactor" :min="0.1" :max="2" :step="0.01" hide-details color="primary" />
               </div>
               <div class="switch-grid">
@@ -550,7 +701,10 @@ async function replacePreset() {
             <div class="md3-card">
               <div class="card-label">音符缩放</div>
               <div class="slider-block">
-                <div class="slider-header"><span>{{ t('note-scale') }}</span><span class="slider-val">{{ noteScale.toFixed(2) }}</span></div>
+                <div class="slider-header">
+                  <span>{{ t('note-scale') }}</span
+                  ><span class="slider-val">{{ noteScale.toFixed(2) }}</span>
+                </div>
                 <v-slider v-model="noteScale" :min="0" :max="5" :step="0.05" hide-details color="primary" />
               </div>
             </div>
@@ -566,8 +720,7 @@ async function replacePreset() {
             <div class="md3-card">
               <div class="card-label">UI 显示</div>
               <div class="ui-grid">
-                <div v-for="(item, index) in renderList" :key="index" class="ui-chip"
-                  :class="{ 'is-on': render.includes(item) }" @click="toggleRender(item)">
+                <div v-for="(item, index) in renderList" :key="index" class="ui-chip" :class="{ 'is-on': render.includes(item) }" @click="toggleRender(item)">
                   <v-icon :icon="render.includes(item) ? 'mdi-checkbox-marked' : 'mdi-checkbox-blank-outline'" size="16" />
                   <span>{{ item }}</span>
                 </div>
@@ -631,8 +784,22 @@ async function replacePreset() {
 
     <!-- Preset bar -->
     <div class="preset-bar">
-      <v-select :model-value="preset" @update:model-value="(val: Preset) => { preset = val; applyConfig(val.config); }"
-        :items="presets" item-title="name" :label="t('presets')" density="compact" variant="outlined" hide-details return-object class="preset-select" />
+      <v-select
+        :model-value="preset"
+        @update:model-value="
+          (val: Preset) => {
+            preset = val;
+            applyConfig(val.config);
+          }
+        "
+        :items="presets"
+        item-title="name"
+        :label="t('presets')"
+        density="compact"
+        variant="outlined"
+        hide-details
+        return-object
+        class="preset-select" />
       <div class="preset-actions">
         <v-btn variant="tonal" color="primary" size="small" prepend-icon="mdi-plus" @click="createPreset">新建</v-btn>
         <v-btn variant="tonal" color="warning" size="small" prepend-icon="mdi-content-save" :disabled="preset.key === 'default'" @click="replacePreset">保存</v-btn>
@@ -643,192 +810,881 @@ async function replacePreset() {
 </template>
 
 <style scoped>
-.config-root { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: transparent; font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif; }
+.config-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+}
 
-.cat-bar { display: flex; gap: 8px; padding: 10px 16px; flex-shrink: 0; }
-.cat-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; background: transparent; color: rgba(255,255,255,0.55); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: all 0.2s; font-family: inherit; }
-.cat-chip:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.8); }
-.cat-chip.is-active { background: rgba(130,177,255,0.15); border-color: rgba(130,177,255,0.4); color: #82b1ff; }
+.cat-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px;
+  flex-shrink: 0;
+}
+.cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.cat-chip:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.8);
+}
+.cat-chip.is-active {
+  background: rgba(130, 177, 255, 0.15);
+  border-color: rgba(130, 177, 255, 0.4);
+  color: #82b1ff;
+}
 
-.config-body { flex: 1; display: flex; gap: 12px; min-height: 0; padding: 0 16px; overflow: hidden; }
+.config-body {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+  padding: 0 16px;
+  overflow: hidden;
+}
 
 /* LEFT column */
-.settings-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.settings-scroll { flex: 1; overflow-y: auto; padding-right: 4px; }
-.settings-stack { display: flex; flex-direction: column; gap: 10px; }
+.settings-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.settings-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
 /* RIGHT preview column */
-.preview-col { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; }
-.preview-panel { flex: 1; background: rgba(24,24,24,0.9); border: 1px solid rgba(255,255,255,0.06); border-radius: 24px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+.preview-col {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+.preview-panel {
+  flex: 1;
+  background: rgba(24, 24, 24, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
 
-.preview-content { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px; width: 100%; }
-.preview-title { font-size: 13px; font-weight: 600; color: rgba(130,177,255,0.8); text-transform: uppercase; letter-spacing: 1px; align-self: flex-start; }
-.preview-default { opacity: 0.6; }
-.preview-hint { color: rgba(255,255,255,0.35); font-size: 14px; margin: 8px 0 0; }
+.preview-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  width: 100%;
+}
+.preview-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(130, 177, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  align-self: flex-start;
+}
+.preview-default {
+  opacity: 0.6;
+}
+.preview-hint {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 14px;
+  margin: 8px 0 0;
+}
 
 /* Preview transition */
-.preview-fade-enter-active { transition: opacity 0.25s ease, transform 0.25s ease; }
-.preview-fade-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
-.preview-fade-enter-from { opacity: 0; transform: translateY(8px); }
-.preview-fade-leave-to { opacity: 0; transform: translateY(-4px); }
+.preview-fade-enter-active {
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+.preview-fade-leave-active {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.preview-fade-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.preview-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
 
 /* ===== Cards ===== */
-.md3-card { background: rgba(30,30,30,0.85); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 12px; transition: border-color 0.2s, box-shadow 0.2s; cursor: default; }
-.md3-card:hover { border-color: rgba(130,177,255,0.2); box-shadow: 0 2px 12px rgba(0,0,0,0.25); }
-.card-label { font-size: 11px; font-weight: 700; color: rgba(130,177,255,0.7); text-transform: uppercase; letter-spacing: 1px; }
+.md3-card {
+  background: rgba(30, 30, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+  cursor: default;
+}
+.md3-card:hover {
+  border-color: rgba(130, 177, 255, 0.2);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+.card-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(130, 177, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
 
-.field-row { display: flex; gap: 10px; }
-.field-row.two-col { display: grid; grid-template-columns: 1fr 1fr; }
-.switch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.field-row {
+  display: flex;
+  gap: 10px;
+}
+.field-row.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.switch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
 
-.slider-row { display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.7); }
-.slider-row .v-slider { flex: 1; min-width: 0; }
-.slider-label { min-width: 56px; font-size: 13px; color: rgba(255,255,255,0.55); }
-.slider-val { min-width: 40px; text-align: right; font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.8); font-family: 'Consolas', monospace; }
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.7);
+}
+.slider-row .v-slider {
+  flex: 1;
+  min-width: 0;
+}
+.slider-label {
+  min-width: 56px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.slider-val {
+  min-width: 40px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: 'Consolas', monospace;
+}
 
-.slider-block { display: flex; flex-direction: column; gap: 4px; }
-.slider-header { display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.6); }
+.slider-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
 
-.respack-row { display: flex; gap: 8px; align-items: center; }
-.avatar-row { display: flex; align-items: center; gap: 16px; }
+.respack-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
 
-.ui-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.ui-chip { display: flex; align-items: center; gap: 6px; padding: 7px 10px; background: rgba(50,50,50,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; cursor: pointer; font-size: 12px; color: rgba(255,255,255,0.5); transition: all 0.2s; user-select: none; }
-.ui-chip:hover { background: rgba(60,60,60,0.6); }
-.ui-chip.is-on { background: rgba(130,177,255,0.12); border-color: rgba(130,177,255,0.3); color: #82b1ff; }
+.ui-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.ui-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  background: rgba(50, 50, 50, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  transition: all 0.2s;
+  user-select: none;
+  white-space: nowrap;
+}
+.ui-chip:hover {
+  background: rgba(60, 60, 60, 0.6);
+}
+.ui-chip.is-on {
+  background: rgba(130, 177, 255, 0.12);
+  border-color: rgba(130, 177, 255, 0.3);
+  color: #82b1ff;
+}
 
-.preset-bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; }
-.preset-select { flex: 1; max-width: 240px; }
-.preset-actions { display: flex; gap: 8px; }
+.preset-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+.preset-select {
+  flex: 1;
+  max-width: 240px;
+}
+.preset-actions {
+  display: flex;
+  gap: 8px;
+}
 
 /* ===== PREVIEW VISUALIZATIONS ===== */
 
 /* Pixel grid demo */
-.pixel-grid-wrap { width: 100%; display: flex; justify-content: center; padding: 12px 0; }
-.pixel-grid { display: grid; gap: 2px; width: fit-content; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); }
-.pixel-dot { width: 5px; height: 5px; border-radius: 1px; background: #82b1ff; opacity: 0; animation: pixelFadeIn 0.6s ease forwards; }
-@keyframes pixelFadeIn { 0% { opacity: 0; transform: scale(0); } 100% { opacity: 0.7; transform: scale(1); } }
-.pixel-dot:nth-child(odd) { animation-delay: 0.1s; }
-.pixel-dot:nth-child(3n) { animation-delay: 0.2s; }
-.pixel-dot:nth-child(5n) { animation-delay: 0.3s; }
+.pixel-grid-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
+.pixel-grid {
+  display: grid;
+  gap: 2px;
+  width: fit-content;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.pixel-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background: #82b1ff;
+  opacity: 0;
+  animation: pixelFadeIn 0.6s ease forwards;
+}
+@keyframes pixelFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+}
+.pixel-dot:nth-child(odd) {
+  animation-delay: 0.1s;
+}
+.pixel-dot:nth-child(3n) {
+  animation-delay: 0.2s;
+}
+.pixel-dot:nth-child(5n) {
+  animation-delay: 0.3s;
+}
 
 /* Performance bars */
-.perf-bars { width: 100%; display: flex; flex-direction: column; gap: 14px; }
-.perf-bar-group { display: flex; align-items: center; gap: 10px; }
-.perf-label { font-size: 12px; color: rgba(255,255,255,0.5); min-width: 36px; }
-.perf-bar { flex: 1; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; }
-.perf-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
-.perf-speed { background: linear-gradient(90deg, #4caf50, #8bc34a); }
-.perf-quality { background: linear-gradient(90deg, #2196f3, #82b1ff); }
-.perf-val { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.7); min-width: 32px; text-align: right; font-family: 'Consolas', monospace; }
+.perf-bars {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.perf-bar-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.perf-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  min-width: 36px;
+}
+.perf-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.perf-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+.perf-speed {
+  background: linear-gradient(90deg, #4caf50, #8bc34a);
+}
+.perf-quality {
+  background: linear-gradient(90deg, #2196f3, #82b1ff);
+}
+.perf-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  min-width: 32px;
+  text-align: right;
+  font-family: 'Consolas', monospace;
+}
 
 /* Bitrate gauge */
-.bitrate-demo { width: 100%; display: flex; justify-content: center; }
-.bitrate-gauge { display: flex; flex-direction: column; align-items: center; }
-.gauge-svg { width: 160px; height: 80px; }
-.gauge-value { font-size: 28px; font-weight: 700; color: #82b1ff; font-family: 'Consolas', monospace; margin-top: -8px; }
-.gauge-unit { font-size: 12px; color: rgba(255,255,255,0.4); }
+.bitrate-demo {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.bitrate-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.gauge-svg {
+  width: 160px;
+  height: 80px;
+}
+.gauge-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #82b1ff;
+  font-family: 'Consolas', monospace;
+  margin-top: -8px;
+}
+.gauge-unit {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
 
 /* Toggle demo */
-.toggles-demo { display: flex; flex-direction: column; gap: 10px; width: 100%; }
-.toggle-demo-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(40,40,40,0.6); border-radius: 12px; color: rgba(255,255,255,0.5); font-size: 13px; transition: all 0.2s; }
-.toggle-demo-item.active { background: rgba(130,177,255,0.1); color: #82b1ff; }
-.toggle-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: background 0.2s; }
-.toggle-demo-item.active .toggle-dot { background: #82b1ff; box-shadow: 0 0 8px rgba(130,177,255,0.5); }
+.toggles-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.toggle-demo-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(40, 40, 40, 0.6);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  transition: all 0.2s;
+}
+.toggle-demo-item.active {
+  background: rgba(130, 177, 255, 0.1);
+  color: #82b1ff;
+}
+.toggle-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: background 0.2s;
+}
+.toggle-demo-item.active .toggle-dot {
+  background: #82b1ff;
+  box-shadow: 0 0 8px rgba(130, 177, 255, 0.5);
+}
 
 /* Wave demo */
-.wave-demo { width: 100%; }
-.wave-bars { display: flex; align-items: flex-end; gap: 3px; height: 80px; padding: 4px 0; }
-.wave-bar { flex: 1; background: linear-gradient(180deg, #82b1ff, #4a7adf); border-radius: 2px; min-height: 4px; transition: height 0.3s ease; animation: wavePulse 1.5s ease-in-out infinite alternate; }
-.wave-bar-sfx { background: linear-gradient(180deg, #e91e63, #ad1457); }
-@keyframes wavePulse { 0% { opacity: 0.7; } 100% { opacity: 1; } }
-.wave-label { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; display: block; }
+.wave-demo {
+  width: 100%;
+}
+.wave-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 80px;
+  padding: 4px 0;
+}
+.wave-bar {
+  flex: 1;
+  background: linear-gradient(180deg, #82b1ff, #4a7adf);
+  border-radius: 2px;
+  min-height: 4px;
+  transition: height 0.3s ease;
+  animation: wavePulse 1.5s ease-in-out infinite alternate;
+}
+.wave-bar-sfx {
+  background: linear-gradient(180deg, #e91e63, #ad1457);
+}
+@keyframes wavePulse {
+  0% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+.wave-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 4px;
+  display: block;
+}
 
 /* Audio quality bars */
-.audio-quality-bars { width: 100%; display: flex; flex-direction: column; gap: 8px; }
-.aq-bar-group { display: flex; align-items: center; gap: 8px; }
-.aq-label { font-size: 11px; color: rgba(255,255,255,0.35); min-width: 36px; font-weight: 600; text-transform: uppercase; }
-.aq-label.is-active { color: #82b1ff; }
-.aq-bar { flex: 1; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
-.aq-fill { height: 100%; border-radius: 3px; background: rgba(255,255,255,0.15); transition: width 0.4s ease; }
-.aq-fill.is-active { background: #82b1ff; }
+.audio-quality-bars {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.aq-bar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.aq-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  min-width: 36px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.aq-label.is-active {
+  color: #82b1ff;
+}
+.aq-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.aq-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  transition: width 0.4s ease;
+}
+.aq-fill.is-active {
+  background: #82b1ff;
+}
 
 /* Chart preview */
-.chart-preview-box { width: 100%; height: 140px; background: linear-gradient(180deg, rgba(20,20,30,0.9), rgba(10,10,20,0.95)); border-radius: 12px; position: relative; overflow: hidden; transition: transform 0.3s ease; transform-origin: center center; }
-.chart-judge-line { position: absolute; bottom: 20px; left: 10%; right: 10%; height: 2px; background: linear-gradient(90deg, transparent, rgba(130,177,255,0.6), rgba(233,30,99,0.6), rgba(130,177,255,0.6), transparent); box-shadow: 0 0 8px rgba(130,177,255,0.3); }
-.chart-note { position: absolute; width: 36px; height: 36px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(99,102,241,0.4)); animation: noteFall linear infinite; }
-.chart-note-1 { left: 30%; animation-delay: 0s; }
-.chart-note-2 { left: 55%; animation-delay: 0.6s; }
-.chart-note-3 { left: 75%; animation-delay: 1.2s; }
-@keyframes noteFall { 0% { top: -30px; opacity: 0; } 10% { opacity: 1; } 85% { opacity: 1; } 100% { top: calc(100% - 30px); opacity: 0; } }
+.chart-preview-box {
+  width: 100%;
+  height: 140px;
+  background: linear-gradient(180deg, rgba(20, 20, 30, 0.9), rgba(10, 10, 20, 0.95));
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s ease;
+  transform-origin: center center;
+}
+.chart-judge-line {
+  position: absolute;
+  bottom: 20px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(130, 177, 255, 0.6), rgba(233, 30, 99, 0.6), rgba(130, 177, 255, 0.6), transparent);
+  box-shadow: 0 0 8px rgba(130, 177, 255, 0.3);
+}
+.chart-note {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.4));
+  animation: noteFall linear infinite;
+}
+.chart-note-1 {
+  left: 30%;
+  animation-delay: 0s;
+}
+.chart-note-2 {
+  left: 55%;
+  animation-delay: 0.6s;
+}
+.chart-note-3 {
+  left: 75%;
+  animation-delay: 1.2s;
+}
+@keyframes noteFall {
+  0% {
+    top: -30px;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: calc(100% - 30px);
+    opacity: 0;
+  }
+}
 
 /* Text preview */
-.text-demo { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
-.combo-preview { font-size: 32px; font-weight: 800; color: rgba(255,255,255,0.9); letter-spacing: 2px; text-shadow: 0 2px 8px rgba(0,0,0,0.4); }
-.watermark-preview { font-size: 14px; color: rgba(255,255,255,0.3); font-style: italic; }
-.ending-preview { font-size: 12px; color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.05); padding: 6px 14px; border-radius: 8px; }
+.text-demo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.combo-preview {
+  font-size: 32px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 2px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.watermark-preview {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.3);
+  font-style: italic;
+}
+.ending-preview {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 14px;
+  border-radius: 8px;
+}
 
 /* Note scale demo */
-.note-scale-demo { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.note-img { object-fit: contain; filter: drop-shadow(0 0 12px rgba(99,102,241,0.4)); transition: all 0.3s ease; }
-.note-scale-label { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.6); font-family: 'Consolas', monospace; }
+.note-scale-demo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.note-img {
+  object-fit: contain;
+  filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.4));
+  transition: all 0.3s ease;
+}
+.note-scale-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: 'Consolas', monospace;
+}
 
 /* Effects preview */
-.effects-grid { display: flex; flex-direction: column; gap: 10px; width: 100%; }
-.fx-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(40,40,40,0.6); border-radius: 12px; color: rgba(255,255,255,0.6); font-size: 13px; position: relative; overflow: hidden; min-height: 44px; }
-.fx-item.off { opacity: 0.4; }
-.fx-particles { position: absolute; inset: 0; pointer-events: none; }
-.particle { position: absolute; width: 4px; height: 4px; background: rgba(130,177,255,0.6); border-radius: 50%; animation: particleFloat 2s ease-in-out infinite; }
-@keyframes particleFloat { 0% { transform: translateY(0) scale(1); opacity: 0.8; } 50% { transform: translateY(-12px) scale(1.3); opacity: 0.4; } 100% { transform: translateY(0) scale(1); opacity: 0.8; } }
-.fx-glow { position: absolute; inset: 0; background: radial-gradient(circle at 30% 50%, rgba(130,177,255,0.15), transparent 60%); pointer-events: none; }
-.fx-double { display: flex; gap: 6px; }
-.hint-dot { width: 10px; height: 10px; border-radius: 50%; background: #e91e63; box-shadow: 0 0 6px rgba(233,30,99,0.5); }
+.effects-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.fx-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(40, 40, 40, 0.6);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  position: relative;
+  overflow: hidden;
+  min-height: 44px;
+}
+.fx-item.off {
+  opacity: 0.4;
+}
+.fx-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: rgba(130, 177, 255, 0.6);
+  border-radius: 50%;
+  animation: particleFloat 2s ease-in-out infinite;
+}
+@keyframes particleFloat {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translateY(-12px) scale(1.3);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.8;
+  }
+}
+.fx-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 50%, rgba(130, 177, 255, 0.15), transparent 60%);
+  pointer-events: none;
+}
+.fx-double {
+  display: flex;
+  gap: 6px;
+}
+.hint-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e91e63;
+  box-shadow: 0 0 6px rgba(233, 30, 99, 0.5);
+}
 
 /* UI phone mock */
-.ui-phone-mock { width: 120px; height: 200px; background: rgba(10,10,10,0.9); border: 2px solid rgba(255,255,255,0.1); border-radius: 16px; position: relative; overflow: hidden; }
-.phone-screen { width: 100%; height: 100%; position: relative; }
-.phone-ui-line { position: absolute; bottom: 30px; left: 10%; right: 10%; height: 2px; background: linear-gradient(90deg, transparent, rgba(130,177,255,0.5), transparent); }
-.phone-ui-score { position: absolute; top: 12px; right: 8px; font-size: 8px; font-weight: 700; color: rgba(255,255,255,0.7); font-family: 'Consolas', monospace; }
-.phone-ui-combo { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.5); }
-.phone-ui-name { position: absolute; top: 12px; left: 8px; font-size: 7px; color: rgba(255,255,255,0.5); }
-.phone-ui-pb { position: absolute; bottom: 8px; left: 8px; right: 8px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; }
-.pb-fill { height: 100%; background: #82b1ff; border-radius: 2px; }
+.ui-phone-mock {
+  width: 120px;
+  height: 200px;
+  background: rgba(10, 10, 10, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.phone-screen {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+.phone-ui-line {
+  position: absolute;
+  bottom: 30px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(130, 177, 255, 0.5), transparent);
+}
+.phone-ui-score {
+  position: absolute;
+  top: 12px;
+  right: 8px;
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: 'Consolas', monospace;
+}
+.phone-ui-combo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.5);
+}
+.phone-ui-name {
+  position: absolute;
+  top: 12px;
+  left: 8px;
+  font-size: 7px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.phone-ui-pb {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+.pb-fill {
+  height: 100%;
+  background: #82b1ff;
+  border-radius: 2px;
+}
 
 /* Player card */
-.player-card-preview { display: flex; align-items: center; gap: 14px; background: rgba(40,40,40,0.6); padding: 14px 18px; border-radius: 16px; width: 100%; }
-.player-info { display: flex; flex-direction: column; gap: 4px; }
-.player-name-pv { font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.9); }
-.player-rks-pv { font-size: 12px; color: rgba(255,255,255,0.5); font-family: 'Consolas', monospace; }
+.player-card-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(40, 40, 40, 0.6);
+  padding: 14px 18px;
+  border-radius: 16px;
+  width: 100%;
+}
+.player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.player-name-pv {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+.player-rks-pv {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'Consolas', monospace;
+}
 
 /* Challenge badge */
-.challenge-badge { width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid var(--badge-color, #ffc107); box-shadow: 0 0 20px color-mix(in srgb, var(--badge-color, #ffc107) 40%, transparent); transition: all 0.3s ease; }
-.badge-rank { font-size: 28px; font-weight: 800; color: var(--badge-color, #ffc107); }
+.challenge-badge {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--badge-color, #ffc107);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--badge-color, #ffc107) 40%, transparent);
+  transition: all 0.3s ease;
+}
+.badge-rank {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--badge-color, #ffc107);
+}
 
 /* Debug demo */
-.debug-demo { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
-.debug-grid { width: 100%; height: 80px; background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 20px 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); }
-.debug-mirror { width: 60px; height: 60px; background: rgba(40,40,40,0.6); border-radius: 12px; display: flex; align-items: center; justify-content: center; transition: transform 0.3s ease; }
-.debug-mirror.flipped { transform: scaleX(-1); }
-.mirror-arrow { font-size: 24px; color: rgba(255,255,255,0.5); }
-.debug-split { display: flex; gap: 4px; }
-.split-left { width: 30px; height: 30px; border-radius: 8px; background: rgba(33,150,243,0.4); }
-.split-right { width: 30px; height: 30px; border-radius: 8px; background: rgba(233,30,99,0.4); }
-.debug-skip { font-size: 12px; font-weight: 700; color: rgba(255,152,0,0.7); background: rgba(255,152,0,0.1); padding: 6px 14px; border-radius: 8px; }
+.debug-demo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.debug-grid {
+  width: 100%;
+  height: 80px;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.debug-mirror {
+  width: 60px;
+  height: 60px;
+  background: rgba(40, 40, 40, 0.6);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+}
+.debug-mirror.flipped {
+  transform: scaleX(-1);
+}
+.mirror-arrow {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.debug-split {
+  display: flex;
+  gap: 4px;
+}
+.split-left {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(33, 150, 243, 0.4);
+}
+.split-right {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(233, 30, 99, 0.4);
+}
+.debug-skip {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 152, 0, 0.7);
+  background: rgba(255, 152, 0, 0.1);
+  padding: 6px 14px;
+  border-radius: 8px;
+}
 
 /* Meta info */
-.preview-meta { display: flex; gap: 16px; width: 100%; justify-content: center; flex-wrap: wrap; }
-.meta-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.meta-label { font-size: 10px; color: rgba(255,255,255,0.35); text-transform: uppercase; }
-.meta-value { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.8); font-family: 'Consolas', monospace; }
+.preview-meta {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.meta-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+}
+.meta-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: 'Consolas', monospace;
+}
 
 /* ===== Responsive ===== */
 @media (max-width: 900px) {
-  .config-body { flex-direction: column; }
-  .preview-col { width: 100%; height: 200px; flex-shrink: 0; }
-  .preview-panel { border-radius: 16px; }
+  .config-body {
+    flex-direction: column;
+  }
+  .preview-col {
+    width: 100%;
+    height: 200px;
+    flex-shrink: 0;
+  }
+  .preview-panel {
+    border-radius: 16px;
+  }
 }
 @media (max-width: 600px) {
-  .preview-col { display: none; }
-  .ui-grid { grid-template-columns: repeat(2, 1fr); }
+  .preview-col {
+    display: none;
+  }
+  .ui-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 </style>

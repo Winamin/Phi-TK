@@ -54,7 +54,7 @@
         "height": 660,
         "resizable": true,
         "title": "Phi-Tk",
-        "width": 880,
+        "width": 920,
         "dragDropEnabled": true,
         "useHttpsScheme": true
       }

@@ -977,6 +977,7 @@ function resetAndGoChoose() {
 /* ===== Options (Step 3) ===== */
 .options-wrapper {
   height: 100%;
+  overflow: hidden;
 }
 
 /* ===== Render Card (Step 4) ===== */

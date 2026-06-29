@@ -11,7 +11,6 @@ en:
   stop-render: Stop
   retry-failed: Retry Failed
   bulk-edit: Bulk Edit
-  back: Back
   name: Name
   level: Level
   charter: Charter
@@ -77,7 +76,6 @@ zh-CN:
   stop-render: 停止渲染
   retry-failed: 重试失败项
   bulk-edit: 批量编辑
-  back: 返回上一级
   name: 名称
   level: 难度
   charter: 谱师
@@ -431,11 +429,6 @@ watch(charts, (val) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
     <!-- Top Bar -->
     <div class="batch-header">
       <div class="header-row">
-        <button class="md3-btn md3-btn-text" @click="router.go(-1)">
-          <v-icon icon="mdi-arrow-left" size="20" />
-          <span>{{ t('back') }}</span>
-        </button>
-
         <div class="search-wrap">
           <v-icon icon="mdi-magnify" size="18" class="search-icon" />
           <input v-model="searchQuery" :placeholder="t('search-placeholder')" class="md3-search" />
