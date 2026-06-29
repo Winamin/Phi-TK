@@ -1453,7 +1453,7 @@ pub async fn main() -> Result<()> {
             .args(args2.split_whitespace())
             .arg(output_path)
             .arg("-loglevel")
-            .arg("warning")
+            .arg("error")
             .stdin(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
@@ -1464,13 +1464,12 @@ pub async fn main() -> Result<()> {
     let rgba_size = vw as usize * vh as usize * 4;
     info!("RGBA buffer size: {}", rgba_size);
 
-    const MAX_PBO_COUNT: usize = 4;
+    const MAX_PBO_COUNT: usize = 8;
     let n = MAX_PBO_COUNT.min(fps as usize).max(2);
     let mut pbos: Vec<GLuint> = vec![0; n];
     info!("Using {} PBOs for async readback (buffering strategy)", n);
 
-    unsafe
-    {
+    unsafe {
         use miniquad::gl::*;
         glGenBuffers(n as _, pbos.as_mut_ptr());
         for pbo in &pbos {
@@ -1493,12 +1492,10 @@ pub async fn main() -> Result<()> {
 
     let frames10 = total_frames / 10;
     let mut step_time = Instant::now();
+    let mut current_pbo_index = 0;
 
-    for frame in 0..total_frames
-    {
-        if frame % frames10 == 0 ||
-            frame == total_frames - 1
-        {
+    for frame in 0..total_frames {
+        if frame % frames10 == 0 || frame == total_frames - 1 {
             let progress = (frame as f64 / total_frames as f64).min(1.0);
             let percent = (progress * 100.).ceil() as i8;
             let bar_width = 20;
@@ -1512,16 +1509,17 @@ pub async fn main() -> Result<()> {
             };
 
             info!(
-                "Rendering: [{}{}] {:>3}% | Time: {} | Frames: {}/{}",
-                "█".repeat(filled),
-                " ".repeat(empty),
-                percent,
-                time_text,
-                frame + 1,
-                total_frames
-            );
+            "Rendering: [{}{}] {:>3}% | Time: {} | Frames: {}/{}",
+            "█".repeat(filled),
+            " ".repeat(empty),
+            percent,
+            time_text,
+            frame + 1,
+            total_frames
+        );
             step_time = Instant::now();
         }
+
         let current_frame_time = frame as f64 * frame_duration;
         *my_time.borrow_mut() = current_frame_time;
         let output = mst.output();
@@ -1539,10 +1537,27 @@ pub async fn main() -> Result<()> {
 
         unsafe {
             use miniquad::gl::*;
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(&mst.output()));
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[0]);
-            //glFinish();
+            if frame > 0 {
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[current_pbo_index]);
+                let src = glMapBufferRange(
+                    GL_PIXEL_PACK_BUFFER,
+                    0,
+                    rgba_size as _,
+                    GL_MAP_READ_BIT
+                );
+                if !src.is_null() {
+                    let data_slice = std::slice::from_raw_parts(src as *const u8, rgba_size);
+                    input.write_all(data_slice)?;
+                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                } else {
+                    bail!("Failed to map PBO at frame {}", frame);
+                }
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            }
+            let next_pbo_index = (current_pbo_index + 1) % n;
 
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(&mst.output()));
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[next_pbo_index]);
             glReadPixels(
                 0, 0,
                 vw as _, vh as _,
@@ -1550,29 +1565,41 @@ pub async fn main() -> Result<()> {
                 std::ptr::null_mut()
             );
 
-            let src = glMapBuffer(GL_PIXEL_PACK_BUFFER, 0x88B8);
-            if !src.is_null() {
-                input.write_all(std::slice::from_raw_parts(
-                    src as *const u8,
-                    rgba_size
-                ))?;
-                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-            } else {
-                bail!("Failed to map PBO at frame {}", frame);
-            }
             glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+            if frame == total_frames - 1 {
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[next_pbo_index]);
+                glFinish();
+                let src = glMapBufferRange(
+                    GL_PIXEL_PACK_BUFFER,
+                    0,
+                    rgba_size as _,
+                    GL_MAP_READ_BIT
+                );
+                if !src.is_null() {
+                    let data_slice = std::slice::from_raw_parts(src as *const u8, rgba_size);
+                    input.write_all(data_slice)?;
+                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                } else {
+                    bail!("Failed to map final PBO at frame {}", frame);
+                }
+
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            }
+            current_pbo_index = next_pbo_index;
         }
 
         send(IPCEvent::Frame);
     }
+
     drop(input);
     proc.wait()?;
 
     info!("Render Time: {:.2?}", render_start_time.elapsed());
     info!(
-        "Average FPS: {:.2}",
-        total_frames as f64 / render_start_time.elapsed().as_secs_f64()
-    );
+    "Average FPS: {:.2}",
+    total_frames as f64 / render_start_time.elapsed().as_secs_f64()
+);
 
     unsafe {
         use miniquad::gl::*;
