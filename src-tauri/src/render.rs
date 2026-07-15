@@ -604,9 +604,13 @@ pub async fn main() -> Result<()> {
 
         info!("SFX mixing: offset={:.6}s (includes {:.6}s delay)", o_offset, audio_delay);
 
-        let sfx_click_ptr = &sfx_click as *const _;
-        let sfx_drag_ptr = &sfx_drag as *const _;
-        let sfx_flick_ptr = &sfx_flick as *const _;
+        let sfx_lut =
+        [
+            &sfx_click as *const _,
+            &sfx_drag as *const _,
+            &sfx_click as *const _,
+            &sfx_flick as *const _,
+        ];
 
         unsafe {
             let lines_ptr = chart.lines.as_ptr();
@@ -619,12 +623,7 @@ pub async fn main() -> Result<()> {
                 for j in 0..notes_len {
                     let note = &*notes_ptr.add(j);
                     if !note.fake {
-                        let sfx = match note.kind
-                        {
-                            NoteKind::Click | NoteKind::Hold { .. } => &*sfx_click_ptr,
-                            NoteKind::Drag => &*sfx_drag_ptr,
-                            NoteKind::Flick => &*sfx_flick_ptr,
-                        };
+                        let sfx = &*sfx_lut[note.kind.order() as usize];
                         let time = o_offset + note.time as f64;
                         place(time, sfx, volume_sfx);
                     }
@@ -645,25 +644,22 @@ pub async fn main() -> Result<()> {
     let audio_bit = params.config.audio_bit;
     let audio_format = params.config.audio_format.to_lowercase();
 
-    // 验证输入
     let supported_formats = ["flac", "mp3", "aac", "opus", "wav"];
     if !supported_formats.contains(&audio_format.as_str()) {
-        bail!(
-            "Unsupported audio format: {}. Supported formats are: {}",
+        bail!
+        ("Unsupported audio format: {}. Supported formats are: {}",
+
             audio_format,
             supported_formats.join(", ")
+
         );
     }
 
     if let Some(bit) = audio_bit {
         if ![16, 24, 32].contains(&bit)
-        {
-            bail!("Invalid audio bit depth: {}. Supported values are 16, 24, 32.", bit);
-        }
+        { bail!("Invalid audio bit depth: {}. Supported values are 16, 24, 32.", bit); }
         if audio_format != "wav"
-        {
-            return Err(anyhow::anyhow!("PCM audio bit depth requires WAV format, but {} was specified", audio_format));
-        }
+        { return Err(anyhow::anyhow!("PCM audio bit depth requires WAV format, but {} was specified", audio_format)); }
     }
 
     let (audio_codec, output_format) = if let Some(bit) = audio_bit {
@@ -724,10 +720,10 @@ pub async fn main() -> Result<()> {
     let target_aspect = info.aspect_ratio as f64;
     let (mut vw, mut vh) = params.config.resolution;
     let (ow, oh) = (vw, vh);
-    let current_aspect = vw as f64 / vh as f64;
+    let aspect = vw as f64 / vh as f64;
 
-    if (current_aspect - target_aspect).abs() > 1e-9 {
-        if current_aspect > target_aspect {
+    if (aspect - target_aspect).abs() > 1e-9 {
+        if aspect > target_aspect {
             vw = (vh as f64 * target_aspect).round() as u32;
         } else {
             vh = (vw as f64 / target_aspect).round() as u32;
@@ -1493,6 +1489,9 @@ pub async fn main() -> Result<()> {
     let frames10 = total_frames / 10;
     let mut step_time = Instant::now();
     let mut current_pbo_index = 0;
+    let mut fps_update_timer = Instant::now();
+    let mut fps_frame_count = 0u64;
+    let mut realtime_fps = 0u64;
 
     for frame in 0..total_frames {
         if frame % frames10 == 0 || frame == total_frames - 1 {
@@ -1589,6 +1588,14 @@ pub async fn main() -> Result<()> {
             current_pbo_index = next_pbo_index;
         }
 
+        fps_frame_count += 1;
+        let elapsed = fps_update_timer.elapsed().as_secs_f64();
+        if elapsed >= 0.05 {
+            realtime_fps = (fps_frame_count as f64 / elapsed).round() as u64;
+            fps_frame_count = 0;
+            fps_update_timer = Instant::now();
+        }
+
         send(IPCEvent::Frame);
     }
 
@@ -1596,10 +1603,7 @@ pub async fn main() -> Result<()> {
     proc.wait()?;
 
     info!("Render Time: {:.2?}", render_start_time.elapsed());
-    info!(
-    "Average FPS: {:.2}",
-    total_frames as f64 / render_start_time.elapsed().as_secs_f64()
-);
+    info!("Average FPS: {}", realtime_fps);
 
     unsafe {
         use miniquad::gl::*;

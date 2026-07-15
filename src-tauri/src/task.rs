@@ -57,6 +57,7 @@ pub struct Task {
     params: RenderParams,
     status: Mutex<TaskStatus>,
     request_cancel: AtomicBool,
+    last_fps_update: Mutex<Instant>,
 }
 
 impl Task {
@@ -101,6 +102,7 @@ impl Task {
             params,
             status: Mutex::new(TaskStatus::Pending),
             request_cancel: AtomicBool::default(),
+            last_fps_update: Mutex::new(Instant::now()),
         })
     }
 
@@ -131,8 +133,8 @@ impl Task {
         let mut total = 0;
         let mut frame_count: u64 = 0;
         let start = Instant::now();
-        let mut frame_times = VecDeque::new();
-        let mut last_update_fps_sec: u32 = 0;
+        //let mut frame_times = VecDeque::new();
+        //let mut last_update_fps_sec: u32 = 0;
         let mut last_fps: usize = 0;
         loop {
             let line = lines.next_line().await?;
@@ -154,18 +156,19 @@ impl Task {
                 }
                 IPCEvent::Frame => {
                     frame_count += 1;
+                    if frame_count % 10 == 0 {
+                        let now = Instant::now();
+                        let mut last_update = self.last_fps_update.lock().await;
+                        let elapsed = now.duration_since(*last_update).as_secs_f64();
+                        if elapsed > 0.0 {
+                            last_fps = (10.0 / elapsed) as usize;
+                        }
+                        *last_update = now;
+                    }
+
                     let cur = start.elapsed().as_secs_f64();
-                    let sec = cur as u32;
-                    frame_times.push_back(cur);
-                    while frame_times.front().is_some_and(|it| cur - *it > 1.) {
-                        frame_times.pop_front();
-                    }
-                    if last_update_fps_sec != sec {
-                        last_fps = frame_times.len();
-                        last_update_fps_sec = sec;
-                    }
-                    let estimate =
-                        total.saturating_sub(frame_count).max(1) as f64 / last_fps as f64;
+                    let estimate = total.saturating_sub(frame_count).max(1) as f64 / last_fps.max(1) as f64;
+
                     if frame_count as f64 / total as f64 >= 1.0 {
                         let output = child.wait_with_output().await?;
                         let stdout = String::from_utf8(output.stdout)
