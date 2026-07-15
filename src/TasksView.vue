@@ -64,7 +64,7 @@ async function updateList() {
 
 await updateList();
 
-const updateTask = setInterval(updateList, 700);
+const updateTask = setInterval(updateList, 40);
 onUnmounted(() => clearInterval(updateTask));
 
 function formatDuration(seconds: number) {
