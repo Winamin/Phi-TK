@@ -13,6 +13,7 @@
     choose:
       archive: Archive
       folder: Folder
+      filter-name: Chart file
 
     chart-file: Chart file
     choose-drop: Drag and drop chart file here
@@ -63,6 +64,7 @@
     choose:
       archive: 压缩包
       folder: 文件夹
+      filter-name: 谱面文件
 
     chart-file: 谱面文件
     choose-drop: 拖拽谱面文件到此处
