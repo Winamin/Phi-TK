@@ -1,6 +1,7 @@
 <i18n>
 en:
   title: Batch Render
+  chart-file: Chart file
   select-charts: Select Charts
   select-preset: Select Preset
   add-files: Add Files
@@ -66,6 +67,7 @@ en:
   bulk-edit-hint: Leave fields blank to keep their original values.
 zh-CN:
   title: 批量渲染
+  chart-file: 谱面文件
   select-charts: 选择谱面
   select-preset: 选择预设
   add-files: 添加文件
