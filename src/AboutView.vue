@@ -215,6 +215,7 @@ onMounted(() => {
   opacity: 0;
   transform: translateX(-30px);
   animation: cardSlideIn 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  --i: 0;
   animation-delay: calc(0.15s * var(--i) + 0.6s);
   transition:
     transform 0.25s ease,
@@ -222,7 +223,6 @@ onMounted(() => {
     border-color 0.25s ease;
 }
 
-/* 偶数卡片从右侧滑入，增加节奏变化 */
 .info-card:nth-child(even) {
   transform: translateX(30px);
 }
