@@ -84,7 +84,7 @@ function describeStatus(status: TaskStatus): string {
     case 'loading': return t('status.loading');
     case 'mixing': return t('status.mixing');
     case 'rendering': {
-      const progressDisplay = status.progress >= 0.999 ? '100.00' : (status.progress * 100).toFixed(2);
+      const progressDisplay = status.progress;
       return t('status.rendering', {
         progress: progressDisplay,
         fps: status.fps,
