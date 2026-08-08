@@ -42,11 +42,9 @@ onMounted(() => {
 
 <template>
   <div class="about-container">
-    <!-- 极简的时间线背景线 -->
     <div class="timeline-bg"></div>
 
     <div class="about-content">
-      <!-- Logo 和版本号，带进入动画 -->
       <div class="app-header">
         <img src="/phi-tklogo.png" alt="Phi TK" class="app-logo-img" />
         <div class="version-badge">
@@ -55,7 +53,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 信息卡片，纵向排列，依次滑入 -->
       <div class="info-cards">
         <v-card class="info-card" :style="{ '--i': 0 }" @click="openGitHub" ripple>
           <div class="card-content">
@@ -97,7 +94,7 @@ onMounted(() => {
         </v-card>
       </div>
 
-      <!-- 底部版权 -->
+
       <div class="about-footer">
         <p class="footer-copyright">{{ t('footer.copyright') }}</p>
       </div>
@@ -106,7 +103,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* 容器：居中布局，暗色背景 */
 .about-container {
   width: 100%;
   height: 100vh;
@@ -122,13 +118,11 @@ onMounted(() => {
   background-color: #121212;
 }
 
-/* 隐形的时间线背景：一条从左到右快速扫过的极细线，仅作氛围 */
 .timeline-bg {
   position: absolute;
   top: 50%;
   left: -50%;
   width: 200%;
-  height: 1px;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
   animation: scanLine 4s linear infinite;
   pointer-events: none;

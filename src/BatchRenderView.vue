@@ -134,9 +134,9 @@ zh-CN:
 </i18n>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRouter } from 'vue-router';
+//import { useRouter } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { event } from '@tauri-apps/api';
@@ -147,7 +147,8 @@ import type { ChartInfo, RenderConfig } from './model';
 import ConfigView from '@/components/ConfigView.vue';
 
 const { t } = useI18n();
-const router = useRouter();
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+//const router = useRouter();
 
 interface BatchChart {
   id: string;
@@ -331,7 +332,7 @@ async function startRender() {
       chart.status = 'rendering';
       renderProgress.value = 0;
       try {
-        if (!chart.chartInfo) throw new Error(t('chart-info-missing'));
+        if (!chart.chartInfo) new Error(t('chart-info-missing'));
         await invoke('post_render', { params: { path: chart.path, info: chart.chartInfo, config } });
         chart.status = 'done';
       } catch (error: any) {
@@ -419,7 +420,7 @@ onMounted(() => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     try { charts.value = JSON.parse(saved).map((c: any) => ({ ...c, status: c.status === 'rendering' ? 'failed' : c.status })); }
-    catch (e) { }
+    catch (e) { /* empty */ }
   }
 });
 
@@ -949,7 +950,6 @@ watch(charts, (val) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
   font-weight: 600;
   color: rgba(255, 255, 255, 0.5);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 /* ===== Dialogs ===== */
@@ -961,8 +961,12 @@ watch(charts, (val) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
 }
 
 .md3-dialog-full {
-  background: rgba(20, 20, 20, 0.98) !important;
-  backdrop-filter: blur(20px) !important;
+  background: rgba(18, 18, 18, 0.55) !important;
+  backdrop-filter: blur(40px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(160%) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
 .border-b { border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important; }

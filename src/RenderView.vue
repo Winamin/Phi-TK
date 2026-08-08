@@ -105,7 +105,8 @@ import { watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { event } from '@tauri-apps/api';
-import { toastError, RULES, toast, anyFilter, isString } from './common';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { toastError, toast, anyFilter, isString } from './common';
 import type { ChartInfo, FileDropEvent, Task } from './model';
 import { VForm } from 'vuetify/components';
 import ConfigView from './components/ConfigView.vue';
@@ -245,7 +246,7 @@ async function postRender() {
     if (!(await invoke('test_ffmpeg'))) {
       await dialog.message(t('ffmpeg-not-found'));
       await invoke('open_app_folder');
-      await shell.open('https://mivik.moe/ffmpeg-windows/');
+      await shell.open('https://github.com/BtbN/FFmpeg-Builds/releases');
       return false;
     }
     let params = await buildParams();
@@ -309,7 +310,7 @@ async function fetchRenderCover() {
   try {
     const tasks = await invoke<Task[]>('get_tasks');
     if (tasks && tasks.length > 0) {
-      const task = tasks.find(t => t.path === chartPath);
+      const task = tasks.find((t) => t.path === chartPath);
       if (task?.cover) {
         renderCover.value = task.cover;
       }
@@ -407,8 +408,7 @@ function resetAndGoChoose() {
 
 <template>
   <div class="render-container">
-    <!-- MD3 Top Action Bar -->
-    <header class="md3-top-bar" v-if="step !== 'choose'">
+    <header class="md3-top-bar" v-if="step !== 'choose' && step !== 'render'">
       <div class="bar-left">
         <button class="bar-btn bar-btn-text" v-if="step === 'config' || step === 'options'" @click="goBack">
           <v-icon icon="mdi-arrow-left" size="20" />
@@ -418,12 +418,7 @@ function resetAndGoChoose() {
 
       <div class="bar-center">
         <div class="step-chips">
-          <span
-            v-for="(s, i) in steps"
-            :key="s"
-            class="step-chip"
-            :class="{ 'is-active': step === s, 'is-done': stepIndex > i + 1 }"
-          >
+          <span v-for="(s, i) in steps" :key="s" class="step-chip" :class="{ 'is-active': step === s, 'is-done': stepIndex > i + 1 }">
             <span class="chip-dot"></span>
             <span class="chip-label" v-if="step === s">{{ t('steps.' + s) }}</span>
           </span>
@@ -453,7 +448,6 @@ function resetAndGoChoose() {
         <div class="bookshelf" ref="bookshelfRef">
           <div class="shelf-label">{{ t('steps.choose') }}</div>
           <div class="shelf-row">
-            <!-- Archive card (book-style) -->
             <div class="book-card" @click="chooseChart(false)">
               <div class="book-spine"></div>
               <div class="book-face">
@@ -462,7 +456,6 @@ function resetAndGoChoose() {
                 <span class="book-desc">.zip / .pez</span>
               </div>
             </div>
-            <!-- Folder card (book-style) -->
             <div class="book-card book-card-alt" @click="chooseChart(true)">
               <div class="book-spine book-spine-alt"></div>
               <div class="book-face">
@@ -480,61 +473,56 @@ function resetAndGoChoose() {
         <div class="config-card-wrapper" ref="flipCardRef">
           <div class="config-card" v-if="chartInfo">
             <v-form ref="form" class="config-form" @submit.prevent>
-                <h2 class="config-title">{{ t('steps.config') }}</h2>
-                <div class="config-grid">
-                  <div class="config-section">
-                    <div class="field-group">
-                      <label class="field-label">{{ t('chart-name') }} *</label>
-                      <input v-model="chartInfo.name" class="md3-field" :class="{ 'has-value': chartInfo.name }" />
-                    </div>
-                    <div class="field-group">
-                      <label class="field-label">{{ t('level') }} *</label>
-                      <input v-model="chartInfo.level" class="md3-field" :class="{ 'has-value': chartInfo.level }" />
-                    </div>
-                    <div class="field-group">
-                      <label class="field-label">{{ t('charter') }} *</label>
-                      <input v-model="chartInfo.charter" class="md3-field" :class="{ 'has-value': chartInfo.charter }" />
-                    </div>
-                    <div class="field-group">
-                      <label class="field-label">{{ t('composer') }}</label>
-                      <input v-model="chartInfo.composer" class="md3-field" :class="{ 'has-value': chartInfo.composer }" />
-                    </div>
-                    <div class="field-group">
-                      <label class="field-label">{{ t('illustrator') }}</label>
-                      <input v-model="chartInfo.illustrator" class="md3-field" :class="{ 'has-value': chartInfo.illustrator }" />
-                    </div>
+              <h2 class="config-title">{{ t('steps.config') }}</h2>
+              <div class="config-grid">
+                <div class="config-section">
+                  <div class="field-group">
+                    <label class="field-label">{{ t('chart-name') }} *</label>
+                    <input v-model="chartInfo.name" class="md3-field" :class="{ 'has-value': chartInfo.name }" />
                   </div>
-                  <div class="config-section">
-                    <div class="field-group">
-                      <label class="field-label">{{ t('aspect') }}</label>
-                      <div class="aspect-row">
-                        <input type="number" v-model="aspectWidth" class="md3-field aspect-field" />
-                        <span class="aspect-sep">:</span>
-                        <input type="number" v-model="aspectHeight" class="md3-field aspect-field" />
-                      </div>
-                    </div>
-                    <div class="field-group">
-                      <label class="field-label">{{ t('dim') }} — {{ Math.round(chartInfo.backgroundDim * 100) }}%</label>
-                      <input type="range" v-model="chartInfo.backgroundDim" min="0" max="1" step="0.01" class="md3-slider" />
-                    </div>
-                    <div class="field-group field-toggle">
-                      <label class="field-label">{{ t('hold_cover') }}</label>
-                      <button
-                        type="button"
-                        class="md3-switch"
-                        :class="{ 'is-on': chartInfo.HoldPartialCover }"
-                        @click="chartInfo.HoldPartialCover = !chartInfo.HoldPartialCover"
-                      >
-                        <span class="switch-thumb"></span>
-                      </button>
-                    </div>
-                    <div class="field-group">
-                      <label class="field-label">{{ t('tip') }}</label>
-                      <input v-model="chartInfo.tip" class="md3-field" :placeholder="t('tip-placeholder')" />
-                    </div>
+                  <div class="field-group">
+                    <label class="field-label">{{ t('level') }} *</label>
+                    <input v-model="chartInfo.level" class="md3-field" :class="{ 'has-value': chartInfo.level }" />
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label">{{ t('charter') }} *</label>
+                    <input v-model="chartInfo.charter" class="md3-field" :class="{ 'has-value': chartInfo.charter }" />
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label">{{ t('composer') }}</label>
+                    <input v-model="chartInfo.composer" class="md3-field" :class="{ 'has-value': chartInfo.composer }" />
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label">{{ t('illustrator') }}</label>
+                    <input v-model="chartInfo.illustrator" class="md3-field" :class="{ 'has-value': chartInfo.illustrator }" />
                   </div>
                 </div>
-              </v-form>
+                <div class="config-section">
+                  <div class="field-group">
+                    <label class="field-label">{{ t('aspect') }}</label>
+                    <div class="aspect-row">
+                      <input type="number" v-model="aspectWidth" class="md3-field aspect-field" />
+                      <span class="aspect-sep">:</span>
+                      <input type="number" v-model="aspectHeight" class="md3-field aspect-field" />
+                    </div>
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label">{{ t('dim') }} — {{ Math.round(chartInfo.backgroundDim * 100) }}%</label>
+                    <input type="range" v-model="chartInfo.backgroundDim" min="0" max="1" step="0.01" class="md3-slider" />
+                  </div>
+                  <div class="field-group field-toggle">
+                    <label class="field-label">{{ t('hold_cover') }}</label>
+                    <button type="button" class="md3-switch" :class="{ 'is-on': chartInfo.HoldPartialCover }" @click="chartInfo.HoldPartialCover = !chartInfo.HoldPartialCover">
+                      <span class="switch-thumb"></span>
+                    </button>
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label">{{ t('tip') }}</label>
+                    <input v-model="chartInfo.tip" class="md3-field" :placeholder="t('tip-placeholder')" />
+                  </div>
+                </div>
+              </div>
+            </v-form>
           </div>
         </div>
       </div>
@@ -547,11 +535,11 @@ function resetAndGoChoose() {
       </div>
 
       <!-- Step 4: Render -->
-      <div class="step-panel" :class="{ 'is-active': step === 'render' }">
+      <div class="step-panel" :class="{ 'is-active': step === 'render', bookshelf: step === 'render' }">
         <div class="render-card" v-if="chartInfo">
           <!-- Left: Illustration -->
           <div class="render-cover">
-            <img v-if="renderCover" :src="convertFileSrc(renderCover)" class="cover-img" />
+            <img v-if="renderCover" :src="convertFileSrc(renderCover)" class="cover-img" alt="" />
             <div v-else class="cover-placeholder">
               <v-icon icon="mdi-music-note-outline" size="48" color="rgba(255,255,255,0.15)" />
             </div>
@@ -563,12 +551,30 @@ function resetAndGoChoose() {
               <h3>{{ t('render-started') }}</h3>
             </div>
             <div class="info-rows">
-              <div class="info-row"><span class="info-label">{{ t('chart-name') }}</span><span class="info-value">{{ chartInfo.name }}</span></div>
-              <div class="info-row"><span class="info-label">{{ t('level') }}</span><span class="info-value">{{ chartInfo.level }}</span></div>
-              <div class="info-row"><span class="info-label">{{ t('charter') }}</span><span class="info-value">{{ chartInfo.charter }}</span></div>
-              <div class="info-row" v-if="chartInfo.composer"><span class="info-label">{{ t('composer') }}</span><span class="info-value">{{ chartInfo.composer }}</span></div>
-              <div class="info-row" v-if="chartInfo.illustrator"><span class="info-label">{{ t('illustrator') }}</span><span class="info-value">{{ chartInfo.illustrator }}</span></div>
-              <div class="info-row"><span class="info-label">{{ t('aspect') }}</span><span class="info-value">{{ aspectWidth }}:{{ aspectHeight }}</span></div>
+              <div class="info-row">
+                <span class="info-label">{{ t('chart-name') }}</span
+                ><span class="info-value">{{ chartInfo.name }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">{{ t('level') }}</span
+                ><span class="info-value">{{ chartInfo.level }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">{{ t('charter') }}</span
+                ><span class="info-value">{{ chartInfo.charter }}</span>
+              </div>
+              <div class="info-row" v-if="chartInfo.composer">
+                <span class="info-label">{{ t('composer') }}</span
+                ><span class="info-value">{{ chartInfo.composer }}</span>
+              </div>
+              <div class="info-row" v-if="chartInfo.illustrator">
+                <span class="info-label">{{ t('illustrator') }}</span
+                ><span class="info-value">{{ chartInfo.illustrator }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">{{ t('aspect') }}</span
+                ><span class="info-value">{{ aspectWidth }}:{{ aspectHeight }}</span>
+              </div>
             </div>
             <div v-if="renderProgress !== undefined" class="render-progress">
               <v-progress-linear :model-value="renderProgress" color="primary" height="6" rounded />
@@ -632,10 +638,18 @@ function resetAndGoChoose() {
   z-index: 10;
 }
 
-.bar-left, .bar-right {
+.bar-left,
+.bar-right {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.step-panel.is-active:last-of-type {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .bar-center {
@@ -645,7 +659,7 @@ function resetAndGoChoose() {
 }
 
 .step-chips {
-  display: flex;
+  display: none !important;
   align-items: center;
   gap: 8px;
 }
@@ -660,10 +674,12 @@ function resetAndGoChoose() {
 }
 
 .chip-dot {
-  width: 8px; height: 8px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.25);
   transition: all 0.3s ease;
+  display: none;
 }
 
 .step-chip.is-active {
@@ -697,7 +713,6 @@ function resetAndGoChoose() {
   transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
   white-space: nowrap;
   font-family: inherit;
-  letter-spacing: 0.1px;
 }
 
 .bar-btn-text {
@@ -743,7 +758,9 @@ function resetAndGoChoose() {
   opacity: 0;
   transform: translateY(16px);
   pointer-events: none;
-  transition: opacity 0.35s cubic-bezier(0.2, 0, 0, 1), transform 0.35s cubic-bezier(0.2, 0, 0, 1);
+  transition:
+    opacity 0.35s cubic-bezier(0.2, 0, 0, 1),
+    transform 0.35s cubic-bezier(0.2, 0, 0, 1);
   overflow-y: auto;
 }
 .step-panel.is-active {
@@ -766,7 +783,6 @@ function resetAndGoChoose() {
   font-weight: 600;
   color: rgba(255, 255, 255, 0.6);
   margin-bottom: 32px;
-  letter-spacing: 0.5px;
 }
 
 .shelf-row {
@@ -781,7 +797,9 @@ function resetAndGoChoose() {
   border-radius: 6px 16px 16px 6px;
   cursor: pointer;
   position: relative;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
   box-shadow: 4px 4px 16px rgba(0, 0, 0, 0.5);
 }
 
@@ -792,7 +810,9 @@ function resetAndGoChoose() {
 
 .book-spine {
   position: absolute;
-  left: 0; top: 0; bottom: 0;
+  left: 0;
+  top: 0;
+  bottom: 0;
   width: 12px;
   border-radius: 6px 0 0 6px;
   background: linear-gradient(180deg, #5a3e8e, #3a2660);
@@ -803,7 +823,10 @@ function resetAndGoChoose() {
 
 .book-face {
   position: absolute;
-  left: 12px; top: 0; right: 0; bottom: 0;
+  left: 12px;
+  top: 0;
+  right: 0;
+  bottom: 0;
   border-radius: 0 16px 16px 0;
   background: linear-gradient(160deg, #2a2040, #1a1430);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -889,7 +912,6 @@ function resetAndGoChoose() {
   font-weight: 600;
   color: rgba(255, 255, 255, 0.55);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .md3-field {
@@ -901,7 +923,9 @@ function resetAndGoChoose() {
   color: rgba(255, 255, 255, 0.9);
   font-size: 14px;
   font-family: inherit;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .md3-field:focus {
   outline: none;
@@ -937,7 +961,8 @@ function resetAndGoChoose() {
 }
 .md3-slider::-webkit-slider-thumb {
   appearance: none;
-  width: 20px; height: 20px;
+  width: 20px;
+  height: 20px;
   background: #82b1ff;
   border-radius: 50%;
   cursor: pointer;
@@ -951,7 +976,8 @@ function resetAndGoChoose() {
 }
 
 .md3-switch {
-  width: 52px; height: 28px;
+  width: 52px;
+  height: 28px;
   background: rgba(60, 60, 60, 0.8);
   border: 2px solid rgba(255, 255, 255, 0.15);
   border-radius: 14px;
@@ -965,8 +991,10 @@ function resetAndGoChoose() {
 }
 .switch-thumb {
   position: absolute;
-  top: 2px; left: 2px;
-  width: 20px; height: 20px;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
   background: #fff;
   border-radius: 50%;
   transition: transform 0.25s ease;
@@ -1054,9 +1082,18 @@ function resetAndGoChoose() {
   padding: 7px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
-.info-row:last-child { border-bottom: none; }
-.info-label { color: rgba(255, 255, 255, 0.5); font-size: 13px; }
-.info-value { color: rgba(255, 255, 255, 0.85); font-size: 13px; text-align: right; }
+.info-row:last-child {
+  border-bottom: none;
+}
+.info-label {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+}
+.info-value {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  text-align: right;
+}
 
 .render-progress {
   margin-top: 8px;
