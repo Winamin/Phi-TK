@@ -46,7 +46,7 @@ zh-CN:
 </i18n>
 
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Task, TaskStatus } from './model';
 import { invoke } from '@tauri-apps/api/core';
@@ -58,14 +58,42 @@ const { t } = useI18n();
 
 const tasks = ref<Task[]>();
 
+const ACTIVE_STATUSES = ['pending', 'loading', 'mixing', 'rendering'];
+const POLL_ACTIVE_MS = 300;
+const POLL_IDLE_MS = 2000;
+
 async function updateList() {
   tasks.value = await invoke<Task[]>('get_tasks');
 }
 
 await updateList();
 
-const updateTask = setInterval(updateList, 40);
-onUnmounted(() => clearInterval(updateTask));
+// Adaptive polling: a fixed interval can stack calls when IPC is slower than the tick,
+// so chain the next tick only after the previous one settles.
+let stopped = false;
+let pollTimer: ReturnType<typeof setTimeout> | undefined;
+
+function scheduleNextPoll() {
+  if (stopped) return;
+  const busy = tasks.value?.some((task) => ACTIVE_STATUSES.includes(task.status.type)) ?? false;
+  pollTimer = setTimeout(poll, busy ? POLL_ACTIVE_MS : POLL_IDLE_MS);
+}
+
+async function poll() {
+  try {
+    await updateList();
+  } catch (e) {
+    console.error('Failed to refresh tasks:', e);
+  }
+  scheduleNextPoll();
+}
+
+scheduleNextPoll();
+
+onUnmounted(() => {
+  stopped = true;
+  if (pollTimer !== undefined) clearTimeout(pollTimer);
+});
 
 function formatDuration(seconds: number) {
   const duration = moment.duration(Math.ceil(seconds), 'seconds');
@@ -147,7 +175,8 @@ const showDetail = (task: Task) => {
   closeContextMenu();
 };
 
-document.addEventListener('click', closeContextMenu);
+onMounted(() => document.addEventListener('click', closeContextMenu));
+onUnmounted(() => document.removeEventListener('click', closeContextMenu));
 </script>
 
 <template>
@@ -272,7 +301,7 @@ document.addEventListener('click', closeContextMenu);
     </v-dialog>
 
     <!-- Context menu -->
-    <v-menu v-model="contextMenu" :position-x="contextMenuX" :position-y="contextMenuY" absolute offset-y>
+    <v-menu v-model="contextMenu" :target="[contextMenuX, contextMenuY]">
       <v-list class="ctx-menu">
         <v-list-item @click="showDetail(contextMenuTask!)">
           <template v-slot:prepend>

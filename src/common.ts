@@ -19,7 +19,8 @@ export function isString(s: unknown): s is string {
 }
 
 export const RULES = {
-  non_empty: (value: string) => value.trim().length > 0 || i18n.global.t('rules.non-empty'),
+  // Vuetify's `clearable` sets the model to null, so accept nullish values here.
+  non_empty: (value: string | null | undefined) => (value ?? '').trim().length > 0 || i18n.global.t('rules.non-empty'),
   positive: (value: string) => (isNumeric(value) && Number(value) >= 0) || i18n.global.t('rules.positive'),
   positiveInt: (value: string) => (isNumeric(value) && Math.abs(Number(value) - Math.round(Number(value))) < 1e-4 && Number(value) > 0) || i18n.global.t('rules.positive-int'),
 };

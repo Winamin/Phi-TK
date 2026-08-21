@@ -92,12 +92,13 @@ async function selectFolder() {
     const rootName = path.split(/[\\/]/).pop() || path;
     selectedInfo.value = t('settings.selected.picked', { name: rootName });
   } catch (err: any) {
-    warning.value = t('settings.outputPath.warning.select_error', { msg: err.message || String(err) });
+    warning.value = t('settings.warning.select_error', { msg: err.message || String(err) });
   }
 }
 
 function saveOutputPath() {
-  if (!rules.non_empty(outputPath.value)) { warning.value = t('settings.outputPath.warning.empty'); return; }
+  // non_empty returns `true` when valid and an error *string* otherwise — both truthy, so compare explicitly.
+  if (rules.non_empty(outputPath.value) !== true) { warning.value = t('settings.warning.empty'); return; }
   localStorage.setItem('outputPath', outputPath.value);
   saved.value = true;
   setTimeout(() => (saved.value = false), 1500);
@@ -106,7 +107,7 @@ function saveOutputPath() {
 async function copyPath() {
   if (!outputPath.value) return;
   try { await writeText(outputPath.value); saved.value = true; setTimeout(() => (saved.value = false), 1500); }
-  catch { warning.value = t('settings.outputPath.warning.copy_error'); }
+  catch { warning.value = t('settings.warning.copy_error'); }
 }
 
 function clearPath() {
@@ -158,8 +159,8 @@ function clearBackground() {
           :hint="t('settings.outputPath.hint')"
           persistent-hint
           variant="outlined"
-          append-outer-icon="mdi-folder-open"
-          @click:append-outer="selectFolder"
+          append-icon="mdi-folder-open"
+          @click:append="selectFolder"
         />
         <div v-if="selectedInfo" class="hint-text">{{ selectedInfo }}</div>
         <div class="card-actions">
@@ -192,8 +193,8 @@ function clearBackground() {
           :hint="t('settings.background.hint')"
           persistent-hint
           variant="outlined"
-          append-outer-icon="mdi-image"
-          @click:append-outer="selectBackground"
+          append-icon="mdi-image"
+          @click:append="selectBackground"
           readonly
         />
 

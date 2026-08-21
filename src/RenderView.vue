@@ -104,8 +104,6 @@ import { useI18n } from 'vue-i18n';
 import { watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { event } from '@tauri-apps/api';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { toastError, toast, anyFilter, isString } from './common';
 import type { ChartInfo, FileDropEvent, Task } from './model';
 import { VForm } from 'vuetify/components';
@@ -113,10 +111,25 @@ import ConfigView from './components/ConfigView.vue';
 import moment from 'moment';
 import * as dialog from '@tauri-apps/plugin-dialog';
 import * as shell from '@tauri-apps/plugin-shell';
-import { listen } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import gsap from 'gsap';
 
 const { t } = useI18n();
+
+// Tauri's `listen` resolves asynchronously, so a component unmounted before it settles
+// must still release the handle — hence the `disposed` guard.
+let disposed = false;
+const unlistenFns: UnlistenFn[] = [];
+
+function track(pending: Promise<UnlistenFn>) {
+  pending.then((unlisten) => (disposed ? unlisten() : unlistenFns.push(unlisten))).catch((e) => console.error('Failed to register listener:', e));
+}
+
+onUnmounted(() => {
+  disposed = true;
+  unlistenFns.forEach((unlisten) => unlisten());
+  unlistenFns.length = 0;
+});
 
 if (!(await invoke('is_the_only_instance'))) {
   await dialog.message(t('already-running'));
@@ -136,7 +149,6 @@ const choosingChart = ref(false),
   parsingChart = ref(false);
 
 const flipCardRef = ref<HTMLElement>();
-const bookshelfRef = ref<HTMLElement>();
 
 async function chooseChart(folder?: boolean) {
   if (choosingChart.value) return;
@@ -291,20 +303,24 @@ const renderMsg = ref(''),
   renderDuration = ref<number>();
 const renderCover = ref<string | null>(null);
 let coverPollInterval: ReturnType<typeof setInterval> | null = null;
-event.listen('render-msg', (msg) => (renderMsg.value = msg.payload as string));
-event.listen('render-progress', (msg) => {
-  let payload = msg.payload as { progress: number; fps: number; estimate: number };
-  renderMsg.value = t('render-status', {
-    progress: (payload.progress * 100).toFixed(2),
-    fps: payload.fps,
-    estimate: moment.duration(payload.estimate, 'seconds').humanize(true, { ss: 1 }),
-  });
-  renderProgress.value = payload.progress * 100;
-});
-event.listen('render-done', (msg) => {
-  stepIndex.value++;
-  renderDuration.value = Math.round(msg.payload as number);
-});
+track(listen('render-msg', (msg) => (renderMsg.value = msg.payload as string)));
+track(
+  listen('render-progress', (msg) => {
+    let payload = msg.payload as { progress: number; fps: number; estimate: number };
+    renderMsg.value = t('render-status', {
+      progress: (payload.progress * 100).toFixed(2),
+      fps: payload.fps,
+      estimate: moment.duration(payload.estimate, 'seconds').humanize(true, { ss: 1 }),
+    });
+    renderProgress.value = payload.progress * 100;
+  }),
+);
+track(
+  listen('render-done', (msg) => {
+    stepIndex.value++;
+    renderDuration.value = Math.round(msg.payload as number);
+  }),
+);
 
 async function fetchRenderCover() {
   try {
@@ -313,6 +329,8 @@ async function fetchRenderCover() {
       const task = tasks.find((t) => t.path === chartPath);
       if (task?.cover) {
         renderCover.value = task.cover;
+        // The cover never changes once resolved — no reason to keep hitting the backend.
+        stopCoverPolling();
       }
     }
   } catch (e) {
@@ -384,19 +402,21 @@ function tryParseAspect(): number | undefined {
 }
 
 const fileHovering = ref(false);
-listen('tauri://drag-over', () => (fileHovering.value = step.value === 'choose'));
-listen('tauri://drag-leave', () => (fileHovering.value = false));
-listen('tauri://drag-drop', async (event) => {
-  const files = (event.payload as FileDropEvent).paths;
-  if (step.value === 'choose') {
-    fileHovering.value = false;
-    await loadChart(files[0]);
-  } else if (step.value === 'config' || step.value === 'options' || step.value === 'render') {
-    fileHovering.value = false;
-    stepIndex.value = 1;
-    await loadChart(files[0]);
-  }
-});
+track(listen('tauri://drag-over', () => (fileHovering.value = step.value === 'choose')));
+track(listen('tauri://drag-leave', () => (fileHovering.value = false)));
+track(
+  listen('tauri://drag-drop', async (payload) => {
+    const files = (payload.payload as FileDropEvent).paths;
+    if (step.value === 'choose') {
+      fileHovering.value = false;
+      await loadChart(files[0]);
+    } else if (step.value === 'config' || step.value === 'options' || step.value === 'render') {
+      fileHovering.value = false;
+      stepIndex.value = 1;
+      await loadChart(files[0]);
+    }
+  }),
+);
 
 function resetAndGoChoose() {
   stepIndex.value = 1;
@@ -445,7 +465,7 @@ function resetAndGoChoose() {
     <main class="render-content">
       <!-- Step 1: Choose (Bookshelf) -->
       <div class="step-panel" :class="{ 'is-active': step === 'choose' }">
-        <div class="bookshelf" ref="bookshelfRef">
+        <div class="bookshelf">
           <div class="shelf-label">{{ t('steps.choose') }}</div>
           <div class="shelf-row">
             <div class="book-card" @click="chooseChart(false)">

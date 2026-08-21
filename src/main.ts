@@ -46,6 +46,15 @@ const i18n = createI18n({
       },
       'has-error': 'There are errors in the configuration',
       'any-filter': 'All files',
+      // Router titles are resolved through `i18n.global.t`, so they must live in the
+      // global message set — SFC <i18n> blocks are locally scoped and invisible here.
+      // `title-default` is intentionally absent: `missing()` maps it to '' → plain "Phi-TK".
+      'title-render': 'Render',
+      'title-rpe': 'RPE',
+      'title-tasks': 'Tasks',
+      'title-batch-render': 'Batch Render',
+      'title-setting': 'Settings',
+      'title-about': 'About',
     },
     'zh-CN': {
       rules: {
@@ -57,6 +66,12 @@ const i18n = createI18n({
       },
       'has-error': '配置中有错误',
       'any-filter': '所有文件',
+      'title-render': '渲染',
+      'title-rpe': 'RPE',
+      'title-tasks': '任务',
+      'title-batch-render': '批量渲染',
+      'title-setting': '设置',
+      'title-about': '关于',
     },
   },
   legacy: false,
