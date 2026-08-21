@@ -133,7 +133,7 @@ zh-CN:
 </i18n>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
@@ -192,9 +192,6 @@ const categories = [
   { key: 'debug', icon: 'mdi-bug-outline', label: '调试' },
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-ref<string | null>(null);
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const resolution = ref('1920x1080');
 const fps = ref('60');
 const sampleCount = ref('1');
@@ -363,39 +360,6 @@ async function openRespackFolder() {
   }
 }
 
-// Preview computations
-computed(() => {
-  const [w, h] = resolution.value.split('x').map(Number);
-  if (!w || !h || isNaN(w) || isNaN(h)) return { w: 16, h: 9, label: '16:9' };
-  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-  const g = gcd(w, h);
-  return { w: w / g, h: h / g, label: `${w / g}:${h / g}` };
-});
-computed(() => {
-  const [w, h] = resolution.value.split('x').map(Number);
-  if (!w || !h || isNaN(w) || isNaN(h)) return { cols: 32, rows: 18, dots: 576 };
-  const scale = Math.min(48 / w, 36 / h, 0.025);
-  const cols = Math.max(8, Math.round(w * scale));
-  const rows = Math.max(6, Math.round(h * scale));
-  return { cols, rows, dots: cols * rows };
-});
-const presetSpeed = computed(() => {
-  const speeds: Record<string, number> = { veryfast: 95, faster: 85, fast: 70, medium: 50, slow: 35, slower: 20, veryslow: 8 };
-  return speeds[ffmpegPreset.value] ?? 50;
-});
-computed(() => 100 - presetSpeed.value);
-computed(() => {
-  const colors: Record<string, string> = {
-    white: '#e0e0e0',
-    green: '#4caf50',
-    blue: '#2196f3',
-    red: '#f44336',
-    golden: '#ffc107',
-    rainbow: 'linear-gradient(90deg, #f44336, #ff9800, #ffeb3b, #4caf50, #2196f3, #9c27b0)',
-  };
-  const idx = t('challenge-colors').split(',').indexOf(challengeColor.value);
-  return colors[STD_CHALLENGE_COLORS[idx]] || colors.golden;
-});
 async function buildConfig(): Promise<RenderConfig | null> {
   if (!(await form.value!.validate()).valid) {
     toast(t('has-error'), 'error');
@@ -772,19 +736,6 @@ async function replacePreset() {
           </div>
         </div>
       </div>
-
-      <!-- Preview panel disabled
-      <div class="preview-col">
-        <div class="preview-panel">
-          <Transition name="preview-fade" mode="out-in">
-            <div key="default" class="preview-content preview-default">
-              <v-icon icon="mdi-eye-outline" size="48" color="rgba(255,255,255,0.15)" />
-              <p class="preview-hint">悬停选项查看预览</p>
-            </div>
-          </Transition>
-        </div>
-      </div>
-      -->
     </div>
 
     <!-- Preset bar -->
@@ -1011,59 +962,6 @@ async function replacePreset() {
 .preset-actions {
   display: flex;
   gap: 8px;
-}
-
-@keyframes pixelFadeIn {
-  0% {
-    opacity: 0;
-    transform: scale(0);
-  }
-  100% {
-    opacity: 0.7;
-    transform: scale(1);
-  }
-}
-
-@keyframes wavePulse {
-  0% {
-    opacity: 0.7;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes noteFall {
-  0% {
-    top: -30px;
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    top: calc(100% - 30px);
-    opacity: 0;
-  }
-}
-
-
-@keyframes particleFloat {
-  0% {
-    transform: translateY(0) scale(1);
-    opacity: 0.8;
-  }
-  50% {
-    transform: translateY(-12px) scale(1.3);
-    opacity: 0.4;
-  }
-  100% {
-    transform: translateY(0) scale(1);
-    opacity: 0.8;
-  }
 }
 
 @media (max-width: 900px) {

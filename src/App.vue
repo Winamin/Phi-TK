@@ -101,7 +101,13 @@ const backgroundStyle = computed(() => {
 
     <nav class="md3-nav-rail">
       <div class="rail-items">
-        <button v-for="item in navItems" :key="item.key" class="rail-item" :class="{ 'is-active': route.name === item.key }" @click="navigateTo(item.key)">
+        <button
+          v-for="item in navItems"
+          :key="item.key"
+          class="rail-item"
+          :class="{ 'is-active': route.name === item.key }"
+          :aria-label="t(item.key)"
+          @click="navigateTo(item.key)">
           <v-icon :icon="route.name === item.key ? item.activeIcon : item.icon" size="24" class="rail-icon" />
         </button>
       </div>

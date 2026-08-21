@@ -5,8 +5,6 @@ import vue from '@vitejs/plugin-vue';
 
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite';
 
-import { resolve, dirname } from 'node:path';
-
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Load environment variables
@@ -16,9 +14,9 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       vue(),
+      // All translations live in SFC <i18n> blocks; there is no src/locales directory.
       VueI18nPlugin({
         defaultSFCLang: 'yml',
-        include: resolve(dirname(fileURLToPath(import.meta.url)), './src/locales/**'),
       }),
     ],
     resolve: {
