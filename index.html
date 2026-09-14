@@ -1,13 +1,20 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" class="mdui-theme-dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Phi TK</title>
+    <style>
+      /* Hide mdui Web Components until their definitions are registered, so the
+         page never flashes unstyled/unsized custom elements. */
+      :not(:defined) {
+        visibility: hidden;
+      }
+    </style>
   </head>
   <body>
-    <div id="app" />
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

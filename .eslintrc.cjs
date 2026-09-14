@@ -11,4 +11,9 @@ module.exports = {
   parserOptions: {
     ecmaVersion: "latest",
   },
+  rules: {
+    // mdui's Web Components use the native `slot="name"` attribute, which this rule
+    // flags as the deprecated Vue 2 slot syntax.
+    "vue/no-deprecated-slot-attribute": "off",
+  },
 };

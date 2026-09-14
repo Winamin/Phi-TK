@@ -21,6 +21,16 @@ en:
   show-output: Show Output
   show-in-folder: Open Folder
 
+  detail:
+    name: Name
+    path: Path
+    status: Status
+    progress: Progress
+    fps: Frame rate
+    duration: Elapsed
+    output: Output
+    error: Error
+
 zh-CN:
   empty: 空空如也
 
@@ -43,10 +53,20 @@ zh-CN:
   show-output: 查看输出
   show-in-folder: 打开文件夹
 
+  detail:
+    name: 名称
+    path: 路径
+    status: 状态
+    progress: 进度
+    fps: 帧率
+    duration: 耗时
+    output: 输出
+    error: 错误
+
 </i18n>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Task, TaskStatus } from './model';
 import { invoke } from '@tauri-apps/api/core';
@@ -125,21 +145,33 @@ function describeStatus(status: TaskStatus): string {
   }
 }
 
-function statusColor(statusType: string): string {
-  const colors: Record<string, string> = {
-    pending: 'info', loading: 'info', mixing: 'info',
-    rendering: 'primary', done: 'success', canceled: 'warning', failed: 'error',
+/**
+ * MD3 has no semantic status palette, so each task state borrows a colour role. `success`
+ * and `warning` are the custom colours registered in `theme.ts`; the rest are stock roles.
+ */
+const STATUS_ROLES: Record<string, string> = {
+  pending: 'tertiary', loading: 'tertiary', mixing: 'tertiary',
+  rendering: 'primary', done: 'success', canceled: 'warning', failed: 'error',
+};
+
+/**
+ * Feeds the status colour to descendants as custom properties. `--mdui-color-primary` is
+ * included because mdui's progress components hardcode it — reassigning it on the host
+ * recolours them without reaching into their shadow roots.
+ */
+function statusVars(statusType: string): Record<string, string> {
+  const role = STATUS_ROLES[statusType] ?? 'tertiary';
+  return {
+    '--status-color': `var(--mdui-color-${role})`,
+    '--status-container': `var(--mdui-color-${role}-container)`,
+    '--status-on-container': `var(--mdui-color-on-${role}-container)`,
+    '--mdui-color-primary': `var(--mdui-color-${role})`,
   };
-  return colors[statusType] || 'info';
 }
 
 const errorDialog = ref(false), errorDialogMessage = ref('');
 const outputDialog = ref(false), outputDialogMessage = ref('');
 const detailDialog = ref(false), selectedTask = ref<Task | null>(null);
-const contextMenu = ref(false);
-const contextMenuX = ref(0);
-const contextMenuY = ref(0);
-const contextMenuTask = ref<Task | null>(null);
 
 async function showInFolder(path: string) {
   try { await invoke('show_in_folder', { path }); } catch (e) { toastError(e); }
@@ -156,198 +188,172 @@ function showOutput(task: Task) {
   }
 }
 
-const showContextMenu = (event: MouseEvent, task: Task) => {
-  event.preventDefault();
-  contextMenu.value = true;
-  contextMenuX.value = event.clientX;
-  contextMenuY.value = event.clientY;
-  contextMenuTask.value = task;
-};
-
-const closeContextMenu = () => {
-  contextMenu.value = false;
-  contextMenuTask.value = null;
-};
-
 const showDetail = (task: Task) => {
   selectedTask.value = task;
   detailDialog.value = true;
-  closeContextMenu();
 };
-
-onMounted(() => document.addEventListener('click', closeContextMenu));
-onUnmounted(() => document.removeEventListener('click', closeContextMenu));
 </script>
 
 <template>
   <div class="tasks-container">
     <!-- Header -->
     <div class="tasks-header">
-      <h2 class="tasks-title">{{ t('output') }}</h2>
-      <button class="md3-btn md3-btn-tonal" @click="showFolder()">
-        <v-icon icon="mdi-folder-open-outline" size="18" />
-        <span>{{ t('show-in-folder') }}</span>
-      </button>
+      <h2 class="tasks-title md3-headline">{{ t('output') }}</h2>
+      <mdui-button variant="tonal" @click="showFolder()">
+        <mdui-icon-folder-open--outlined slot="icon"></mdui-icon-folder-open--outlined>
+        {{ t('show-in-folder') }}
+      </mdui-button>
     </div>
 
     <!-- Empty state -->
     <div v-if="!tasks || !tasks.length" class="empty-state">
-      <v-icon icon="mdi-inbox-outline" size="64" color="rgba(255,255,255,0.2)" />
-      <p>{{ t('empty') }}</p>
+      <mdui-icon-inbox--outlined class="empty-icon"></mdui-icon-inbox--outlined>
+      <p class="md3-body">{{ t('empty') }}</p>
     </div>
 
     <!-- Task list -->
     <div v-else class="task-list">
-      <div
-        v-for="task in tasks"
-        :key="task.id"
-        class="task-card"
-        @contextmenu="showContextMenu($event, task)"
-      >
-        <!-- Cover (left 35%) -->
-        <div class="task-cover">
-          <div
-            class="cover-image"
-            :style="{ backgroundImage: 'url(' + convertFileSrc(task.cover) + ')' }"
-          ></div>
-        </div>
-
-        <!-- Info (right 65%) -->
-        <div class="task-info">
-          <div class="task-header">
-            <h3 class="task-name" :title="task.name">{{ task.name }}</h3>
-            <v-chip :color="statusColor(task.status.type)" size="small" variant="flat">
-              {{ task.status.type.toUpperCase() }}
-            </v-chip>
+      <!-- `<mdui-dropdown>` is `display: contents`, so the card below stays a flex item of
+           the list. Anchoring the menu at the pointer replaces the old hand-tracked
+           `contextMenuX`/`contextMenuY` coordinates. -->
+      <mdui-dropdown v-for="task in tasks" :key="task.id" trigger="contextmenu" open-on-pointer>
+        <mdui-card slot="trigger" variant="filled" class="task-card" :style="statusVars(task.status.type)">
+          <!-- Cover (left 35%) -->
+          <div class="task-cover">
+            <div
+              class="cover-image"
+              :style="{ backgroundImage: 'url(' + convertFileSrc(task.cover) + ')' }"></div>
           </div>
 
-          <p class="task-path" :title="task.path">{{ task.path }}</p>
+          <!-- Info (right 65%) -->
+          <div class="task-info">
+            <div class="task-header">
+              <h3 class="task-name" :title="task.name">{{ task.name }}</h3>
+              <span class="status-chip">{{ task.status.type.toUpperCase() }}</span>
+            </div>
 
-          <div class="task-status">
-            <v-progress-circular
-              v-if="['loading', 'mixing', 'pending'].includes(task.status.type)"
-              indeterminate :color="statusColor(task.status.type)" size="20" width="2"
-            />
-            <v-progress-circular
-              v-else-if="task.status.type === 'rendering'"
-              :model-value="task.status.progress * 100"
-              :color="statusColor(task.status.type)" size="20" width="2"
-            />
-            <span class="status-text">{{ describeStatus(task.status) }}</span>
+            <p class="task-path" :title="task.path">{{ task.path }}</p>
+
+            <div class="task-status">
+              <mdui-circular-progress
+                v-if="['loading', 'mixing', 'pending'].includes(task.status.type)"
+                class="status-spinner"></mdui-circular-progress>
+              <mdui-circular-progress
+                v-else-if="task.status.type === 'rendering'"
+                class="status-spinner"
+                :value="task.status.progress"></mdui-circular-progress>
+              <span class="status-text">{{ describeStatus(task.status) }}</span>
+            </div>
+
+            <mdui-linear-progress
+              v-if="task.status.type === 'rendering'"
+              class="status-bar"
+              :value="task.status.progress"></mdui-linear-progress>
+
+            <div class="task-actions">
+              <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
+                <mdui-button variant="text" @click="invoke('cancel_task', { id: task.id })">
+                  <mdui-icon-cancel slot="icon"></mdui-icon-cancel>
+                  {{ t('cancel') }}
+                </mdui-button>
+              </template>
+              <template v-else-if="task.status.type === 'failed'">
+                <mdui-button variant="text" @click="errorDialogMessage = task.status.error; errorDialog = true;">
+                  <mdui-icon-error--outlined slot="icon"></mdui-icon-error--outlined>
+                  {{ t('details') }}
+                </mdui-button>
+              </template>
+              <template v-else-if="task.status.type === 'done'">
+                <mdui-button variant="text" @click="showOutput(task)">
+                  <mdui-icon-description--outlined slot="icon"></mdui-icon-description--outlined>
+                  {{ t('show-output') }}
+                </mdui-button>
+                <mdui-button variant="text" @click="showInFolder(task.output)">
+                  <mdui-icon-folder-open--outlined slot="icon"></mdui-icon-folder-open--outlined>
+                  {{ t('show-in-folder') }}
+                </mdui-button>
+              </template>
+            </div>
           </div>
+        </mdui-card>
 
-          <v-progress-linear
-            v-if="task.status.type === 'rendering'"
-            :model-value="task.status.progress * 100"
-            :color="statusColor(task.status.type)" height="3" rounded
-          />
-
-          <div class="task-actions">
-            <template v-if="['loading', 'mixing', 'rendering', 'pending'].includes(task.status.type)">
-              <button class="md3-btn md3-btn-text md3-btn-sm" @click="invoke('cancel_task', { id: task.id })">
-                <v-icon icon="mdi-cancel" size="16" />
-                <span>{{ t('cancel') }}</span>
-              </button>
-            </template>
-            <template v-else-if="task.status.type === 'failed'">
-              <button class="md3-btn md3-btn-text md3-btn-sm" @click="errorDialogMessage = task.status.error; errorDialog = true;">
-                <v-icon icon="mdi-alert-circle-outline" size="16" />
-                <span>{{ t('details') }}</span>
-              </button>
-            </template>
-            <template v-else-if="task.status.type === 'done'">
-              <button class="md3-btn md3-btn-text md3-btn-sm" @click="showOutput(task)">
-                <v-icon icon="mdi-text-box-outline" size="16" />
-                <span>{{ t('show-output') }}</span>
-              </button>
-              <button class="md3-btn md3-btn-text md3-btn-sm" @click="showInFolder(task.output)">
-                <v-icon icon="mdi-folder-open-outline" size="16" />
-                <span>{{ t('show-in-folder') }}</span>
-              </button>
-            </template>
-          </div>
-        </div>
-      </div>
+        <mdui-menu>
+          <mdui-menu-item @click="showDetail(task)">
+            <mdui-icon-info--outlined slot="icon"></mdui-icon-info--outlined>
+            {{ t('details') }}
+          </mdui-menu-item>
+        </mdui-menu>
+      </mdui-dropdown>
     </div>
 
-    <!-- Error dialog -->
-    <v-dialog v-model="errorDialog" width="auto" min-width="400px" scrim="#000000CC" persistent>
-      <v-card class="md3-dialog error-dialog">
-        <v-card-title class="d-flex align-center">
-          <v-icon color="error" class="mr-2">mdi-alert</v-icon>
-          <span>{{ t('error') }}</span>
-        </v-card-title>
-        <v-divider />
-        <v-card-text>
-          <pre class="error-message">{{ errorDialogMessage }}</pre>
-        </v-card-text>
-        <v-card-actions class="justify-end">
-          <button class="md3-btn md3-btn-text" @click="errorDialog = false">{{ t('confirm') }}</button>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <!-- Error dialog. No `close-on-overlay-click`: a stray click should not throw away a
+         failure message the user has not read yet. -->
+    <mdui-dialog
+      class="log-dialog"
+      close-on-esc
+      :open="errorDialog"
+      @close="errorDialog = false">
+      <mdui-icon-warning slot="icon" class="dialog-error-icon"></mdui-icon-warning>
+      <span slot="headline">{{ t('error') }}</span>
+      <pre class="log-pre log-pre-error">{{ errorDialogMessage }}</pre>
+      <mdui-button slot="action" variant="text" @click="errorDialog = false">{{ t('confirm') }}</mdui-button>
+    </mdui-dialog>
 
     <!-- Output dialog -->
-    <v-dialog v-model="outputDialog" width="auto" min-width="400px">
-      <v-card class="md3-dialog">
-        <v-card-title>{{ t('output') }}</v-card-title>
-        <v-card-text>
-          <pre class="output-pre">{{ outputDialogMessage }}</pre>
-        </v-card-text>
-        <v-card-actions class="justify-end">
-          <button class="md3-btn md3-btn-filled" @click="outputDialog = false">{{ t('confirm') }}</button>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <!-- Context menu -->
-    <v-menu v-model="contextMenu" :target="[contextMenuX, contextMenuY]">
-      <v-list class="ctx-menu">
-        <v-list-item @click="showDetail(contextMenuTask!)">
-          <template v-slot:prepend>
-            <v-icon>mdi-information</v-icon>
-          </template>
-          <v-list-item-title>{{ t('details') }}</v-list-item-title>
-        </v-list-item>
-      </v-list>
-    </v-menu>
+    <mdui-dialog
+      class="log-dialog"
+      close-on-esc
+      close-on-overlay-click
+      :open="outputDialog"
+      @close="outputDialog = false">
+      <span slot="headline">{{ t('output') }}</span>
+      <pre class="log-pre">{{ outputDialogMessage }}</pre>
+      <mdui-button slot="action" variant="tonal" @click="outputDialog = false">{{ t('confirm') }}</mdui-button>
+    </mdui-dialog>
 
     <!-- Detail dialog -->
-    <v-dialog v-model="detailDialog" width="auto" min-width="500px">
-      <v-card class="md3-dialog" v-if="selectedTask">
-        <v-card-title>{{ t('details') }}</v-card-title>
-        <v-divider />
-        <v-card-text>
-          <div class="detail-list">
-            <div class="detail-row"><span class="detail-label">名称</span><span>{{ selectedTask.name }}</span></div>
-            <div class="detail-row"><span class="detail-label">路径</span><span>{{ selectedTask.path }}</span></div>
-            <div class="detail-row"><span class="detail-label">状态</span><span>{{ describeStatus(selectedTask.status) }}</span></div>
-            <div class="detail-row" v-if="selectedTask.status.type === 'rendering'">
-              <span class="detail-label">进度</span><span>{{ Math.round(selectedTask.status.progress * 100) }}%</span>
-            </div>
-            <div class="detail-row" v-if="selectedTask.status.type === 'rendering'">
-              <span class="detail-label">帧率</span><span>{{ selectedTask.status.fps }} FPS</span>
-            </div>
-            <div class="detail-row" v-if="selectedTask.status.type === 'done' && selectedTask.status.duration">
-              <span class="detail-label">耗时</span><span>{{ formatDuration(selectedTask.status.duration) }}</span>
-            </div>
-            <div class="detail-row" v-if="selectedTask.status.type === 'done' && selectedTask.output">
-              <span class="detail-label">输出</span><span class="break-all">{{ selectedTask.output }}</span>
-            </div>
-            <div class="detail-row" v-if="selectedTask.status.type === 'failed' && selectedTask.status.error">
-              <span class="detail-label">错误</span><span class="error-text">{{ selectedTask.status.error }}</span>
-            </div>
-          </div>
-        </v-card-text>
-        <v-card-actions class="justify-end">
-          <button class="md3-btn md3-btn-filled" @click="detailDialog = false">{{ t('confirm') }}</button>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <mdui-dialog
+      class="log-dialog"
+      close-on-esc
+      close-on-overlay-click
+      :open="detailDialog"
+      @close="detailDialog = false">
+      <span slot="headline">{{ t('details') }}</span>
+      <div v-if="selectedTask" class="detail-list">
+        <div class="detail-row">
+          <span class="detail-label">{{ t('detail.name') }}</span><span>{{ selectedTask.name }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">{{ t('detail.path') }}</span><span class="break-all">{{ selectedTask.path }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">{{ t('detail.status') }}</span><span>{{ describeStatus(selectedTask.status) }}</span>
+        </div>
+        <div v-if="selectedTask.status.type === 'rendering'" class="detail-row">
+          <span class="detail-label">{{ t('detail.progress') }}</span><span>{{ Math.round(selectedTask.status.progress * 100) }}%</span>
+        </div>
+        <div v-if="selectedTask.status.type === 'rendering'" class="detail-row">
+          <span class="detail-label">{{ t('detail.fps') }}</span><span>{{ selectedTask.status.fps }} FPS</span>
+        </div>
+        <div v-if="selectedTask.status.type === 'done' && selectedTask.status.duration" class="detail-row">
+          <span class="detail-label">{{ t('detail.duration') }}</span><span>{{ formatDuration(selectedTask.status.duration) }}</span>
+        </div>
+        <div v-if="selectedTask.status.type === 'done' && selectedTask.output" class="detail-row">
+          <span class="detail-label">{{ t('detail.output') }}</span><span class="break-all">{{ selectedTask.output }}</span>
+        </div>
+        <div v-if="selectedTask.status.type === 'failed' && selectedTask.status.error" class="detail-row">
+          <span class="detail-label">{{ t('detail.error') }}</span><span class="error-text">{{ selectedTask.status.error }}</span>
+        </div>
+      </div>
+      <mdui-button slot="action" variant="tonal" @click="detailDialog = false">{{ t('confirm') }}</mdui-button>
+    </mdui-dialog>
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
+@use './styles/breakpoints' as bp;
+@use './styles/motion' as mo;
+
 .tasks-container {
   display: flex;
   flex-direction: column;
@@ -356,7 +362,6 @@ onUnmounted(() => document.removeEventListener('click', closeContextMenu));
   max-width: 960px;
   margin: 0 auto;
   padding: 24px;
-  box-sizing: border-box;
 }
 
 /* ===== Header ===== */
@@ -364,42 +369,15 @@ onUnmounted(() => document.removeEventListener('click', closeContextMenu));
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 20px;
   flex-shrink: 0;
 }
 
 .tasks-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgb(var(--mdui-color-on-surface));
   margin: 0;
 }
-
-/* ===== MD3 Buttons ===== */
-.md3-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-  white-space: nowrap;
-  font-family: inherit;
-}
-.md3-btn-sm { padding: 6px 12px; font-size: 12px; }
-
-.md3-btn-text { background: transparent; color: rgba(255, 255, 255, 0.7); }
-.md3-btn-text:hover { background: rgba(255, 255, 255, 0.08); }
-
-.md3-btn-tonal { background: rgba(130, 177, 255, 0.12); color: #82b1ff; }
-.md3-btn-tonal:hover { background: rgba(130, 177, 255, 0.2); }
-
-.md3-btn-filled { background: #82b1ff; color: #002f65; font-weight: 600; }
-.md3-btn-filled:hover { background: #a0c4ff; }
 
 /* ===== Empty State ===== */
 .empty-state {
@@ -409,8 +387,11 @@ onUnmounted(() => document.removeEventListener('click', closeContextMenu));
   justify-content: center;
   flex: 1;
   gap: 16px;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 16px;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  color: rgb(var(--mdui-color-outline));
 }
 
 /* ===== Task List ===== */
@@ -420,31 +401,32 @@ onUnmounted(() => document.removeEventListener('click', closeContextMenu));
   gap: 12px;
   flex: 1;
   overflow-y: auto;
+  padding: 2px;
 }
 
-/* ===== Task Card (RPEView style) ===== */
+/* `<mdui-card>` is `display: inline-block` in its shadow root; a document-level rule
+   outranks `:host`, so this makes it a row. */
 .task-card {
   display: flex;
   flex-direction: row;
-  background: rgba(25, 25, 25, 0.85);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
   min-height: 120px;
+  /* The lift is spatial (it moves), the shadow is an effect. */
+  @include mo.spatial((transform, box-shadow));
+
+  @include mo.enter-rise(14px);
+  @include mo.stagger(10, 45ms, 40ms);
 }
 
 .task-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--mdui-elevation-level2);
 }
 
 /* Cover (35%) */
 .task-cover {
   width: 35%;
   flex-shrink: 0;
-  background: rgba(0, 0, 0, 0.2);
+  background-color: rgb(var(--mdui-color-surface-container-low));
 }
 
 .cover-image {
@@ -474,9 +456,10 @@ onUnmounted(() => document.removeEventListener('click', closeContextMenu));
 }
 
 .task-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: var(--mdui-typescale-title-medium-size);
+  font-weight: var(--mdui-typescale-title-medium-weight);
+  line-height: var(--mdui-typescale-title-medium-line-height);
+  color: rgb(var(--mdui-color-on-surface));
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -485,9 +468,24 @@ onUnmounted(() => document.removeEventListener('click', closeContextMenu));
   min-width: 0;
 }
 
+/* Deliberately not an `<mdui-chip>`: this is a read-only state badge, and MD3 chips are
+   interactive affordances with a 2rem tap target to match. */
+.status-chip {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: var(--mdui-shape-corner-full);
+  background-color: rgb(var(--status-container));
+  color: rgb(var(--status-on-container));
+  font-size: var(--mdui-typescale-label-small-size);
+  font-weight: var(--mdui-typescale-label-large-weight);
+  line-height: var(--mdui-typescale-label-small-line-height);
+  letter-spacing: var(--mdui-typescale-label-small-tracking);
+}
+
 .task-path {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
+  font-size: var(--mdui-typescale-body-small-size);
+  line-height: var(--mdui-typescale-body-small-line-height);
+  color: rgb(var(--mdui-color-on-surface-variant));
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -498,11 +496,26 @@ onUnmounted(() => document.removeEventListener('click', closeContextMenu));
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+/* `<mdui-circular-progress>` sizes itself to 2.5rem via `:host`; overriding it here is
+   the same document-level-beats-`:host` trick used for the icon buttons. */
+.status-spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  stroke: rgb(var(--status-color));
+}
+
+.status-bar {
+  --shape-corner: var(--mdui-shape-corner-full);
+  height: 3px;
 }
 
 .status-text {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
+  font-size: var(--mdui-typescale-body-small-size);
+  line-height: var(--mdui-typescale-body-small-line-height);
+  color: rgb(var(--mdui-color-on-surface-variant));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -512,88 +525,79 @@ onUnmounted(() => document.removeEventListener('click', closeContextMenu));
   display: flex;
   gap: 8px;
   margin-top: auto;
+  flex-wrap: wrap;
 }
 
 /* ===== Dialogs ===== */
-.md3-dialog {
-  background: rgba(28, 28, 28, 0.95) !important;
-  backdrop-filter: blur(20px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 28px !important;
+/* mdui caps the panel at 35rem; log output reads much better wider than that. */
+.log-dialog::part(panel) {
+  min-width: min(25rem, 100%);
+  max-width: min(45rem, 100%);
 }
 
-.error-dialog {
-  border-color: rgba(255, 82, 82, 0.3) !important;
+.dialog-error-icon {
+  color: rgb(var(--mdui-color-error));
 }
 
-.error-message {
-  color: #ff5252;
-  font-family: monospace;
-  background: rgba(0, 0, 0, 0.4);
+.log-pre {
+  margin: 0;
   padding: 12px;
-  border-radius: 12px;
-  max-height: 60vh;
-  overflow: auto;
+  border-radius: var(--mdui-shape-corner-medium);
+  background-color: rgb(var(--mdui-color-surface-container-highest));
+  color: rgb(var(--mdui-color-on-surface));
+  font-family: 'Roboto Mono', 'Consolas', monospace;
+  font-size: var(--mdui-typescale-body-small-size);
   line-height: 1.5;
-  white-space: pre-wrap;
-}
-
-.output-pre {
-  background: rgba(0, 0, 0, 0.3);
-  padding: 12px;
-  border-radius: 12px;
-  font-family: monospace;
-  font-size: 13px;
   max-height: 60vh;
   overflow: auto;
   white-space: pre-wrap;
 }
 
-/* Context menu */
-.ctx-menu {
-  background: rgba(28, 28, 28, 0.95) !important;
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 16px !important;
+.log-pre-error {
+  color: rgb(var(--mdui-color-error));
+  background-color: rgb(var(--mdui-color-error-container));
 }
 
-/* Detail list */
+/* ===== Detail list ===== */
 .detail-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
 .detail-row {
   display: flex;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.85);
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(var(--mdui-color-outline-variant), 0.5);
+  font-size: var(--mdui-typescale-body-medium-size);
+  line-height: var(--mdui-typescale-body-medium-line-height);
+  color: rgb(var(--mdui-color-on-surface));
 }
 
-.detail-row:last-child { border-bottom: none; }
+.detail-row:last-child {
+  border-bottom: none;
+}
 
 .detail-label {
-  width: 72px;
+  width: 4.5rem;
   flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.5);
-  font-weight: 500;
+  color: rgb(var(--mdui-color-on-surface-variant));
+  font-weight: var(--mdui-typescale-label-large-weight);
 }
 
-.break-all { word-break: break-all; }
+.break-all {
+  word-break: break-all;
+}
 
 .error-text {
-  color: #ff5252;
-  font-family: monospace;
-  font-size: 13px;
-  background: rgba(255, 82, 82, 0.1);
-  padding: 6px 10px;
-  border-radius: 8px;
+  color: rgb(var(--mdui-color-error));
+  font-family: 'Roboto Mono', 'Consolas', monospace;
+  font-size: var(--mdui-typescale-body-small-size);
+  word-break: break-all;
 }
 
 /* ===== Responsive ===== */
-@media (max-width: 600px) {
+@include bp.compact {
   .tasks-container { padding: 16px; }
   .task-card { flex-direction: column; }
   .task-cover { width: 100%; min-height: 140px; }

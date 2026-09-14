@@ -65,6 +65,9 @@ en:
   chart-info: Chart Info
   bulk-edit-title: Bulk Edit Settings
   bulk-edit-hint: Leave fields blank to keep their original values.
+  hold-keep: Keep
+  hold-on: On
+  hold-off: Off
 zh-CN:
   title: 批量渲染
   chart-file: 谱面文件
@@ -131,6 +134,9 @@ zh-CN:
   chart-info: 谱面信息
   bulk-edit-title: 批量编辑属性
   bulk-edit-hint: 未填写的项将保持每个谱面原有的设置不变。
+  hold-keep: 保持
+  hold-on: 开启
+  hold-off: 关闭
 </i18n>
 
 <script setup lang="ts">
@@ -141,9 +147,13 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import moment from 'moment';
 
-import { toast, toastError, RULES } from './common';
+import { toast, toastError, validateFields } from './common';
 import type { ChartInfo, RenderConfig } from './model';
 import ConfigView from '@/components/ConfigView.vue';
+import MdCheckbox from '@/components/md/MdCheckbox.vue';
+import MdSlider from '@/components/md/MdSlider.vue';
+import MdSwitch from '@/components/md/MdSwitch.vue';
+import MdTextField from '@/components/md/MdTextField.vue';
 
 const { t } = useI18n();
 
@@ -170,7 +180,7 @@ const editDialog = ref(false);
 const bulkEditDialog = ref(false);
 const editingChartId = ref<string | null>(null);
 const editingChart = computed(() => (editingChartId.value ? charts.value.find((c) => c.id === editingChartId.value) : undefined));
-const form = ref<any>();
+const editForm = ref<HTMLFormElement>();
 
 const currentRenderingId = ref<string | null>(null);
 const isRenderingQueue = ref(false);
@@ -190,6 +200,14 @@ const searchQuery = ref('');
 
 const defaultConfig = ref<RenderConfig>(loadDefaultConfig());
 
+const holdCoverValue = computed({
+  get: () => bulkEditData.value.holdCover === null ? 'keep' : bulkEditData.value.holdCover ? 'on' : 'off',
+  set: (v: string) => {
+    if (v === 'keep') bulkEditData.value.holdCover = null;
+    else bulkEditData.value.holdCover = v === 'on';
+  },
+});
+
 function generateId() {
   return Math.random().toString(36).substring(2, 9);
 }
@@ -208,65 +226,24 @@ async function previewChart(id: string) {
 }
 
 function loadDefaultConfig(): RenderConfig {
-  const savedConfig = localStorage.getItem('defaultRenderConfig');
-  if (savedConfig) {
-    try {
-      return JSON.parse(savedConfig) as RenderConfig;
-    } catch (e) {
-      console.error('Failed to parse saved config', e);
-    }
+  const saved = localStorage.getItem('defaultRenderConfig');
+  if (saved) {
+    try { return JSON.parse(saved) as RenderConfig; } catch { /* empty */ }
   }
   return {
-    resolution: [1920, 1080],
-    ffmpegPreset: 'medium p4 balanced',
-    endingLength: -2.0,
-    disableLoading: true,
-    chartDebug: false,
-    flidX: false,
-    chartRatio: 1,
-    bufferSize: 256,
-    fps: 60,
-    hardwareAccel: true,
-    videoCodec: 'h264',
-    encoder: 'auto',
-    bitrateControl: 'CRF',
-    bitrate: '28',
-    targetAudio: 48000,
-    video: false,
-    audioBit: undefined,
-    audioFormat: 'flac',
-    background: false,
-    aggressive: false,
-    challengeColor: 'golden',
-    challengeRank: 45,
-    disableEffect: false,
-    doubleHint: true,
-    fxaa: false,
-    noteScale: 1,
-    particle: true,
-    playerAvatar: null,
-    playerName: '',
-    playerRks: 15,
-    sampleCount: 1,
-    resPackPath: null,
-    speed: 1,
-    volumeMusic: 1,
-    volumeSfx: 1,
-    combo: 'AUTOPLAY',
-    watermark: '',
-    handSplit: false,
-    noteSpeedFactor: 1.0,
-    ffmpegThread: false,
-    showProgressText: false,
-    showTimeText: false,
-    uiLine: true,
-    uiScore: true,
-    uiCombo: true,
-    uiLevel: true,
-    uiName: true,
-    uiPb: true,
-    uiPause: true,
-    bar: false,
+    resolution: [1920, 1080], ffmpegPreset: 'medium', endingLength: -2.0,
+    disableLoading: true, chartDebug: false, flidX: false, chartRatio: 1,
+    bufferSize: 256, fps: 60, hardwareAccel: true, videoCodec: 'h264',
+    encoder: 'auto', bitrateControl: 'CRF', bitrate: '28', targetAudio: 48000,
+    video: false, audioBit: undefined, audioFormat: 'flac', background: false,
+    aggressive: false, challengeColor: 'golden', challengeRank: 45,
+    disableEffect: false, doubleHint: true, fxaa: false, noteScale: 1,
+    particle: true, playerAvatar: null, playerName: '', playerRks: 15,
+    sampleCount: 1, resPackPath: null, speed: 1, volumeMusic: 1, volumeSfx: 1,
+    combo: 'AUTOPLAY', watermark: '', handSplit: false, noteSpeedFactor: 1.0,
+    ffmpegThread: false, showProgressText: false, showTimeText: false,
+    uiLine: true, uiScore: true, uiCombo: true, uiLevel: true, uiName: true,
+    uiPb: true, uiPause: true, bar: false,
   };
 }
 
@@ -278,44 +255,31 @@ function saveDefaultConfig(config: RenderConfig) {
 
 async function getPresets() {
   try {
-    const presetsMap = (await invoke('get_presets')) as Record<string, any>;
-    presets.value = [{ name: 'default' }, ...Object.keys(presetsMap).map((name) => ({ name }))];
+    const m = (await invoke('get_presets')) as Record<string, any>;
+    presets.value = [{ name: 'default' }, ...Object.keys(m).map((name) => ({ name }))];
     selectedPreset.value = presets.value[0].name;
-  } catch (error) {
-    console.error('Failed to get presets', error);
-  }
+  } catch { /* empty */ }
 }
 
 async function processNewPaths(paths: string[]) {
-  const uniquePaths = [...new Set(paths)];
-  const existingPaths = new Set(charts.value.map((c) => c.path));
-  const newPaths = uniquePaths.filter((path) => !existingPaths.has(path));
-  if (newPaths.length === 0) {
-    toast(t('no-charts-found'), 'warning');
-    return;
-  }
-  for (const path of newPaths) {
-    await addChart(path);
-  }
-  toast(t('charts-added', { count: newPaths.length }), 'success');
+  const unique = [...new Set(paths)];
+  const existing = new Set(charts.value.map((c) => c.path));
+  const fresh = unique.filter((p) => !existing.has(p));
+  if (!fresh.length) { toast(t('no-charts-found'), 'warning'); return; }
+  for (const p of fresh) await addChart(p);
+  toast(t('charts-added', { count: fresh.length }), 'success');
 }
 
 async function addFiles() {
   if (isAddingFiles.value) return;
   isAddingFiles.value = true;
   try {
-    const files = await open({
-      multiple: true,
-      filters: [{ name: t('chart-file'), extensions: ['zip', 'json', 'pez'] }],
-    });
+    const files = await open({ multiple: true, filters: [{ name: t('chart-file'), extensions: ['zip', 'json', 'pez'] }] });
     if (!files) return;
-    const paths = (Array.isArray(files) ? files : [files]).map((f) => (typeof f === 'string' ? f : (f as any).path));
+    const paths = (Array.isArray(files) ? files : [files]).map((f) => typeof f === 'string' ? f : (f as any).path);
     await processNewPaths(paths);
-  } catch (error) {
-    toast(t('add-files-failed'), 'error');
-  } finally {
-    isAddingFiles.value = false;
-  }
+  } catch { toast(t('add-files-failed'), 'error'); }
+  finally { isAddingFiles.value = false; }
 }
 
 async function addFolder() {
@@ -326,104 +290,75 @@ async function addFolder() {
     if (!folder) return;
     const folderPath = typeof folder === 'string' ? folder : (folder as any).path;
     const files = (await invoke('list_chart_files', { path: folderPath })) as string[];
-    if (!files || files.length === 0) return toast(t('no-charts-found'), 'warning');
-    const validExtensions = ['.json', '.zip', '.pez'];
-    const filteredFiles = files.filter((f) => validExtensions.includes(f.toLowerCase().slice(f.lastIndexOf('.'))));
-    await processNewPaths(filteredFiles);
-  } catch (error) {
-    toast(t('add-folder-failed'), 'error');
-  } finally {
-    isAddingFolder.value = false;
-  }
+    if (!files?.length) return toast(t('no-charts-found'), 'warning');
+    const valid = files.filter((f) => ['.json', '.zip', '.pez'].includes(f.toLowerCase().slice(f.lastIndexOf('.'))));
+    await processNewPaths(valid);
+  } catch { toast(t('add-folder-failed'), 'error'); }
+  finally { isAddingFolder.value = false; }
 }
 
 async function addChart(path: string) {
   if (charts.value.some((c) => c.path === path)) return;
-  const newChart: BatchChart = { id: generateId(), path, name: t('adding-charts'), level: '...', charter: '...', status: 'pending', selected: true };
-  const placeholderIndex = charts.value.push(newChart) - 1;
+  const placeholder: BatchChart = { id: generateId(), path, name: t('adding-charts'), level: '...', charter: '...', status: 'pending', selected: true };
+  const idx = charts.value.push(placeholder) - 1;
   try {
-    const chartInfo = (await invoke('parse_chart', { path })) as ChartInfo;
-    let aW = String(chartInfo.aspectRatio);
-    let aH = '1.0';
-    for (const asp of [
-      [16, 9],
-      [4, 3],
-      [8, 5],
-      [3, 2],
-    ]) {
-      if (Math.abs(asp[0] / asp[1] - chartInfo.aspectRatio) < 1e-4) {
-        aW = String(asp[0]);
-        aH = String(asp[1]);
-        break;
-      }
+    const info = (await invoke('parse_chart', { path })) as ChartInfo;
+    let aW = String(info.aspectRatio), aH = '1.0';
+    for (const asp of [[16, 9], [4, 3], [8, 5], [3, 2]]) {
+      if (Math.abs(asp[0] / asp[1] - info.aspectRatio) < 1e-4) { aW = String(asp[0]); aH = String(asp[1]); break; }
     }
-    charts.value[placeholderIndex] = { ...newChart, name: chartInfo.name, level: chartInfo.level, charter: chartInfo.charter, chartInfo, aspectWidth: aW, aspectHeight: aH };
-  } catch (error: any) {
-    let errorMessage = t('invalid-chart-file');
-    if (error.message?.includes('as zip archive')) errorMessage = t('file-type-error', { message: 'Not a ZIP archive' });
-    else if (error.message?.includes('central directory')) errorMessage = t('file-type-error', { message: 'Invalid ZIP format' });
-    charts.value[placeholderIndex] = { ...newChart, name: t('failed'), status: 'failed', selected: false, error: errorMessage };
+    charts.value[idx] = { ...placeholder, name: info.name, level: info.level, charter: info.charter, chartInfo: info, aspectWidth: aW, aspectHeight: aH };
+  } catch (e: any) {
+    let msg = t('invalid-chart-file');
+    if (e.message?.includes('as zip archive')) msg = t('file-type-error', { message: 'Not a ZIP archive' });
+    else if (e.message?.includes('central directory')) msg = t('file-type-error', { message: 'Invalid ZIP format' });
+    charts.value[idx] = { ...placeholder, name: t('failed'), status: 'failed', selected: false, error: msg };
   }
 }
 
-function clearList() {
-  if (confirm(t('clear-list') + '?')) charts.value = [];
-}
-function clearDone() {
-  charts.value = charts.value.filter((c) => c.status !== 'done');
-}
-function retryFailed() {
-  charts.value.forEach((c) => {
-    if (c.status === 'failed') c.status = 'pending';
-  });
-}
-function removeChart(id: string) {
-  charts.value = charts.value.filter((c) => c.id !== id);
-}
+function clearList() { if (confirm(t('clear-list') + '?')) charts.value = []; }
+function clearDone() { charts.value = charts.value.filter((c) => c.status !== 'done'); }
+function retryFailed() { charts.value.forEach((c) => { if (c.status === 'failed') c.status = 'pending'; }); }
+function removeChart(id: string) { charts.value = charts.value.filter((c) => c.id !== id); }
 
 async function buildRenderParams() {
   if (!(await invoke('test_ffmpeg'))) throw new Error(t('ffmpeg-not-found'));
-  let config = selectedPreset.value === 'default' ? defaultConfig.value : ((await invoke('get_presets')) as any)[selectedPreset.value];
-  if (!config) config = defaultConfig.value;
-  if (!config.resolution) throw new Error('Resolution missing');
-  return config;
+  let cfg = selectedPreset.value === 'default' ? defaultConfig.value : ((await invoke('get_presets')) as any)[selectedPreset.value];
+  if (!cfg) cfg = defaultConfig.value;
+  if (!cfg.resolution) throw new Error('Resolution missing');
+  return cfg;
 }
 
 async function saveConfig() {
-  const config = await configViewRef.value?.buildConfig();
-  if (config) {
-    saveDefaultConfig(config);
-    configDialog.value = false;
-  }
+  const cfg = await configViewRef.value?.buildConfig();
+  if (cfg) { saveDefaultConfig(cfg); configDialog.value = false; }
 }
 
 async function startRender() {
-  const pendingCount = filteredCharts.value.filter((c) => c.selected && c.status === 'pending').length;
-  if (pendingCount === 0) return toast(t('no-charts-selected'), 'warning');
+  const pending = filteredCharts.value.filter((c) => c.selected && c.status === 'pending');
+  if (!pending.length) return toast(t('no-charts-selected'), 'warning');
   try {
-    const config = await buildRenderParams();
+    const cfg = await buildRenderParams();
     isRenderingQueue.value = true;
-    for (let i = 0; i < charts.value.length; i++) {
+    for (const chart of charts.value) {
       if (!isRenderingQueue.value) break;
-      const chart = charts.value[i];
       if (!chart.selected || chart.status !== 'pending') continue;
       currentRenderingId.value = chart.id;
       chart.status = 'rendering';
       renderProgress.value = 0;
       try {
         if (!chart.chartInfo) throw new Error(t('chart-info-missing'));
-        await invoke('post_render', { params: { path: chart.path, info: chart.chartInfo, config } });
+        await invoke('post_render', { params: { path: chart.path, info: chart.chartInfo, config: cfg } });
         chart.status = 'done';
-      } catch (error: any) {
+      } catch (err: any) {
         chart.status = 'failed';
-        chart.error = error.message || String(error);
-        toastError(error);
+        chart.error = err.message || String(err);
+        toastError(err);
       }
     }
-    if (isRenderingQueue.value) toast(t('batch-completed', { count: pendingCount }), 'success');
-  } catch (error) {
-    toastError(error);
-  } finally {
+    if (isRenderingQueue.value) toast(t('batch-completed', { count: pending.length }), 'success');
+  } catch (err) { toastError(err); }
+  finally {
     isRenderingQueue.value = false;
     currentRenderingId.value = null;
     renderMsg.value = '';
@@ -431,10 +366,7 @@ async function startRender() {
   }
 }
 
-function stopRender() {
-  isRenderingQueue.value = false;
-  toast(t('batch-stopped'), 'info');
-}
+function stopRender() { isRenderingQueue.value = false; toast(t('batch-stopped'), 'info'); }
 
 const filteredCharts = computed(() => {
   if (!searchQuery.value.trim()) return charts.value;
@@ -444,61 +376,34 @@ const filteredCharts = computed(() => {
 
 const selectedCount = computed(() => charts.value.filter((c) => c.selected).length);
 const allSelected = computed(() => charts.value.length > 0 && selectedCount.value === charts.value.length);
-const isIndeterminate = computed(() => selectedCount.value > 0 && selectedCount.value < charts.value.length);
 
 function toggleSelectAll() {
   const target = !allSelected.value;
-  charts.value.forEach((chart) => {
-    if (chart.status !== 'rendering') chart.selected = target;
-  });
+  charts.value.forEach((c) => { if (c.status !== 'rendering') c.selected = target; });
 }
 
-// Tauri's `listen` resolves asynchronously, so a component unmounted before it settles
-// must still release the handle — hence the `disposed` guard.
 let disposed = false;
 const unlistenFns: UnlistenFn[] = [];
+function track(p: Promise<UnlistenFn>) { p.then((fn) => disposed ? fn() : unlistenFns.push(fn)).catch((e) => console.error('Failed to register listener:', e)); }
 
-function track(pending: Promise<UnlistenFn>) {
-  pending.then((unlisten) => (disposed ? unlisten() : unlistenFns.push(unlisten))).catch((e) => console.error('Failed to register listener:', e));
-}
+onUnmounted(() => { disposed = true; unlistenFns.forEach((fn) => fn()); unlistenFns.length = 0; });
 
-onUnmounted(() => {
-  disposed = true;
-  unlistenFns.forEach((unlisten) => unlisten());
-  unlistenFns.length = 0;
-});
+track(listen('render-msg', (msg) => { renderMsg.value = msg.payload as string; }));
+track(listen('render-progress', (msg) => {
+  const p = msg.payload as { progress: number; fps: number; estimate: number };
+  renderMsg.value = `FPS: ${p.fps} | ${t('eta')}: ${moment.duration(p.estimate, 'seconds').humanize(true, { ss: 1 })}`;
+  renderProgress.value = p.progress * 100;
+}));
 
-track(
-  listen('render-msg', (msg) => {
-    renderMsg.value = msg.payload as string;
-  }),
-);
-track(
-  listen('render-progress', (msg) => {
-    const p = msg.payload as { progress: number; fps: number; estimate: number };
-    renderMsg.value = `FPS: ${p.fps} | ${t('eta')}: ${moment.duration(p.estimate, 'seconds').humanize(true, { ss: 1 })}`;
-    renderProgress.value = p.progress * 100;
-  }),
-);
-
-function openEditDialog(id: string) {
-  editingChartId.value = id;
-  editDialog.value = true;
-}
+function openEditDialog(id: string) { editingChartId.value = id; editDialog.value = true; }
 
 async function saveChartInfo() {
-  if (!form.value || !editingChartId.value) return;
-  const { valid } = await form.value.validate();
-  if (!valid) return;
+  if (!editForm.value || !editingChartId.value) return;
+  if (!validateFields(editForm.value)) return;
   const chart = charts.value.find((c) => c.id === editingChartId.value);
   if (!chart) return;
-  const aspect = tryParseAspect(chart.aspectWidth, chart.aspectHeight);
-  if (aspect && chart.chartInfo) chart.chartInfo.aspectRatio = aspect;
-  if (chart.chartInfo) {
-    chart.name = chart.chartInfo.name;
-    chart.level = chart.chartInfo.level;
-    chart.charter = chart.chartInfo.charter;
-  }
+  const asp = tryParseAspect(chart.aspectWidth, chart.aspectHeight);
+  if (asp && chart.chartInfo) chart.chartInfo.aspectRatio = asp;
   editDialog.value = false;
 }
 
@@ -508,17 +413,11 @@ function openBulkEditDialog() {
 }
 
 function saveBulkEdit() {
-  const aspect = tryParseAspect(bulkEditData.value.aspectWidth, bulkEditData.value.aspectHeight);
-  const selectedCharts = charts.value.filter((c) => c.selected && c.chartInfo);
-  selectedCharts.forEach((chart) => {
+  const asp = tryParseAspect(bulkEditData.value.aspectWidth, bulkEditData.value.aspectHeight);
+  charts.value.filter((c) => c.selected && c.chartInfo).forEach((chart) => {
     if (!chart.chartInfo) return;
-    if (aspect) {
-      chart.aspectWidth = bulkEditData.value.aspectWidth;
-      chart.aspectHeight = bulkEditData.value.aspectHeight;
-      chart.chartInfo.aspectRatio = aspect;
-    }
+    if (asp) { chart.aspectWidth = bulkEditData.value.aspectWidth; chart.aspectHeight = bulkEditData.value.aspectHeight; chart.chartInfo.aspectRatio = asp; }
     if (bulkEditData.value.backgroundDim !== null) chart.chartInfo.backgroundDim = bulkEditData.value.backgroundDim;
-    // v-btn-toggle yields `undefined` when the active button is toggled off, so `!== null` isn't enough.
     if (typeof bulkEditData.value.holdCover === 'boolean') chart.chartInfo.HoldPartialCover = bulkEditData.value.holdCover;
   });
   bulkEditDialog.value = false;
@@ -527,9 +426,8 @@ function saveBulkEdit() {
 
 function tryParseAspect(w?: string, h?: string) {
   if (!w || !h) return undefined;
-  const numW = parseFloat(w),
-    numH = parseFloat(h);
-  return isNaN(numW) || isNaN(numH) ? undefined : numW / numH;
+  const nW = parseFloat(w), nH = parseFloat(h);
+  return isNaN(nW) || isNaN(nH) ? undefined : nW / nH;
 }
 
 const STORAGE_KEY = 'batch_render_charts_v2';
@@ -537,46 +435,41 @@ onMounted(() => {
   getPresets();
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
-    try {
-      charts.value = JSON.parse(saved).map((c: any) => ({ ...c, status: c.status === 'rendering' ? 'failed' : c.status }));
-    } catch (e) {
-      /* empty */
-    }
+    try { charts.value = JSON.parse(saved).map((c: any) => ({ ...c, status: c.status === 'rendering' ? 'failed' : c.status })); } catch { /* empty */ }
   }
 });
 
-watch(
-  charts,
-  (val) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
-  },
-  { deep: true },
-);
+watch(charts, (val) => { localStorage.setItem(STORAGE_KEY, JSON.stringify(val)); }, { deep: true });
+
+function onHoldCoverChange(e: Event) {
+  const v = (e.target as HTMLElement & { value?: string }).value;
+  if (v === 'keep') bulkEditData.value.holdCover = null;
+  else bulkEditData.value.holdCover = v === 'on';
+}
 </script>
 
 <template>
   <div class="batch-layout">
-    <!-- Top Bar -->
+    <!-- Header -->
     <div class="batch-header">
       <div class="header-row">
         <div class="search-wrap">
-          <v-icon icon="mdi-magnify" size="18" class="search-icon" />
-          <input v-model="searchQuery" :placeholder="t('search-placeholder')" class="md3-search" />
+          <mdui-icon-search class="search-icon"></mdui-icon-search>
+          <input v-model="searchQuery" :placeholder="t('search-placeholder')" class="search-input" />
         </div>
-
         <div class="header-actions">
-          <button class="md3-btn md3-btn-tonal" :disabled="isAddingFiles" @click="addFiles">
-            <v-icon icon="mdi-file-plus-outline" size="18" />
-            <span>{{ t('add-files') }}</span>
-          </button>
-          <button class="md3-btn md3-btn-tonal" :disabled="isAddingFolder" @click="addFolder">
-            <v-icon icon="mdi-folder-plus-outline" size="18" />
-            <span>{{ t('add-folder') }}</span>
-          </button>
-          <button class="md3-btn md3-btn-tonal" @click="configDialog = true">
-            <v-icon icon="mdi-cog-outline" size="18" />
-            <span>{{ t('configure') }}</span>
-          </button>
+          <mdui-button variant="tonal" :disabled="isAddingFiles" @click="addFiles">
+            <mdui-icon-note-add--outlined slot="icon"></mdui-icon-note-add--outlined>
+            <span class="btn-label">{{ t('add-files') }}</span>
+          </mdui-button>
+          <mdui-button variant="tonal" :disabled="isAddingFolder" @click="addFolder">
+            <mdui-icon-create-new-folder--outlined slot="icon"></mdui-icon-create-new-folder--outlined>
+            <span class="btn-label">{{ t('add-folder') }}</span>
+          </mdui-button>
+          <mdui-button variant="tonal" @click="configDialog = true">
+            <mdui-icon-settings--outlined slot="icon"></mdui-icon-settings--outlined>
+            <span class="btn-label">{{ t('configure') }}</span>
+          </mdui-button>
         </div>
       </div>
     </div>
@@ -584,67 +477,71 @@ watch(
     <!-- Selection bar -->
     <div class="selection-bar">
       <div class="sel-left">
-        <v-checkbox-btn :model-value="allSelected" :indeterminate="isIndeterminate" @click="toggleSelectAll" color="primary" />
+        <MdCheckbox :model-value="allSelected" @update:model-value="toggleSelectAll" />
         <span class="sel-count">{{ t('selected', { count: selectedCount }) }} / {{ t('total-charts', { count: charts.length }) }}</span>
-
-        <button v-if="selectedCount > 1" class="md3-btn md3-btn-text md3-btn-sm" @click="openBulkEditDialog">
-          <v-icon icon="mdi-pencil-box-multiple-outline" size="16" />
-          <span>{{ t('bulk-edit') }}</span>
-        </button>
+        <mdui-button v-if="selectedCount > 1" variant="text" @click="openBulkEditDialog">
+          <mdui-icon-edit-note slot="icon"></mdui-icon-edit-note>
+          {{ t('bulk-edit') }}
+        </mdui-button>
       </div>
       <div class="sel-right">
-        <button v-if="charts.some((c) => c.status === 'failed')" class="md3-btn md3-btn-text md3-btn-sm" @click="retryFailed">
-          <v-icon icon="mdi-refresh" size="16" /><span>{{ t('retry-failed') }}</span>
-        </button>
-        <button v-if="charts.some((c) => c.status === 'done')" class="md3-btn md3-btn-text md3-btn-sm" @click="clearDone">
-          <v-icon icon="mdi-check-all" size="16" /><span>{{ t('clear-done') }}</span>
-        </button>
-        <button class="md3-btn md3-btn-text md3-btn-sm" @click="clearList" :disabled="charts.length === 0">
-          <v-icon icon="mdi-delete-outline" size="16" /><span>{{ t('clear-list') }}</span>
-        </button>
+        <mdui-button v-if="charts.some((c) => c.status === 'failed')" variant="text" @click="retryFailed">
+          <mdui-icon-refresh slot="icon"></mdui-icon-refresh>
+          {{ t('retry-failed') }}
+        </mdui-button>
+        <mdui-button v-if="charts.some((c) => c.status === 'done')" variant="text" @click="clearDone">
+          <mdui-icon-done-all slot="icon"></mdui-icon-done-all>
+          {{ t('clear-done') }}
+        </mdui-button>
+        <mdui-button variant="text" :disabled="!charts.length" @click="clearList">
+          <mdui-icon-delete--outlined slot="icon"></mdui-icon-delete--outlined>
+          {{ t('clear-list') }}
+        </mdui-button>
       </div>
     </div>
 
-    <!-- Render action -->
+    <!-- Render bar -->
     <div class="render-bar">
       <template v-if="isRenderingQueue">
-        <v-chip color="warning" variant="flat" class="rendering-chip">
-          <v-icon start icon="mdi-loading" class="spin-anim" />
+        <mdui-chip variant="elevated" class="rendering-chip">
+          <mdui-circular-progress slot="icon" class="spin-anim"></mdui-circular-progress>
           {{ t('rendering') }}
-        </v-chip>
-        <button class="md3-btn md3-btn-text" @click="stopRender" style="color: #ff5252">
-          <v-icon icon="mdi-stop" size="18" /><span>{{ t('stop-render') }}</span>
-        </button>
+        </mdui-chip>
+        <mdui-button variant="text" @click="stopRender" style="color: var(--mdui-color-error)">
+          <mdui-icon-stop slot="icon"></mdui-icon-stop>
+          {{ t('stop-render') }}
+        </mdui-button>
       </template>
       <template v-else>
-        <button class="md3-btn md3-btn-filled" :disabled="selectedCount === 0" @click="startRender">
-          <v-icon icon="mdi-play" size="18" />
-          <span>{{ t('start-render') }} ({{ selectedCount }})</span>
-        </button>
+        <mdui-button variant="filled" :disabled="!selectedCount" @click="startRender">
+          <mdui-icon-play-arrow slot="icon"></mdui-icon-play-arrow>
+          {{ t('start-render') }} ({{ selectedCount }})
+        </mdui-button>
       </template>
     </div>
 
-    <!-- List -->
+    <!-- Chart list -->
     <div class="chart-list">
-      <div v-if="charts.length === 0" class="empty-state">
-        <v-icon icon="mdi-text-box-plus-outline" size="64" color="rgba(255,255,255,0.15)" />
-        <p>{{ t('no-charts') }}</p>
+      <div v-if="!charts.length" class="empty-state">
+        <mdui-icon-inbox--outlined class="empty-icon"></mdui-icon-inbox--outlined>
+        <p class="md3-body">{{ t('no-charts') }}</p>
       </div>
-
+      <div v-else-if="!filteredCharts.length" class="empty-state">
+        <mdui-icon-search class="empty-icon"></mdui-icon-search>
+        <p class="md3-body">{{ t('no-results') }}</p>
+      </div>
       <div v-else class="list-scroll">
         <div v-for="item in filteredCharts" :key="item.id" class="chart-row" :class="{ 'is-rendering': item.status === 'rendering', 'is-failed': item.status === 'failed' }">
           <div v-if="item.status === 'rendering' && item.id === currentRenderingId" class="progress-bg" :style="{ width: `${renderProgress}%` }"></div>
-
           <div class="row-content">
-            <v-checkbox-btn v-model="item.selected" :disabled="item.status === 'rendering'" color="primary" />
-
+            <MdCheckbox v-model="item.selected" :disabled="item.status === 'rendering'" />
             <div class="row-info">
               <div class="row-title">
                 <span class="row-name" :title="item.name">{{ item.name }}</span>
-                <v-chip size="x-small" variant="outlined" color="primary">{{ item.level }}</v-chip>
+                <mdui-chip variant="outlined" class="level-chip">{{ item.level }}</mdui-chip>
               </div>
               <div class="row-sub">
-                <v-icon icon="mdi-account-music" size="14" />
+                <mdui-icon-person class="sub-icon"></mdui-icon-person>
                 <span>{{ item.charter }}</span>
                 <template v-if="item.status === 'rendering' && item.id === currentRenderingId">
                   <span class="render-status">{{ renderProgress.toFixed(1) }}% - {{ renderMsg }}</span>
@@ -654,24 +551,22 @@ watch(
                 </template>
               </div>
             </div>
-
-            <v-chip
-              :color="item.status === 'done' ? 'success' : item.status === 'failed' ? 'error' : item.status === 'rendering' ? 'warning' : 'default'"
-              :variant="item.status === 'pending' ? 'tonal' : 'flat'"
-              size="small"
-              >{{ t(item.status) }}</v-chip
-            >
-
+            <mdui-chip
+              :variant="item.status === 'pending' ? 'outlined' : 'elevated'"
+              class="status-chip"
+              :class="`status-${item.status}`">
+              {{ t(item.status) }}
+            </mdui-chip>
             <div class="row-actions">
-              <button class="icon-btn" :disabled="!item.chartInfo || item.status === 'rendering'" @click="openEditDialog(item.id)" :title="t('edit')">
-                <v-icon icon="mdi-pencil-outline" size="18" />
-              </button>
-              <button class="icon-btn" :disabled="!item.chartInfo || item.status === 'rendering'" @click="previewChart(item.id)" :title="t('preview')">
-                <v-icon icon="mdi-play-circle-outline" size="18" />
-              </button>
-              <button class="icon-btn icon-btn-danger" :disabled="item.status === 'rendering'" @click="removeChart(item.id)" :title="t('close')">
-                <v-icon icon="mdi-close" size="18" />
-              </button>
+              <mdui-button-icon :disabled="!item.chartInfo || item.status === 'rendering'" @click="openEditDialog(item.id)" :title="t('edit')">
+                <mdui-icon-edit--outlined></mdui-icon-edit--outlined>
+              </mdui-button-icon>
+              <mdui-button-icon :disabled="!item.chartInfo || item.status === 'rendering'" @click="previewChart(item.id)" :title="t('preview')">
+                <mdui-icon-play-circle--outlined></mdui-icon-play-circle--outlined>
+              </mdui-button-icon>
+              <mdui-button-icon :disabled="item.status === 'rendering'" @click="removeChart(item.id)" :title="t('close')">
+                <mdui-icon-close></mdui-icon-close>
+              </mdui-button-icon>
             </div>
           </div>
         </div>
@@ -679,132 +574,118 @@ watch(
     </div>
 
     <!-- Config Dialog -->
-    <v-dialog v-model="configDialog" fullscreen transition="dialog-bottom-transition">
-      <v-card class="md3-dialog-full h-100">
-        <v-toolbar color="transparent" class="border-b">
-          <v-toolbar-title>{{ t('configure') }}</v-toolbar-title>
-          <v-spacer />
-          <v-btn icon="mdi-close" variant="text" @click="configDialog = false" />
-        </v-toolbar>
-        <v-card-text class="pa-0 h-100">
-          <ConfigView ref="configViewRef" />
-        </v-card-text>
-        <v-card-actions class="pa-4 border-t">
-          <v-spacer />
-          <button class="md3-btn md3-btn-text" @click="configDialog = false">{{ t('close') }}</button>
-          <button class="md3-btn md3-btn-filled" @click="saveConfig">{{ t('save') }}</button>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <mdui-dialog :open="configDialog" @close="configDialog = false" class="config-dialog">
+      <div class="dialog-toolbar">
+        <mdui-button-icon @click="configDialog = false">
+          <mdui-icon-close></mdui-icon-close>
+        </mdui-button-icon>
+        <span class="dialog-title">{{ t('configure') }}</span>
+        <div class="toolbar-spacer"></div>
+        <mdui-button variant="tonal" @click="saveConfig">
+          <mdui-icon-save slot="icon"></mdui-icon-save>
+          {{ t('save') }}
+        </mdui-button>
+      </div>
+      <div class="config-dialog-body">
+        <ConfigView ref="configViewRef" />
+      </div>
+    </mdui-dialog>
 
     <!-- Edit Dialog -->
-    <v-dialog v-model="editDialog" max-width="600">
-      <v-card class="md3-dialog" v-if="editingChart?.chartInfo">
-        <v-toolbar color="transparent" class="border-b">
-          <v-toolbar-title>{{ t('chart-info') }}</v-toolbar-title>
-          <v-spacer />
-          <v-btn icon="mdi-close" variant="text" @click="editDialog = false" />
-        </v-toolbar>
-        <v-card-text class="pa-6">
-          <v-form ref="form" @submit.prevent>
-            <v-row dense>
-              <v-col cols="8"
-                ><v-text-field :label="t('chart-name')" :rules="[RULES.non_empty]" v-model="editingChart.chartInfo!.name" variant="outlined" density="comfortable"
-              /></v-col>
-              <v-col cols="4"
-                ><v-text-field :label="t('level')" :rules="[RULES.non_empty]" v-model="editingChart.chartInfo!.level" variant="outlined" density="comfortable"
-              /></v-col>
-              <v-col cols="4"
-                ><v-text-field :label="t('charter')" :rules="[RULES.non_empty]" v-model="editingChart.chartInfo!.charter" variant="outlined" density="comfortable"
-              /></v-col>
-              <v-col cols="4"><v-text-field :label="t('composer')" v-model="editingChart.chartInfo!.composer" variant="outlined" density="comfortable" /></v-col>
-              <v-col cols="4"><v-text-field :label="t('illustrator')" v-model="editingChart.chartInfo!.illustrator" variant="outlined" density="comfortable" /></v-col>
-            </v-row>
-            <v-divider class="my-4" />
-            <v-row dense align="center">
-              <v-col cols="12" sm="5">
-                <div class="field-label-sm">{{ t('aspect') }}</div>
-                <div class="d-flex align-center gap-2">
-                  <v-text-field type="number" :rules="[RULES.positive]" v-model="editingChart.aspectWidth" hide-details variant="outlined" density="compact" />
-                  <span>:</span>
-                  <v-text-field type="number" :rules="[RULES.positive]" v-model="editingChart.aspectHeight" hide-details variant="outlined" density="compact" />
-                </div>
-              </v-col>
-              <v-col cols="12" sm="7">
-                <v-slider :label="t('dim')" thumb-label="always" :min="0" :max="1" :step="0.01" v-model="editingChart.chartInfo!.backgroundDim" hide-details class="mt-4" />
-              </v-col>
-              <v-col cols="12">
-                <v-switch color="primary" :label="t('hold_cover')" v-model="editingChart.chartInfo!.HoldPartialCover" hide-details />
-              </v-col>
-              <v-col cols="12">
-                <v-text-field :label="t('tip')" v-model="editingChart.chartInfo!.tip" variant="outlined" density="comfortable" hide-details class="mt-2" />
-              </v-col>
-            </v-row>
-          </v-form>
-        </v-card-text>
-        <v-card-actions class="pa-4 border-t">
-          <v-spacer />
-          <button class="md3-btn md3-btn-text" @click="editDialog = false">{{ t('close') }}</button>
-          <button class="md3-btn md3-btn-filled" @click="saveChartInfo">{{ t('save') }}</button>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <mdui-dialog :open="editDialog" @close="editDialog = false" class="edit-dialog">
+      <div class="dialog-toolbar">
+        <mdui-button-icon @click="editDialog = false">
+          <mdui-icon-close></mdui-icon-close>
+        </mdui-button-icon>
+        <span class="dialog-title">{{ t('chart-info') }}</span>
+        <div class="toolbar-spacer"></div>
+        <mdui-button variant="tonal" @click="saveChartInfo">
+          <mdui-icon-save slot="icon"></mdui-icon-save>
+          {{ t('save') }}
+        </mdui-button>
+      </div>
+      <div class="dialog-body" v-if="editingChart?.chartInfo">
+        <form ref="editForm" class="edit-form" @submit.prevent>
+          <div class="form-grid">
+            <MdTextField v-model="editingChart.chartInfo.name" variant="outlined" required :label="t('chart-name')" />
+            <MdTextField v-model="editingChart.chartInfo.level" variant="outlined" required :label="t('level')" />
+            <MdTextField v-model="editingChart.chartInfo.charter" variant="outlined" required :label="t('charter')" />
+            <MdTextField v-model="editingChart.chartInfo.composer" variant="outlined" :label="t('composer')" />
+            <MdTextField v-model="editingChart.chartInfo.illustrator" variant="outlined" :label="t('illustrator')" />
+          </div>
+          <mdui-divider></mdui-divider>
+          <div class="form-grid">
+            <div class="aspect-row">
+              <MdTextField v-model="editingChart.aspectWidth" variant="outlined" inputmode="decimal" :label="t('width')" />
+              <span class="aspect-sep">:</span>
+              <MdTextField v-model="editingChart.aspectHeight" variant="outlined" inputmode="decimal" :label="t('height')" />
+            </div>
+            <div class="slider-block">
+              <div class="slider-header">
+                <span>{{ t('dim') }}</span>
+                <span class="slider-val">{{ Math.round(editingChart.chartInfo.backgroundDim * 100) }}%</span>
+              </div>
+              <MdSlider v-model="editingChart.chartInfo.backgroundDim" :min="0" :max="1" :step="0.01" />
+            </div>
+            <div class="field-toggle">
+              <span class="field-label">{{ t('hold_cover') }}</span>
+              <MdSwitch v-model="editingChart.chartInfo.HoldPartialCover" />
+            </div>
+            <MdTextField v-model="editingChart.chartInfo.tip" variant="outlined" :label="t('tip')" />
+          </div>
+        </form>
+      </div>
+    </mdui-dialog>
 
     <!-- Bulk Edit Dialog -->
-    <v-dialog v-model="bulkEditDialog" max-width="500">
-      <v-card class="md3-dialog">
-        <v-toolbar color="transparent" class="border-b">
-          <v-toolbar-title>{{ t('bulk-edit-title') }}</v-toolbar-title>
-          <v-spacer />
-          <v-btn icon="mdi-close" variant="text" @click="bulkEditDialog = false" />
-        </v-toolbar>
-        <v-card-text class="pa-6">
-          <v-alert color="info" variant="tonal" class="mb-4" icon="mdi-information-outline">
-            {{ t('bulk-edit-hint') }}
-          </v-alert>
-          <v-form ref="bulkForm" @submit.prevent>
-            <div class="field-label-sm mb-1">{{ t('aspect') }}</div>
-            <div class="d-flex align-center gap-2 mb-4">
-              <v-text-field type="number" placeholder="Original" v-model="bulkEditData.aspectWidth" hide-details variant="outlined" density="comfortable" />
-              <span>:</span>
-              <v-text-field type="number" placeholder="Original" v-model="bulkEditData.aspectHeight" hide-details variant="outlined" density="comfortable" />
+    <mdui-dialog :open="bulkEditDialog" @close="bulkEditDialog = false" class="bulk-edit-dialog">
+      <div class="dialog-toolbar">
+        <mdui-button-icon @click="bulkEditDialog = false">
+          <mdui-icon-close></mdui-icon-close>
+        </mdui-button-icon>
+        <span class="dialog-title">{{ t('bulk-edit-title') }}</span>
+        <div class="toolbar-spacer"></div>
+        <mdui-button variant="tonal" @click="saveBulkEdit">
+          <mdui-icon-save slot="icon"></mdui-icon-save>
+          {{ t('save') }}
+        </mdui-button>
+      </div>
+      <div class="dialog-body">
+        <div class="bulk-hint">
+          <mdui-icon-info--outlined class="hint-icon"></mdui-icon-info--outlined>
+          <span>{{ t('bulk-edit-hint') }}</span>
+        </div>
+        <div class="form-grid">
+          <div class="aspect-row">
+            <MdTextField v-model="bulkEditData.aspectWidth" variant="outlined" inputmode="decimal" :label="t('width')" />
+            <span class="aspect-sep">:</span>
+            <MdTextField v-model="bulkEditData.aspectHeight" variant="outlined" inputmode="decimal" :label="t('height')" />
+          </div>
+          <div class="slider-block">
+            <div class="slider-header">
+              <span>{{ t('dim') }}</span>
+              <span class="slider-val">{{ bulkEditData.backgroundDim !== null ? Math.round(bulkEditData.backgroundDim * 100) + '%' : '—' }}</span>
             </div>
-            <div class="field-label-sm mb-1">{{ t('dim') }}</div>
-            <v-slider
-              thumb-label
-              :min="0"
-              :max="1"
-              :step="0.01"
-              :model-value="bulkEditData.backgroundDim ?? 0"
-              @update:model-value="bulkEditData.backgroundDim = $event"
-              hide-details
-              color="primary"
-              class="mb-2">
-              <template v-slot:append>
-                <v-btn icon="mdi-close-circle" size="small" variant="text" color="error" v-if="bulkEditData.backgroundDim !== null" @click="bulkEditData.backgroundDim = null" />
-              </template>
-            </v-slider>
-            <div class="d-flex align-center justify-space-between mt-4">
-              <span class="field-label-sm">{{ t('hold_cover') }}</span>
-              <v-btn-toggle v-model="bulkEditData.holdCover" color="primary" variant="outlined" density="compact">
-                <v-btn :value="null">Keep</v-btn>
-                <v-btn :value="true">On</v-btn>
-                <v-btn :value="false">Off</v-btn>
-              </v-btn-toggle>
-            </div>
-          </v-form>
-        </v-card-text>
-        <v-card-actions class="pa-4 border-t">
-          <v-spacer />
-          <button class="md3-btn md3-btn-text" @click="bulkEditDialog = false">{{ t('close') }}</button>
-          <button class="md3-btn md3-btn-filled" @click="saveBulkEdit">{{ t('save') }}</button>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+            <MdSlider :model-value="bulkEditData.backgroundDim ?? 0" @update:model-value="(v: number) => bulkEditData.backgroundDim = v" :min="0" :max="1" :step="0.01" />
+          </div>
+          <div class="field-toggle">
+            <span class="field-label">{{ t('hold_cover') }}</span>
+            <mdui-segmented-button-group selects="single" :value="holdCoverValue" @change="onHoldCoverChange">
+              <mdui-segmented-button value="keep">{{ t('hold-keep') }}</mdui-segmented-button>
+              <mdui-segmented-button value="on">{{ t('hold-on') }}</mdui-segmented-button>
+              <mdui-segmented-button value="off">{{ t('hold-off') }}</mdui-segmented-button>
+            </mdui-segmented-button-group>
+          </div>
+        </div>
+      </div>
+    </mdui-dialog>
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
+@use './styles/breakpoints' as bp;
+@use './styles/motion' as mo;
+
 .batch-layout {
   display: flex;
   flex-direction: column;
@@ -812,63 +693,13 @@ watch(
   width: 100%;
   padding: 20px;
   box-sizing: border-box;
-  font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
-}
-
-/* ===== MD3 Buttons ===== */
-.md3-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-  white-space: nowrap;
-  font-family: inherit;
-}
-.md3-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.md3-btn-sm {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-.md3-btn-text {
-  background: transparent;
-  color: rgba(255, 255, 255, 0.7);
-}
-.md3-btn-text:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-}
-.md3-btn-tonal {
-  background: rgba(130, 177, 255, 0.12);
-  color: #82b1ff;
-}
-.md3-btn-tonal:hover:not(:disabled) {
-  background: rgba(130, 177, 255, 0.2);
-}
-.md3-btn-filled {
-  background: #82b1ff;
-  color: #002f65;
-  font-weight: 600;
-}
-.md3-btn-filled:hover:not(:disabled) {
-  background: #a0c4ff;
-  box-shadow: 0 2px 8px rgba(130, 177, 255, 0.3);
 }
 
 /* ===== Header ===== */
 .batch-header {
   flex-shrink: 0;
-  background: rgba(24, 24, 24, 0.85);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 20px;
+  background-color: rgb(var(--mdui-color-surface-container));
+  border-radius: var(--mdui-shape-corner-extra-large);
   padding: 14px 18px;
   margin-bottom: 12px;
 }
@@ -892,27 +723,28 @@ watch(
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: rgba(255, 255, 255, 0.4);
+  color: rgb(var(--mdui-color-on-surface-variant));
   pointer-events: none;
+  font-size: 1.25rem;
 }
 
-.md3-search {
+.search-input {
   width: 100%;
-  padding: 8px 12px 8px 36px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 13px;
+  padding: 10px 12px 10px 40px;
+  background-color: rgb(var(--mdui-color-surface-container-high));
+  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  border-radius: var(--mdui-shape-corner-full);
+  color: rgb(var(--mdui-color-on-surface));
+  font-size: var(--mdui-typescale-body-medium-size);
   font-family: inherit;
-  transition: border-color 0.2s ease;
+  transition: border-color var(--mdui-motion-duration-short4) var(--mdui-motion-easing-standard);
 }
-.md3-search:focus {
+.search-input:focus {
   outline: none;
-  border-color: rgba(130, 177, 255, 0.5);
+  border-color: rgb(var(--mdui-color-primary));
 }
-.md3-search::placeholder {
-  color: rgba(255, 255, 255, 0.35);
+.search-input::placeholder {
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 .header-actions {
@@ -926,20 +758,19 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
+  padding: 4px 8px;
   flex-shrink: 0;
 }
 
-.sel-left,
-.sel-right {
+.sel-left, .sel-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .sel-count {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.55);
+  font-size: var(--mdui-typescale-body-small-size);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 /* ===== Render Bar ===== */
@@ -947,7 +778,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 0;
+  padding: 4px 0;
   flex-shrink: 0;
 }
 
@@ -955,25 +786,17 @@ watch(
   animation: pulse-glow 2s infinite;
 }
 @keyframes pulse-glow {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(255, 152, 0, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 152, 0, 0);
-  }
+  0% { box-shadow: 0 0 0 0 rgba(var(--mdui-color-tertiary), 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(var(--mdui-color-tertiary), 0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--mdui-color-tertiary), 0); }
 }
 
 .spin-anim {
+  width: 1rem;
+  height: 1rem;
   animation: spin 1.5s linear infinite;
 }
-@keyframes spin {
-  100% {
-    transform: rotate(360deg);
-  }
-}
+@keyframes spin { 100% { transform: rotate(360deg); } }
 
 /* ===== Chart List ===== */
 .chart-list {
@@ -998,32 +821,35 @@ watch(
   justify-content: center;
   height: 100%;
   gap: 16px;
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 14px;
 }
 
-/* ===== Chart Row (MD3 Card) ===== */
+.empty-icon {
+  font-size: 4rem;
+  color: rgb(var(--mdui-color-outline));
+}
+
+/* ===== Chart Row ===== */
 .chart-row {
   position: relative;
-  background: rgba(30, 30, 30, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 16px;
+  background-color: rgb(var(--mdui-color-surface-container-low));
+  border-radius: var(--mdui-shape-corner-large);
   overflow: hidden;
-  transition: all 0.2s ease;
+  @include mo.spatial(box-shadow);
+
+  @include mo.enter-rise(14px);
+  @include mo.stagger(10, 45ms, 40ms);
 }
 
 .chart-row:hover {
-  background: rgba(40, 40, 40, 0.9);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--mdui-elevation-level1);
 }
 
 .chart-row.is-failed {
-  border-left: 3px solid #ff5252;
+  border-left: 3px solid rgb(var(--mdui-color-error));
 }
 
 .chart-row.is-rendering {
-  border: 1px solid rgba(255, 152, 0, 0.3);
+  border: 1px solid rgb(var(--mdui-color-tertiary));
 }
 
 .progress-bg {
@@ -1031,9 +857,11 @@ watch(
   top: 0;
   left: 0;
   height: 100%;
-  background: linear-gradient(90deg, rgba(130, 177, 255, 0.08), rgba(130, 177, 255, 0.18));
+  background: linear-gradient(90deg, rgba(var(--mdui-color-tertiary-container), 0.3), rgba(var(--mdui-color-tertiary-container), 0.6));
   z-index: 0;
-  transition: width 0.3s linear;
+  /* A determinate progress fill reads as decelerating into its target rather
+     than stopping dead, so it eases out instead of running linear. */
+  transition: width var(--app-motion-duration-effects-slow) var(--mdui-motion-easing-standard-decelerate);
 }
 
 .row-content {
@@ -1060,111 +888,183 @@ watch(
 }
 
 .row-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: var(--mdui-typescale-title-medium-size);
+  font-weight: var(--mdui-typescale-title-medium-weight);
+  color: rgb(var(--mdui-color-on-surface));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.level-chip {
+  --shape-corner: var(--mdui-shape-corner-small);
+  flex-shrink: 0;
 }
 
 .row-sub {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
+  font-size: var(--mdui-typescale-body-small-size);
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.sub-icon {
+  font-size: 1rem;
 }
 
 .render-status {
-  color: #82b1ff;
+  color: rgb(var(--mdui-color-primary));
   font-weight: 500;
 }
 
 .error-status {
-  color: #ff5252;
+  color: rgb(var(--mdui-color-error));
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.status-chip {
+  flex-shrink: 0;
+  --shape-corner: var(--mdui-shape-corner-full);
+}
+
+.status-pending { color: rgb(var(--mdui-color-tertiary)); }
+.status-rendering { color: rgb(var(--mdui-color-primary)); }
+.status-done { color: rgb(var(--mdui-color-success)); }
+.status-failed { color: rgb(var(--mdui-color-error)); }
+
 .row-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
-.icon-btn {
-  width: 32px;
-  height: 32px;
+/* ===== Dialogs ===== */
+.config-dialog::part(panel) {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.edit-dialog::part(panel),
+.bulk-edit-dialog::part(panel) {
+  max-width: min(600px, 90vw);
+}
+
+.dialog-toolbar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  border-radius: 50%;
-  cursor: pointer;
-  color: rgba(255, 255, 255, 0.6);
-  transition: all 0.15s ease;
-}
-.icon-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-}
-.icon-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-.icon-btn-danger:hover:not(:disabled) {
-  background: rgba(255, 82, 82, 0.15);
-  color: #ff5252;
+  gap: 8px;
+  padding: 8px 16px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgb(var(--mdui-color-outline-variant));
 }
 
-.field-label-sm {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.5);
-  text-transform: uppercase;
+.dialog-title {
+  font-size: var(--mdui-typescale-title-large-size);
+  font-weight: var(--mdui-typescale-title-large-weight);
+  color: rgb(var(--mdui-color-on-surface));
 }
 
-/* ===== Dialogs ===== */
-.md3-dialog {
-  background: rgba(28, 28, 28, 0.95) !important;
-  backdrop-filter: blur(20px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 28px !important;
+.toolbar-spacer {
+  flex: 1;
 }
 
-.md3-dialog-full {
-  background: rgba(18, 18, 18, 0.55) !important;
-  backdrop-filter: blur(40px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(160%) !important;
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
+.config-dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.border-b {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+.dialog-body {
+  padding: 20px;
+  overflow-y: auto;
 }
-.border-t {
-  border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+
+/* ===== Form ===== */
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.aspect-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aspect-sep {
+  font-size: var(--mdui-typescale-title-large-size);
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.slider-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  color: rgb(var(--mdui-color-on-surface-variant));
+  font-size: var(--mdui-typescale-body-medium-size);
+}
+
+.slider-val {
+  font-family: 'Roboto Mono', 'Consolas', monospace;
+  font-size: var(--mdui-typescale-body-small-size);
+  font-weight: var(--mdui-typescale-label-large-weight);
+  color: rgb(var(--mdui-color-on-surface));
+}
+
+.field-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.field-label {
+  font-size: var(--mdui-typescale-body-medium-size);
+  color: rgb(var(--mdui-color-on-surface));
+}
+
+.bulk-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: var(--mdui-shape-corner-medium);
+  background-color: rgb(var(--mdui-color-secondary-container));
+  color: rgb(var(--mdui-color-on-secondary-container));
+  font-size: var(--mdui-typescale-body-small-size);
+  margin-bottom: 16px;
+}
+
+.hint-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
 }
 
 /* ===== Responsive ===== */
-@media (max-width: 768px) {
-  .batch-layout {
-    padding: 12px;
-  }
-  .header-actions {
-    flex-wrap: wrap;
-  }
-  .header-actions .md3-btn span {
-    display: none;
-  }
-  .sel-right .md3-btn span {
-    display: none;
-  }
+@include bp.below-expanded {
+  .batch-layout { padding: 12px; }
+  .header-actions { flex-wrap: wrap; }
+  .btn-label { display: none; }
 }
 </style>

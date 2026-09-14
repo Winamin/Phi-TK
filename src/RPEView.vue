@@ -19,54 +19,54 @@ zh-CN:
 </i18n>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { invoke } from '@tauri-apps/api/core'
-import { convertFileSrc } from '@tauri-apps/api/core'
-import { open } from '@tauri-apps/plugin-dialog'
+import { ref, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { invoke } from '@tauri-apps/api/core';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 
-import { toast, toastError } from './common'
-import type { RPEChart } from './model'
-import router from './router'
+import { toast, toastError } from './common';
+import type { RPEChart } from './model';
+import router from './router';
 
-const { t } = useI18n()
+const { t } = useI18n();
 
-const charts = ref<RPEChart[] | null>(null)
+const charts = ref<RPEChart[] | null>(null);
 
 const getRPECharts = async () => {
   try {
-    charts.value = (await invoke('get_rpe_charts')) as RPEChart[] | null
+    charts.value = (await invoke('get_rpe_charts')) as RPEChart[] | null;
   } catch (e) {
-    toastError(e)
-    charts.value = null
+    toastError(e);
+    charts.value = null;
   }
-}
+};
 
 const bindRPE = async () => {
-  const file = await open({ directory: true, title: t('rpe-folder') })
-  if (!file) return
+  const file = await open({ directory: true, title: t('rpe-folder') });
+  if (!file) return;
   try {
-    await invoke('set_rpe_dir', { path: file })
-    toast(t('binded'), 'success')
-    await getRPECharts()
+    await invoke('set_rpe_dir', { path: file });
+    toast(t('binded'), 'success');
+    await getRPECharts();
   } catch (e) {
-    toastError(e)
+    toastError(e);
   }
-}
+};
 
 const unbindRPE = async () => {
   try {
-    await invoke('unset_rpe_dir')
-    toast(t('unbinded'), 'success')
-    charts.value = null
+    await invoke('unset_rpe_dir');
+    toast(t('unbinded'), 'success');
+    charts.value = null;
   } catch (e) {
-    toastError(e)
+    toastError(e);
   }
-}
+};
 
 onMounted(() => {
-  getRPECharts()
-})
+  getRPECharts();
+});
 </script>
 
 <template>
@@ -74,52 +74,53 @@ onMounted(() => {
     <!-- Unbinded state -->
     <template v-if="!charts">
       <div class="empty-state">
-        <h2 class="empty-title">{{ t('not-binded') }}</h2>
-        <button class="md3-btn md3-btn-filled" @click="bindRPE">
-          <v-icon icon="mdi-link-variant" size="18" />
-          <span>{{ t('bind') }}</span>
-        </button>
+        <mdui-icon-link-off class="empty-icon"></mdui-icon-link-off>
+        <h2 class="empty-title md3-headline">{{ t('not-binded') }}</h2>
+        <mdui-button variant="filled" @click="bindRPE">
+          <mdui-icon-link slot="icon"></mdui-icon-link>
+          {{ t('bind') }}
+        </mdui-button>
       </div>
     </template>
 
     <!-- Binded state -->
     <template v-else>
       <div class="rpe-header">
-        <button class="md3-btn md3-btn-text" @click="unbindRPE" style="color: #ff5252;">
-          <v-icon icon="mdi-link-off" size="18" />
-          <span>{{ t('unbind') }}</span>
-        </button>
+        <mdui-button variant="text" class="unbind-btn" @click="unbindRPE">
+          <mdui-icon-link-off slot="icon"></mdui-icon-link-off>
+          {{ t('unbind') }}
+        </mdui-button>
       </div>
 
       <div class="chart-list">
-        <div
-          v-for="chart in charts"
-          :key="chart.id"
-          class="chart-card"
-        >
+        <mdui-card v-for="chart in charts" :key="chart.id" variant="filled" class="chart-card">
           <div class="chart-cover">
             <div
               class="cover-image"
-              :style="{ backgroundImage: 'url(' + convertFileSrc(chart.illustration) + ')' }"
-            ></div>
+              :style="{ backgroundImage: 'url(' + convertFileSrc(chart.illustration) + ')' }"></div>
           </div>
           <div class="chart-content">
-            <h3 class="chart-name">{{ chart.name }}</h3>
+            <h3 class="chart-name md3-title-large">{{ chart.name }}</h3>
             <p class="chart-id">{{ chart.id }}</p>
             <div class="chart-action">
-              <button class="md3-btn md3-btn-filled" @click="router.push({ name: 'render', query: { chart: chart.path } })">
-                <v-icon icon="mdi-play-circle-outline" size="18" />
-                <span>{{ t('render') }}</span>
-              </button>
+              <mdui-button
+                variant="filled"
+                @click="router.push({ name: 'render', query: { chart: chart.path } })">
+                <mdui-icon-play-circle--outlined slot="icon"></mdui-icon-play-circle--outlined>
+                {{ t('render') }}
+              </mdui-button>
             </div>
           </div>
-        </div>
+        </mdui-card>
       </div>
     </template>
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
+@use './styles/breakpoints' as bp;
+@use './styles/motion' as mo;
+
 .rpe-container {
   padding: 24px;
   width: 100%;
@@ -131,26 +132,6 @@ onMounted(() => {
   gap: 16px;
 }
 
-/* ===== MD3 Buttons ===== */
-.md3-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-  white-space: nowrap;
-  font-family: inherit;
-}
-.md3-btn-filled { background: #82b1ff; color: #002f65; font-weight: 600; }
-.md3-btn-filled:hover { background: #a0c4ff; box-shadow: 0 2px 8px rgba(130, 177, 255, 0.3); }
-.md3-btn-text { background: transparent; color: rgba(255, 255, 255, 0.7); }
-.md3-btn-text:hover { background: rgba(255, 255, 255, 0.08); }
-
 /* ===== Empty State ===== */
 .empty-state {
   display: flex;
@@ -161,10 +142,13 @@ onMounted(() => {
   gap: 24px;
 }
 
+.empty-icon {
+  font-size: 4rem;
+  color: rgb(var(--mdui-color-outline));
+}
+
 .empty-title {
-  font-size: 22px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgb(var(--mdui-color-on-surface-variant));
   margin: 0;
   text-align: center;
 }
@@ -176,6 +160,11 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+/* Unbinding is destructive, so the action carries the error colour. */
+.unbind-btn {
+  --mdui-color-primary: var(--mdui-color-error);
+}
+
 /* ===== Chart List ===== */
 .chart-list {
   display: flex;
@@ -183,30 +172,28 @@ onMounted(() => {
   gap: 12px;
   overflow-y: auto;
   flex: 1;
+  padding: 2px;
 }
 
-/* ===== Chart Card (RPEView style, MD3 enhanced) ===== */
+/* `<mdui-card>` is `display: inline-block` in its shadow root; a document-level rule
+   outranks `:host`, so this makes it a row. */
 .chart-card {
   display: flex;
   flex-direction: row;
-  background: rgba(25, 25, 25, 0.85);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  @include mo.spatial(box-shadow);
+
+  @include mo.enter-rise(14px);
+  @include mo.stagger(10, 45ms, 40ms);
 }
 
 .chart-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: var(--mdui-elevation-level2);
 }
 
 .chart-cover {
   width: 35%;
   min-height: 180px;
-  background: rgba(0, 0, 0, 0.15);
+  background-color: rgb(var(--mdui-color-surface-container-low));
 }
 
 .cover-image {
@@ -226,17 +213,16 @@ onMounted(() => {
 }
 
 .chart-name {
-  font-size: 18px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgb(var(--mdui-color-on-surface));
   margin: 0;
 }
 
 .chart-id {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  font-size: var(--mdui-typescale-body-small-size);
+  line-height: var(--mdui-typescale-body-small-line-height);
+  color: rgb(var(--mdui-color-on-surface-variant));
   margin: 0;
-  font-family: 'Consolas', monospace;
+  font-family: 'Roboto Mono', 'Consolas', monospace;
 }
 
 .chart-action {
@@ -246,10 +232,19 @@ onMounted(() => {
 }
 
 /* ===== Responsive ===== */
-@media (max-width: 600px) {
-  .rpe-container { padding: 16px; }
-  .chart-card { flex-direction: column; }
-  .chart-cover { width: 100%; min-height: 160px; }
-  .chart-content { width: 100%; }
+@include bp.compact {
+  .rpe-container {
+    padding: 16px;
+  }
+  .chart-card {
+    flex-direction: column;
+  }
+  .chart-cover {
+    width: 100%;
+    min-height: 160px;
+  }
+  .chart-content {
+    width: 100%;
+  }
 }
 </style>

@@ -1,35 +1,83 @@
+/* Roboto — MD3's reference typeface. Bundled locally: the Tauri CSP has no `font-src`,
+   so the Google Fonts CDN is unreachable at runtime. latin + latin-ext only; CJK falls
+   back to the platform UI font (bundling Noto Sans SC would add ~10 MB). */
 @font-face {
-  font-family: 'Ubuntu';
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 400;
   font-display: swap;
-  src: url('./Ubuntu-Regular.ttf');
+  src: url('./fonts/roboto-latin-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/roboto-latin-500.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/roboto-latin-700.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/roboto-latin-ext-400.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/roboto-latin-ext-500.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/roboto-latin-ext-700.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
-:root {
-  --glass-bg: rgba(30, 30, 30, 0.72);
-  --glass-bg-heavy: rgba(24, 24, 24, 0.88);
-  --glass-blur: blur(24px) saturate(180%);
-  --glass-border: 1px solid rgba(255, 255, 255, 0.08);
-  --glass-border-active: 1px solid rgba(255, 255, 255, 0.14);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  --glass-shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.3);
-  --glass-radius: 16px;
-  --glass-radius-sm: 12px;
-  --glass-radius-lg: 28px;
-
-  --md3-ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
-  --md3-ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --md3-ease-decelerate: cubic-bezier(0, 0, 0, 1);
+html,
+body {
+  height: 100%;
 }
 
 html {
-  font-family: 'Ubuntu', 'Roboto', sans-serif, system-ui !important;
-  transition: background-color 0.5s;
-  color-scheme: dark;
+  font-family: 'Roboto', system-ui, sans-serif;
+  transition: background-color var(--mdui-motion-duration-medium2) var(--mdui-motion-easing-standard);
 }
 
 body {
   margin: 0;
-  background: #0F0F0F;
+  background-color: rgb(var(--mdui-color-background));
+  color: rgb(var(--mdui-color-on-background));
+  font-size: var(--mdui-typescale-body-medium-size);
+  line-height: var(--mdui-typescale-body-medium-line-height);
+}
+
+/* `<mdui-layout full-height>` is `height: 100%` of its parent and `flex: 1 1 auto`, so the
+   mount point has to be a full-height flex container. The wallpaper layers are
+   `position: fixed`, which keeps them out of the flex flow. */
+#app {
+  display: flex;
+  height: 100%;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 ::-webkit-scrollbar {
@@ -42,225 +90,267 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
+  background: rgba(var(--mdui-color-outline), 0.5);
+  border-radius: var(--mdui-shape-corner-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgb(var(--mdui-color-outline));
 }
 
-.glass-card {
-  background: var(--glass-bg) !important;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: var(--glass-border) !important;
-  border-radius: var(--glass-radius) !important;
-  box-shadow: var(--glass-shadow-sm);
-  transition: transform 0.2s var(--md3-ease-standard),
-              box-shadow 0.2s var(--md3-ease-standard),
-              border-color 0.2s var(--md3-ease-standard);
+/* ===== Snackbar tinting for toast(message, kind) =====
+   mdui's snackbar exposes no CSS parts, but it sets background/colour on `:host`, and
+   document-level rules targeting the host element take precedence over `:host` rules. */
+.toast-success {
+  background-color: rgb(var(--mdui-color-success-container));
+  color: rgb(var(--mdui-color-on-success-container));
+}
+.toast-warning {
+  background-color: rgb(var(--mdui-color-warning-container));
+  color: rgb(var(--mdui-color-on-warning-container));
+}
+.toast-error {
+  background-color: rgb(var(--mdui-color-error-container));
+  color: rgb(var(--mdui-color-on-error-container));
 }
 
-.glass-card:hover {
-  border-color: rgba(255, 255, 255, 0.14);
-  box-shadow: var(--glass-shadow);
+/* ===== Shared MD3 building blocks ===== */
+
+/* A page-level surface panel. Replaces the four independent `.md3-card` / `.glass-card`
+   definitions that used to live in individual views. */
+.md3-surface {
+  background-color: rgb(var(--mdui-color-surface-container-low));
+  border-radius: var(--mdui-shape-corner-large);
+  padding: 20px;
 }
 
-.glass-card-elevated {
-  background: rgba(35, 35, 35, 0.8) !important;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: var(--glass-border) !important;
-  border-radius: var(--glass-radius) !important;
-  box-shadow: var(--glass-shadow);
+.md3-surface-high {
+  background-color: rgb(var(--mdui-color-surface-container-high));
+  border-radius: var(--mdui-shape-corner-large);
+  padding: 20px;
 }
 
-.glass-nav {
-  background: rgba(24, 24, 24, 0.82) !important;
-  backdrop-filter: blur(32px) saturate(200%);
-  -webkit-backdrop-filter: blur(32px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+/* Section heading inside a surface panel. */
+.md3-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: rgb(var(--mdui-color-primary));
+  font-size: var(--mdui-typescale-title-small-size);
+  font-weight: var(--mdui-typescale-title-small-weight);
+  line-height: var(--mdui-typescale-title-small-line-height);
+  letter-spacing: var(--mdui-typescale-title-small-tracking);
 }
 
-.glass-dialog {
-  background: rgba(28, 28, 28, 0.92) !important;
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+.md3-title-large {
+  font-size: var(--mdui-typescale-title-large-size);
+  font-weight: var(--mdui-typescale-title-large-weight);
+  line-height: var(--mdui-typescale-title-large-line-height);
 }
 
-.md3-text-display {
-  font-size: 3.5rem;
-  font-weight: 400;
-  line-height: 1.12;
-  letter-spacing: -0.25px;
+.md3-headline {
+  font-size: var(--mdui-typescale-headline-small-size);
+  font-weight: var(--mdui-typescale-headline-small-weight);
+  line-height: var(--mdui-typescale-headline-small-line-height);
 }
 
-.md3-text-headline {
-  font-size: 2rem;
-  font-weight: 400;
-  line-height: 1.25;
+.md3-body {
+  font-size: var(--mdui-typescale-body-medium-size);
+  line-height: var(--mdui-typescale-body-medium-line-height);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
-.md3-text-title-lg {
-  font-size: 1.375rem;
-  font-weight: 500;
-  line-height: 1.27;
+.md3-caption {
+  font-size: var(--mdui-typescale-body-small-size);
+  line-height: var(--mdui-typescale-body-small-line-height);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
-.md3-text-title {
-  font-size: 1rem;
-  font-weight: 500;
-  line-height: 1.25;
+/* A dialog / sheet scrim. MD3 layers a 32% scrim between an overlay surface and the
+   content it covers; using the token keeps it correct in both light and dark themes. */
+.md3-scrim {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(var(--mdui-color-scrim), 0.32);
 }
 
-.md3-text-label-lg {
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.43;
-  letter-spacing: 0.1px;
+/* MD3 typescale shorthands, so views stop repeating the four-property dance. */
+.md3-title-medium {
+  font-size: var(--mdui-typescale-title-medium-size);
+  font-weight: var(--mdui-typescale-title-medium-weight);
+  line-height: var(--mdui-typescale-title-medium-line-height);
+  letter-spacing: var(--mdui-typescale-title-medium-tracking);
 }
 
-.v-main {
-  background: transparent !important;
+.md3-title-small {
+  font-size: var(--mdui-typescale-title-small-size);
+  font-weight: var(--mdui-typescale-title-small-weight);
+  line-height: var(--mdui-typescale-title-small-line-height);
+  letter-spacing: var(--mdui-typescale-title-small-tracking);
 }
 
-.v-main__wrap {
-  background: transparent !important;
+.md3-body-medium {
+  font-size: var(--mdui-typescale-body-medium-size);
+  line-height: var(--mdui-typescale-body-medium-line-height);
 }
 
-/* ===== MD3 Dark Theme Global Overrides ===== */
-
-/* Filled form fields - MD3 surface-container-high */
-.v-field--variant-filled {
-  background: rgba(42, 42, 42, 0.8) !important;
-  border-radius: 12px !important;
-}
-.v-field--variant-filled .v-field__overlay {
-  background: transparent !important;
-}
-.v-field--variant-filled:hover {
-  background: rgba(50, 50, 50, 0.85) !important;
-}
-.v-field--variant-filled.v-field--focused {
-  background: rgba(55, 55, 55, 0.9) !important;
+/* A tonal icon badge — MD3's "leading icon in a container" pattern. */
+.md3-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--mdui-shape-corner-full);
+  background-color: rgb(var(--mdui-color-secondary-container));
+  color: rgb(var(--mdui-color-on-secondary-container));
+  font-size: 1.25rem;
 }
 
-/* Outlined fields - MD3 outline style */
-.v-field--variant-outlined .v-field__outline__start,
-.v-field--variant-outlined .v-field__outline__end,
-.v-field--variant-outlined .v-field__outline__notch {
-  border-color: rgba(255, 255, 255, 0.12) !important;
-}
-.v-field--variant-outlined.v-field--focused .v-field__outline__start,
-.v-field--variant-outlined.v-field--focused .v-field__outline__end,
-.v-field--variant-outlined.v-field--focused .v-field__outline__notch {
-  border-color: #82b1ff !important;
+.md3-icon-badge-primary {
+  background-color: rgb(var(--mdui-color-primary-container));
+  color: rgb(var(--mdui-color-on-primary-container));
 }
 
-/* Labels */
-.v-label {
-  color: rgba(255, 255, 255, 0.55) !important;
-  opacity: 1 !important;
+/* ============================================================================
+   MD3 expressive motion tokens.
+   ============================================================================
+
+   Two corrections and one addition on top of what mdui ships:
+
+   1. mdui defines `--mdui-motion-easing-emphasized` as an *alias of* `standard`,
+      which is documented but means every "emphasized" transition in the app is
+      really a standard one. Restored to the MD3 value.
+
+   2. Material 3's expressive motion is spring-based, not curve-based. The spring
+      easings below are generated from damped-harmonic-oscillator physics and
+      sampled into `linear()`:
+
+          p(t) = 1 - e^(-ζω₀t) · (cos ω_d t + (ζω₀/ω_d) · sin ω_d t)
+
+      Overshoot of a damped spring is e^(-πζ/√(1-ζ²)), so a damping ratio of 1.0
+      is critically damped and flattens at 1 — that is why the `effects` springs
+      never overshoot while the `spatial` and `bouncy` ones do.
+
+   3. Spatial and effects get *different* durations, because MD3 moves position
+      and colour on separate clocks.
+
+   `linear()` needs Chromium 113+. The `@supports` block below falls back to a
+   cubic-bezier with comparable overshoot, so the fallback is graceful rather
+   than a hard failure on an older webview. */
+
+:root {
+  /* --- Spatial: position, size, shape. Springs; may overshoot slightly. --- */
+  --app-motion-duration-spatial-fast: 224ms;
+  --app-motion-duration-spatial-default: 317ms;
+  --app-motion-duration-spatial-slow: 484ms;
+
+  /* --- Effects: colour, opacity, elevation. Critically damped, flat at 1. --- */
+  --app-motion-duration-effects-fast: 150ms;
+  --app-motion-duration-effects-default: 231ms;
+  --app-motion-duration-effects-slow: 326ms;
+
+  /* --- Bouncy accent: ζ = 0.7, ~4.6% overshoot. --- */
+  --app-motion-duration-bouncy: 420ms;
+
+  /* Cubic-bezier fallbacks, tuned to a similar overshoot profile. */
+  --app-motion-spring-spatial-fast: cubic-bezier(0.2, 0, 0, 1);
+  --app-motion-spring-spatial-default: cubic-bezier(0.2, 0, 0, 1);
+  --app-motion-spring-spatial-slow: cubic-bezier(0.2, 0, 0, 1);
+  --app-motion-spring-effects-fast: cubic-bezier(0, 0, 0, 1);
+  --app-motion-spring-effects-default: cubic-bezier(0, 0, 0, 1);
+  --app-motion-spring-effects-slow: cubic-bezier(0, 0, 0, 1);
+  --app-motion-spring-bouncy: cubic-bezier(0.34, 1.32, 0.64, 1);
 }
 
-/* Input text */
-.v-field__input {
-  color: rgba(255, 255, 255, 0.9) !important;
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --app-motion-spring-spatial-fast: linear(
+      0, 0.0193, 0.0681, 0.1355, 0.213, 0.2949, 0.3766, 0.4554, 0.5292, 0.5969, 0.6581, 0.7124, 0.7602, 0.8017,
+      0.8373, 0.8677, 0.8934, 0.9149, 0.9327, 0.9474, 0.9594, 0.9691, 0.9769, 0.983, 0.9879, 0.9917, 0.9946, 0.9967,
+      0.9984, 0.9995, 1.0004, 1.0009, 1.0012, 1.0014, 1.0015, 1.0015, 1.0015, 1.0014, 1.0013, 1.0011, 1
+    );
+    --app-motion-spring-spatial-default: linear(
+      0, 0.0137, 0.0494, 0.1003, 0.1609, 0.227, 0.2954, 0.3638, 0.4303, 0.4937, 0.5532, 0.6084, 0.6588, 0.7046,
+      0.7457, 0.7824, 0.8148, 0.8434, 0.8683, 0.8899, 0.9086, 0.9246, 0.9383, 0.9499, 0.9597, 0.9679, 0.9747,
+      0.9803, 0.9849, 0.9887, 0.9918, 0.9942, 0.9962, 0.9977, 0.9988, 0.9997, 1.0004, 1.0008, 1.0012, 1.0014,
+      1.0015, 1.0015, 1.0015, 1.0015, 1.0014, 1.0013, 1.0012, 1.0011, 1
+    );
+    --app-motion-spring-spatial-slow: linear(
+      0, 0.0102, 0.0374, 0.077, 0.1253, 0.1794, 0.2367, 0.2955, 0.3541, 0.4116, 0.467, 0.5198, 0.5695, 0.6159,
+      0.6589, 0.6984, 0.7345, 0.7672, 0.7968, 0.8234, 0.8472, 0.8683, 0.8871, 0.9036, 0.9181, 0.9308, 0.9418,
+      0.9514, 0.9597, 0.9668, 0.9729, 0.978, 0.9824, 0.9861, 0.9892, 0.9918, 0.9939, 0.9957, 0.9971, 0.9982,
+      0.9991, 0.9998, 1.0004, 1.0008, 1.0011, 1.0013, 1.0014, 1.0015, 1.0015, 1.0015, 1.0015, 1.0014, 1.0013,
+      1.0013, 1.0012, 1.0011, 1
+    );
+    --app-motion-spring-effects-fast: linear(
+      0, 0.0343, 0.1141, 0.2144, 0.3199, 0.4219, 0.5154, 0.5983, 0.6701, 0.7311, 0.7822, 0.8246, 0.8594, 0.8878,
+      0.9107, 0.9292, 0.9441, 0.9559, 0.9653, 0.9728, 0.9787, 0.9833, 0.987, 0.9899, 0.9921, 0.9939, 0.9952,
+      0.9963, 0.9971, 0.9978, 0.9983, 0.9987, 1
+    );
+    --app-motion-spring-effects-default: linear(
+      0, 0.0228, 0.0786, 0.1529, 0.2356, 0.3201, 0.4023, 0.4794, 0.5501, 0.6138, 0.6703, 0.7199, 0.7631, 0.8003,
+      0.8323, 0.8596, 0.8827, 0.9023, 0.9187, 0.9326, 0.9442, 0.9538, 0.9619, 0.9686, 0.9741, 0.9787, 0.9825,
+      0.9857, 0.9883, 0.9904, 0.9921, 0.9936, 0.9948, 0.9957, 0.9965, 0.9972, 0.9977, 0.9981, 0.9985, 0.9988, 1
+    );
+    --app-motion-spring-effects-slow: linear(
+      0, 0.0162, 0.0574, 0.1142, 0.1799, 0.2497, 0.3202, 0.3889, 0.4544, 0.5157, 0.5722, 0.6237, 0.6703, 0.7121,
+      0.7494, 0.7824, 0.8116, 0.8372, 0.8596, 0.8791, 0.8961, 0.9109, 0.9237, 0.9347, 0.9442, 0.9524, 0.9594,
+      0.9654, 0.9706, 0.975, 0.9788, 0.982, 0.9847, 0.987, 0.989, 0.9907, 0.9921, 0.9934, 0.9944, 0.9953, 0.996,
+      0.9966, 0.9972, 0.9976, 0.998, 0.9983, 0.9986, 0.9988, 1
+    );
+    --app-motion-spring-bouncy: linear(
+      0, 0.0155, 0.0567, 0.1165, 0.189, 0.2691, 0.3527, 0.4366, 0.5182, 0.5956, 0.6674, 0.7328, 0.7913, 0.8427,
+      0.8872, 0.9249, 0.9562, 0.9818, 1.0021, 1.0178, 1.0293, 1.0374, 1.0425, 1.0452, 1.046, 1.0452, 1.0433,
+      1.0405, 1.0371, 1.0334, 1.0296, 1.0257, 1.022, 1.0184, 1.0151, 1.0121, 1.0095, 1.0071, 1.0051, 1.0034, 1.0019,
+      1.0008, 0.9999, 0.9991, 0.9986, 0.9983, 0.998, 0.9979, 0.9979, 0.9979, 0.998, 0.9981, 0.9983, 0.9985, 0.9987,
+      0.9988, 1
+    );
+  }
 }
 
-/* Cards - MD3 surface container */
-.v-card--variant-flat {
-  background: rgba(30, 30, 30, 0.85) !important;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+/* MD3's emphasized easing, restored. mdui aliases this to `standard`; the real
+   curve is a two-part path whose decelerating half is what gives "emphasized"
+   motion its characteristic weight. */
+:root {
+  --mdui-motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Dialogs */
-.v-dialog .v-overlay__content > .v-card,
-.v-dialog .v-overlay__content > form > .v-card {
-  background: rgba(28, 28, 28, 0.97) !important;
-  backdrop-filter: blur(20px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 28px !important;
+/* The one entrance animation shared by every staggered list in the app. Declared
+   globally so a mixin can reference it without duplicating the keyframes into
+   each component's stylesheet. */
+@keyframes app-enter-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--app-enter-distance, 12px)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-/* Chips - MD3 tonal style */
-.v-chip--variant-tonal {
-  background: rgba(130, 177, 255, 0.12) !important;
-  color: #82b1ff !important;
-}
-
-/* Sliders - MD3 style */
-.v-slider-track__fill {
-  background: #82b1ff !important;
-}
-.v-slider-thumb__surface {
-  background: #82b1ff !important;
-}
-
-/* Switches - MD3 inset style */
-.v-switch .v-selection-control__wrapper {
-  width: 52px !important;
-  height: 32px !important;
-}
-
-/* Progress linear - rounded */
-.v-progress-linear__background,
-.v-progress-linear__determinate {
-  border-radius: 4px !important;
-}
-
-/* Overlay scrim */
-.v-overlay--active .v-overlay__scrim {
-  background: rgba(0, 0, 0, 0.6) !important;
-}
-
-/* Selection controls */
-.v-selection-control--dirty .v-selection-control__input > .v-icon {
-  color: #82b1ff !important;
-}
-
-/* List items */
-.v-list-item {
-  border-radius: 12px !important;
-  margin: 2px 8px !important;
-}
-.v-list-item:hover {
-  background: rgba(255, 255, 255, 0.06) !important;
-}
-
-/* Alerts */
-.v-alert--variant-tonal {
-  border-radius: 16px !important;
-}
-
-/* Snackbar */
-.v-snackbar__wrapper {
-  border-radius: 16px !important;
-  background: rgba(40, 40, 40, 0.95) !important;
-  backdrop-filter: blur(12px) !important;
-}
-
-/* Dividers */
-.v-divider {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-/* Toolbar */
-.v-toolbar {
-  background: transparent !important;
-}
-
-/* Tabs */
-.v-tab {
-  border-radius: 12px !important;
-  text-transform: none !important;
-}
-
-/* Button text transform */
-.v-btn {
-  text-transform: none !important;
-  letter-spacing: 0.1px !important;
+/* `prefers-reduced-motion` is a system-level accessibility setting; MD3 surfaces
+   should stop moving entirely rather than merely speed up. Spring `linear()`
+   easings are neutralised by the same rule, because it collapses every duration
+   to ~0 — the curve then has no time in which to overshoot. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* A staggered list must also lose its delays, or items would pop in one by one
+     after the (now instant) animation had already finished. */
+  *,
+  *::before,
+  *::after {
+    animation-delay: 0ms !important;
+    transition-delay: 0ms !important;
+  }
 }
