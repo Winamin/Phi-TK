@@ -1,45 +1,115 @@
-export default {
-  dark: true,
-  colors: {
-    // MD3 Dark theme - Baseline tonal palette
-    background: '#0d0d0d',
-    surface: '#141414',
-    'surface-variant': '#1e1e1e',
-    'surface-bright': '#2a2a2a',
-    'surface-container': '#1a1a1a',
-    'surface-container-lowest': '#0f0f0f',
-    'surface-container-low': '#181818',
-    'surface-container-high': '#222222',
-    'surface-container-highest': '#2d2d2d',
+import { setTheme } from 'mdui/functions/setTheme.js';
+import { setColorScheme } from 'mdui/functions/setColorScheme.js';
+import { removeColorScheme } from 'mdui/functions/removeColorScheme.js';
+import { getColorFromImage } from 'mdui/functions/getColorFromImage.js';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
-    primary: '#82b1ff',
-    'on-primary': '#002f65',
-    'primary-container': '#00458e',
-    'on-primary-container': '#d1e4ff',
+export type ThemeMode = 'light' | 'dark' | 'auto';
 
-    secondary: '#bfc6dc',
-    'on-secondary': '#293041',
-    'secondary-container': '#3f4759',
-    'on-secondary-container': '#dae2f9',
+/**
+ * Brand seed colour, carried over from the previous Vuetify palette. mdui derives the
+ * full MD3 tonal palette (primary/secondary/tertiary/surface/…) from this single hex.
+ */
+export const SEED_COLOR = '#82b1ff';
 
-    tertiary: '#ddbce0',
-    'on-tertiary': '#3f2844',
-    'tertiary-container': '#573e5c',
-    'on-tertiary-container': '#fad8fd',
+const THEME_MODE_KEY = 'themeMode';
+const DERIVED_COLOR_KEY = 'derivedColor';
+const WALLPAPER_COLOR_KEY = 'wallpaperColor';
 
-    error: '#ffb4ab',
-    'on-error': '#690005',
-    'error-container': '#93000a',
-    'on-error-container': '#ffdad6',
+/** `success` / `warning` have no MD3 equivalent, so they are registered as custom colours. */
+const CUSTOM_COLORS = [
+  { name: 'success', value: '#7dd87d' },
+  { name: 'warning', value: '#ffb86b' },
+];
 
-    success: '#7dd87d',
-    warning: '#ffb86b',
-    info: '#82b1ff',
+export function getThemeMode(): ThemeMode {
+  const stored = localStorage.getItem(THEME_MODE_KEY);
+  return stored === 'light' || stored === 'dark' || stored === 'auto' ? stored : 'dark';
+}
 
-    outline: '#8e9099',
-    'outline-variant': '#44474e',
-    'on-background': '#e3e2e6',
-    'on-surface': '#e3e2e6',
-    'on-surface-variant': '#c4c6d0',
-  },
-};
+let mediaQuery: MediaQueryList | null = null;
+let mediaHandler: ((e: MediaQueryListEvent) => void) | null = null;
+
+function startMediaListener() {
+  if (mediaQuery) return;
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  mediaHandler = (e: MediaQueryListEvent) => {
+    if (getThemeMode() === 'auto') {
+      setTheme(e.matches ? 'dark' : 'light');
+    }
+  };
+  mediaQuery.addEventListener('change', mediaHandler);
+}
+
+function stopMediaListener() {
+  if (mediaQuery && mediaHandler) {
+    mediaQuery.removeEventListener('change', mediaHandler);
+    mediaQuery = null;
+    mediaHandler = null;
+  }
+}
+
+export function applyThemeMode(mode: ThemeMode) {
+  setTheme(mode);
+  localStorage.setItem(THEME_MODE_KEY, mode);
+  if (mode === 'auto') {
+    startMediaListener();
+  } else {
+    stopMediaListener();
+  }
+}
+
+/** Whether the accent colour should be derived from the wallpaper (Material You). */
+export function isWallpaperColorEnabled(): boolean {
+  return localStorage.getItem(WALLPAPER_COLOR_KEY) === '1';
+}
+
+export function setWallpaperColorEnabled(enabled: boolean) {
+  localStorage.setItem(WALLPAPER_COLOR_KEY, enabled ? '1' : '0');
+}
+
+export function applyColorScheme(hex: string) {
+  setColorScheme(hex, { customColors: CUSTOM_COLORS });
+}
+
+/**
+ * Re-applies whichever accent colour is currently in effect: the wallpaper-derived one
+ * when that feature is on and a colour has been cached, otherwise the brand seed.
+ */
+export function applyStoredColorScheme() {
+  const derived = localStorage.getItem(DERIVED_COLOR_KEY);
+  applyColorScheme(isWallpaperColorEnabled() && derived ? derived : SEED_COLOR);
+}
+
+export function resetColorScheme() {
+  localStorage.removeItem(DERIVED_COLOR_KEY);
+  removeColorScheme();
+  applyColorScheme(SEED_COLOR);
+}
+
+/**
+ * Extracts the dominant colour from a wallpaper file and applies it as the accent.
+ * `path` is a filesystem path, converted to an `asset:` URL the webview can load.
+ * Returns the derived hex, or null when the image could not be read.
+ */
+export async function deriveColorFromWallpaper(path: string): Promise<string | null> {
+  try {
+    const img = new Image();
+    img.src = convertFileSrc(path);
+    await img.decode();
+    const hex = await getColorFromImage(img);
+    localStorage.setItem(DERIVED_COLOR_KEY, hex);
+    applyColorScheme(hex);
+    return hex;
+  } catch (e) {
+    console.error('failed to derive colour from wallpaper', e);
+    return null;
+  }
+}
+
+/** Called once at startup, before the app mounts. */
+export function initTheme() {
+  setTheme(getThemeMode());
+  applyStoredColorScheme();
+  if (getThemeMode() === 'auto') startMediaListener();
+}

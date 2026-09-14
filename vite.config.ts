@@ -12,8 +12,19 @@ export default defineConfig(({ mode }) => {
   process.env = { ...process.env, ...env };
 
   return {
+    // Surfaced in the UI (e.g. the Render start screen) via `__APP_VERSION__`.
+    define: {
+      __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0'),
+    },
     plugins: [
-      vue(),
+      vue({
+        template: {
+          compilerOptions: {
+            // mdui ships Web Components; Vue must not try to resolve <mdui-*> as Vue components.
+            isCustomElement: (tag) => tag.startsWith('mdui-'),
+          },
+        },
+      }),
       // All translations live in SFC <i18n> blocks; there is no src/locales directory.
       VueI18nPlugin({
         defaultSFCLang: 'yml',
