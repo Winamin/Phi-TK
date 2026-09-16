@@ -226,12 +226,18 @@ const backgroundStyle = computed(() => {
 /* MD3 shared-axis X entrance for top-level destinations.
    The rail sits on the leading edge, so destinations are siblings along the
    horizontal axis and sliding them in from the trailing side states that
-   relationship. A vertical rise would imply a stack that does not exist here. */
+   relationship. A vertical rise would imply a stack that does not exist here.
+
+   `backwards`, never `both`: a filled transform animation leaves this element with a
+   computed transform of `matrix(1, 0, 0, 1, 0, 0)` rather than `none`, which makes the
+   whole view a containing block for `position: fixed` descendants. Every mdui dropdown,
+   select and tooltip panel in the view is such an element, so the forward fill would
+   offset all of them by the view's own origin. */
 .route-view {
   width: 100%;
   min-height: 100%;
   animation: route-enter var(--app-motion-duration-spatial-default)
-    var(--app-motion-spring-spatial-default, var(--mdui-motion-easing-emphasized-decelerate)) both;
+    var(--app-motion-spring-spatial-default, var(--mdui-motion-easing-emphasized-decelerate)) backwards;
 }
 
 @keyframes route-enter {
