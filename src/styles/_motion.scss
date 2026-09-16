@@ -1,0 +1,123 @@
+// ============================================================================
+// MD3 expressive motion.
+//
+// Material 3 splits motion by *what is moving*:
+//
+//   SPATIAL  position, size, shape, rotation  → springy, MAY overshoot
+//   EFFECTS  colour, opacity, elevation       → critically damped, must NOT
+//
+// That split is the whole reason transitions feel "alive" rather than uniform.
+// Both halves are exposed here as mixins, so a component picks a category and a
+// speed instead of inventing numbers.
+//
+// The spring curves in `main.css` are generated from damped-harmonic-oscillator
+// physics (`p(t) = 1 - e^(-ζω₀t)(cos ω_d t + ζω₀/ω_d · sin ω_d t)`), sampled into
+// a CSS `linear()` easing. Overshoot for a damped spring is `e^(-πζ/√(1-ζ²))`,
+// which is why the effects springs — ζ = 1.0, critically damped — flatten at 1
+// while the spatial and bouncy ones pass it.
+//
+// Note: mdui ships `--mdui-motion-easing-emphasized` as an alias of `standard`,
+// which flattens every "emphasized" transition in the app. These springs are what
+// actually restore the expressive feel; the easing overrides in `main.css`
+// correct the alias for the remaining non-spring cases.
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+// Category mixins.
+//
+// `$props` is a single transition-property value: either one property or a list
+// in parentheses, e.g. `@include spatial(transform)` or
+// `@include spatial((transform, box-shadow))`. A variadic parameter would have
+// to come last, which would make `$speed` positional and awkward to read.
+// ---------------------------------------------------------------------------
+
+/// Spatial motion — for anything that moves, resizes or reshapes. Springs, so it
+/// settles with a slight bounce instead of easing to a dead stop.
+@mixin spatial($props, $speed: default) {
+  transition-property: $props;
+  transition-duration: var(--app-motion-duration-spatial-#{$speed});
+  transition-timing-function: var(--app-motion-spring-spatial-#{$speed}, var(--mdui-motion-easing-emphasized-decelerate));
+}
+
+/// Effects motion — for colour, opacity and elevation. Critically damped: these
+/// must never overshoot, or the UI reads as unstable.
+@mixin effects($props, $speed: default) {
+  transition-property: $props;
+  transition-duration: var(--app-motion-duration-effects-#{$speed});
+  transition-timing-function: var(--app-motion-spring-effects-#{$speed}, var(--mdui-motion-easing-standard));
+}
+
+/// A deliberately lively spring (ζ = 0.7, ~4.6% overshoot) for expressive
+/// accents: press feedback, newly-inserted rows, attention moments.
+@mixin bouncy($props: transform) {
+  transition-property: $props;
+  transition-duration: var(--app-motion-duration-bouncy);
+  transition-timing-function: var(--app-motion-spring-bouncy, var(--mdui-motion-easing-emphasized-decelerate));
+}
+
+// ---------------------------------------------------------------------------
+// Interaction patterns
+// ---------------------------------------------------------------------------
+
+/// MD3 press feedback: the shape shrinks quickly while held, then springs back
+/// past its resting size on release. The asymmetry is the point — CSS applies
+/// the `:active` transition while pressed and the base one on release, so an
+/// accelerate curve in and a bouncy spring out is exactly MD3's feel.
+@mixin press-scale($scale: 0.96) {
+  transform: scale(1);
+  @include bouncy(transform);
+
+  &:active {
+    transform: scale($scale);
+    transition-duration: var(--mdui-motion-duration-short3);
+    transition-timing-function: var(--mdui-motion-easing-standard-accelerate);
+  }
+}
+
+/// Staggered entrance delay for a list or grid.
+///
+/// Only the delay is emitted, so the `app-enter-rise` animation itself can be
+/// declared once on the sharing class. Capped at `$count` items — past that the
+/// delay outlasts the user's patience, so later items enter together rather than
+/// trailing in one at a time.
+@mixin stagger($count: 12, $step: 35ms, $base: 0ms) {
+  @for $i from 1 through $count {
+    &:nth-child(#{$i}) {
+      animation-delay: calc(#{$base} + #{$step} * #{$i - 1});
+    }
+  }
+}
+
+/// The entrance animation, keyed off the global `app-enter-rise` keyframes.
+/// `both` is load-bearing: without a backwards fill the item would sit at its
+/// final position until the staggered delay elapsed, defeating the stagger.
+@mixin enter-rise($distance: 12px) {
+  animation: app-enter-rise var(--app-motion-duration-spatial-default)
+    var(--app-motion-spring-spatial-default, var(--mdui-motion-easing-emphasized-decelerate)) both;
+  // Consumed by the keyframes below via a variable so the distance stays a
+  // mixin argument rather than a hardcoded constant.
+  --app-enter-distance: #{$distance};
+}
+
+/// MD3 fade-through: the outgoing surface fades while scaling down and the
+/// incoming one fades in from slightly larger. Used for overlays and transient
+/// surfaces, where a slide would imply a spatial relationship that isn't there.
+///
+/// Emits `<name>-enter-*` / `<name>-leave-*`, so it must be included inside the
+/// selector matching Vue's transition `name`.
+@mixin fade-through($scale: 0.92) {
+  &-enter-active,
+  &-leave-active {
+    @include effects((opacity, transform), $speed: fast);
+  }
+
+  &-enter-from {
+    opacity: 0;
+    transform: scale(1 / $scale);
+  }
+
+  &-leave-to {
+    opacity: 0;
+    transform: scale($scale);
+  }
+}

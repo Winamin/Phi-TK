@@ -1,0 +1,67 @@
+// ============================================================================
+// MD3 window size classes — single source of truth for CSS breakpoints.
+//
+// Why SCSS variables instead of CSS custom properties: `@media` conditions do
+// not accept `var()`, so mdui's `--mdui-breakpoint-*` tokens cannot be used
+// directly in a media query. These mirror mdui's shipped values, and
+// `src/window-size.ts` reads the real tokens at runtime — so the two stay in
+// step as long as these numbers match mdui.css.
+//
+// Reference: 480 / 600 / 840 / 1080 / 1440 / 1920 in the MD3 spec.
+// ============================================================================
+
+$breakpoint-compact-max: 599px;
+$breakpoint-medium: 600px;
+$breakpoint-medium-max: 839px;
+$breakpoint-expanded: 840px;
+$breakpoint-large: 1080px;
+$breakpoint-extra-large: 1440px;
+
+/// Compact — phones. Below 600px.
+@mixin compact {
+  @media (max-width: #{$breakpoint-compact-max}) {
+    @content;
+  }
+}
+
+/// Medium — small tablets / foldables. 600–839px.
+@mixin medium {
+  @media (min-width: #{$breakpoint-medium}) and (max-width: #{$breakpoint-medium-max}) {
+    @content;
+  }
+}
+
+/// Medium and up — anything at or above 600px.
+@mixin medium-up {
+  @media (min-width: #{$breakpoint-medium}) {
+    @content;
+  }
+}
+
+/// Below expanded — compact and medium. Under 840px.
+@mixin below-expanded {
+  @media (max-width: #{$breakpoint-medium-max}) {
+    @content;
+  }
+}
+
+/// Expanded — tablets in landscape. 840px and up.
+@mixin expanded {
+  @media (min-width: #{$breakpoint-expanded}) {
+    @content;
+  }
+}
+
+/// Large — desktop. 1080px and up.
+@mixin large {
+  @media (min-width: #{$breakpoint-large}) {
+    @content;
+  }
+}
+
+/// Below large — below 1080px.
+@mixin below-large {
+  @media (max-width: #{$breakpoint-large - 1px}) {
+    @content;
+  }
+}

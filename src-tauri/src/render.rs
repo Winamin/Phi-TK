@@ -834,9 +834,7 @@ pub async fn main() -> Result<()> {
     fn test_encoder(ffmpeg: &Path, encoder: &str) -> Result<(bool, String)> {
         let mut cmd = Command::new(ffmpeg);
 
-        // Vulkan 编码器需要特殊的初始化命令
         if encoder.ends_with("_vulkan") {
-            // Vulkan 编码器只支持 NV12 格式，使用 hwupload 上传
             cmd.args(&[
                 "-init_hw_device", "vulkan=vk",
                 "-f", "lavfi",

@@ -1,0 +1,68 @@
+// ============================================================================
+// MD3 interaction states.
+//
+// Material 3 expresses hover / focus / press as a *state layer*: a translucent
+// overlay of the content colour painted on top of the component, never as a
+// change to the component's own fill. The opacities come from mdui's tokens
+// (hover 8%, focus 12%, pressed 12%, dragged 16%) so they stay in step with the
+// design system rather than being re-typed per component.
+//
+// Only `:focus-visible` is used, never bare `:focus`: a pointer click should not
+// leave a focus ring behind, but keyboard navigation must show one.
+// ============================================================================
+
+/// Paints a state layer via `::after`, so it composites over whatever fill the
+/// component already has (including a selected/secondary-container tone).
+///
+/// The host must be `position: relative` and have a `border-radius` — the layer
+/// inherits the radius so it follows pill and rounded-rect shapes alike.
+@mixin state-layer($color: --mdui-color-on-surface) {
+  position: relative;
+  isolation: isolate;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background-color: rgb(var(#{$color}));
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--mdui-motion-duration-short3) var(--mdui-motion-easing-standard);
+  }
+
+  &:hover::after {
+    opacity: var(--mdui-state-layer-hover);
+  }
+
+  &:focus-visible::after {
+    opacity: var(--mdui-state-layer-focus);
+  }
+
+  &:active::after {
+    opacity: var(--mdui-state-layer-pressed);
+  }
+}
+
+/// A 2px focus ring, drawn outside the element so it is never clipped by the
+/// component's own `overflow: hidden`.
+@mixin focus-ring($color: --mdui-color-primary) {
+  &:focus-visible {
+    outline: 2px solid rgb(var(#{$color}));
+    outline-offset: 2px;
+  }
+}
+
+/// A full pill or rounded rectangle with the MD3 state layer and focus ring —
+/// the combination almost every hand-rolled interactive element needs.
+@mixin interactive($color: --mdui-color-on-surface) {
+  @include state-layer($color);
+  @include focus-ring;
+
+  cursor: pointer;
+  // MD3 components are not text-selectable; dragging across a row should not
+  // highlight its label.
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
