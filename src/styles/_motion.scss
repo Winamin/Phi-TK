@@ -89,11 +89,20 @@
 }
 
 /// The entrance animation, keyed off the global `app-enter-rise` keyframes.
-/// `both` is load-bearing: without a backwards fill the item would sit at its
+/// `backwards` is load-bearing: without a backwards fill the item would sit at its
 /// final position until the staggered delay elapsed, defeating the stagger.
+///
+/// It must not be `forwards`/`both`. Chromium keeps a filled transform animation's
+/// computed value as `matrix(1, 0, 0, 1, 0, 0)` instead of returning to `none`, and any
+/// non-`none` transform makes the element a containing block for `position: fixed`
+/// descendants. mdui's menus, selects and tooltips are fixed panels positioned from
+/// `getBoundingClientRect()` viewport coordinates, so a filled ancestor silently
+/// displaces every dropdown inside it by its own offset — most visibly the selects in
+/// the config view. `backwards` still holds the pre-delay state and then hands the
+/// element back to its normal style, which is all the stagger ever needed.
 @mixin enter-rise($distance: 12px) {
   animation: app-enter-rise var(--app-motion-duration-spatial-default)
-    var(--app-motion-spring-spatial-default, var(--mdui-motion-easing-emphasized-decelerate)) both;
+    var(--app-motion-spring-spatial-default, var(--mdui-motion-easing-emphasized-decelerate)) backwards;
   // Consumed by the keyframes below via a variable so the distance stays a
   // mixin argument rather than a hardcoded constant.
   --app-enter-distance: #{$distance};
