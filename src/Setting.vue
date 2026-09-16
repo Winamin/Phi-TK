@@ -356,6 +356,10 @@ function clearBackground() {
   display: flex;
   flex-direction: column;
   gap: 0;
+  /* Sections are flex items of the scrolling `.settings-scroll`, which squeezes them
+     before it scrolls. A squeezed section clips its card's rows (they are
+     `overflow: hidden`), so a row's text gets sliced in half. Keep the natural height. */
+  flex-shrink: 0;
 
   /* Sections rise in sequence as the page appears. */
   @include mo.enter-rise(10px);

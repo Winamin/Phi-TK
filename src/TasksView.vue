@@ -158,15 +158,23 @@ const STATUS_ROLES: Record<string, string> = {
  * Feeds the status colour to descendants as custom properties. `--mdui-color-primary` is
  * included because mdui's progress components hardcode it — reassigning it on the host
  * recolours them without reaching into their shadow roots.
+ *
+ * The `primary` role must be skipped, though: assigning the token to itself is a
+ * self-reference, and any custom property caught in a cycle is invalid at computed-value
+ * time. That blanks every `rgb(var(--mdui-color-primary))` consumer inside the card —
+ * which is precisely the `rendering` state's progress bar and spinner, and why the bar
+ * had no fill. `primary` needs no override anyway: the inherited token already resolves
+ * to it.
  */
 function statusVars(statusType: string): Record<string, string> {
   const role = STATUS_ROLES[statusType] ?? 'tertiary';
-  return {
+  const vars: Record<string, string> = {
     '--status-color': `var(--mdui-color-${role})`,
     '--status-container': `var(--mdui-color-${role}-container)`,
     '--status-on-container': `var(--mdui-color-on-${role}-container)`,
-    '--mdui-color-primary': `var(--mdui-color-${role})`,
   };
+  if (role !== 'primary') vars['--mdui-color-primary'] = `var(--mdui-color-${role})`;
+  return vars;
 }
 
 const errorDialog = ref(false), errorDialogMessage = ref('');
@@ -410,6 +418,11 @@ const showDetail = (task: Task) => {
   display: flex;
   flex-direction: row;
   min-height: 120px;
+  /* A column flex container shrinks its items before it ever scrolls, and `mdui-card`
+     clips (`overflow: hidden`), so a squeezed card silently slices through its own
+     status line and buttons — the text appears to bleed between neighbouring cards.
+     Opting out of the shrink hands the overflow back to `.task-list`, which scrolls. */
+  flex-shrink: 0;
   /* The lift is spatial (it moves), the shadow is an effect. */
   @include mo.spatial((transform, box-shadow));
 

@@ -180,6 +180,10 @@ onMounted(() => {
 .chart-card {
   display: flex;
   flex-direction: row;
+  /* Same trap as the tasks list: a column flex container squeezes its items before it
+     scrolls, and `mdui-card` clips, so a compressed card cuts through its own text.
+     The card keeps its natural height and `.chart-list` scrolls instead. */
+  flex-shrink: 0;
   @include mo.spatial(box-shadow);
 
   @include mo.enter-rise(14px);
