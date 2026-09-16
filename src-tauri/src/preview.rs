@@ -85,7 +85,6 @@ pub async fn main() -> Result<()> {
     let mut fps_time = -1;
     let mut is_fullscreen = false;
     let mut frame_times = Vec::with_capacity(100);
-    let mut frame_time_sum: f64 = 0.0;
     //let mut avg_fps = 0.0;
     'app: loop {
         let frame_start = tm.real_time();
@@ -101,16 +100,14 @@ pub async fn main() -> Result<()> {
         let t = tm.real_time();
         let frame_time = t - frame_start;
         frame_times.push(frame_time);
-        frame_time_sum += frame_time;
         if frame_times.len() > 100
         {
-            let oldest = frame_times.remove(0);
-            frame_time_sum -= oldest;
+            frame_times.remove(0);
         }
-        let avg_frame_time = frame_time_sum / frame_times.len() as f64;
-        let current_fps = 1000.0 / frame_time;
-        let avg_fps = 1000.0 / avg_frame_time;
-        let fps_now = (avg_fps * 1000) as i32;
+        let avg_frame_time: f64 = frame_times.iter().sum::<f64>() / frame_times.len() as f64;
+        let current_fps = 1.0 / frame_time;
+        let avg_fps = 1.0 / avg_frame_time;
+        let fps_now = t as i32;
         if fps_now != fps_time {
             fps_time = fps_now;
             info!("| {} | {:.1}", current_fps as u32, avg_fps);
