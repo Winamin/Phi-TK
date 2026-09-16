@@ -834,6 +834,11 @@ function onHoldCoverChange(e: Event) {
   background-color: rgb(var(--mdui-color-surface-container-low));
   border-radius: var(--mdui-shape-corner-large);
   overflow: hidden;
+  /* The list is a fixed-height column flex container, so rows would be squeezed below
+     their content height and `overflow: hidden` would cut the charter line in half —
+     which reads as text bleeding between adjacent cards. Rows keep their natural
+     height; `.list-scroll` already scrolls. */
+  flex-shrink: 0;
   @include mo.spatial(box-shadow);
 
   @include mo.enter-rise(14px);
