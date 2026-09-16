@@ -1,6 +1,6 @@
 [package]
 name = "Phi-TK"
-version = "2.0.1"
+version = "2.0.2"
 description = "Phi-TK"
 authors = ["Mivik", "Link"]
 license = ""
@@ -49,7 +49,7 @@ tauri-plugin-fs = "2"
 tauri-plugin-os = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
-tauri-plugin-http = "2"
+tauri-plugin-http = "2.6"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
