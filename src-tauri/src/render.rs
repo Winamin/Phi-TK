@@ -1334,11 +1334,14 @@ pub async fn main() -> Result<()> {
                 || encoder_availability.h264_vulkan
         }
     };
-    let want_dx = match encoder_type {
-        "dx12" => true,
-        "auto" => !any_vendor_hw,
-        _ => false,
-    };
+    // 关掉硬件加速时必须完全不碰 DX/D3D12 路径：那同样是硬件编码，而且会经由
+    // 下面的「DX 编码器回退」把用户选的 H.264 悄悄换成 HEVC 硬件编码。
+    let want_dx = params.config.hardware_accel
+        && match encoder_type {
+            "dx12" => true,
+            "auto" => !any_vendor_hw,
+            _ => false,
+        };
     const DX12_H264: [DxEncoder; 1] = [DxEncoder { name: "h264_d3d12va", hw: "d3d12va", pix: "d3d12" }];
     const DX12_HEVC: [DxEncoder; 1] = [DxEncoder { name: "hevc_d3d12va", hw: "d3d12va", pix: "d3d12" }];
     const DX12_AV1: [DxEncoder; 1] = [DxEncoder { name: "av1_d3d12va", hw: "d3d12va", pix: "d3d12" }];
@@ -1382,13 +1385,13 @@ pub async fn main() -> Result<()> {
         }
         if dx_selected.is_none() {
             warn!("  DX upload path: all probes failed ({}), falling back to other encoders", tried.trim_end());
-    if let Some(codec) = dx_codec_switched {
-        warn!(
-            "  Note: this ffmpeg build has no DX12 encoder for {}, the output will be {}",
-            params.config.video_codec,
-            codec.to_uppercase()
-        );
-    }
+        }
+        if let Some(codec) = dx_codec_switched {
+            warn!(
+                "  Note: this ffmpeg build has no DX12 encoder for {}, the output will be {}",
+                params.config.video_codec,
+                codec.to_uppercase()
+            );
         }
     }
     let candidates: Vec<(&str, bool, &mut bool)> = match params.config.video_codec.as_str() {
@@ -1552,7 +1555,8 @@ pub async fn main() -> Result<()> {
        av1_nvenc: {}\n\
        av1_qsv: {}\n\
        av1_amf: {}\n\
-       av1_vulkan: {}",
+       av1_vulkan: {}\n\
+     {}",
     params.config.video_codec,
     params.config.encoder,
     encoder_availability.h264_nvenc,
@@ -1567,6 +1571,15 @@ pub async fn main() -> Result<()> {
     encoder_availability.av1_qsv,
     encoder_availability.av1_amf,
     encoder_availability.av1_vulkan,
+    // 关掉硬件加速、或显式选了 CPU 软编码时，上面的硬件编码器根本不会被探测 ——
+    // 打印一行说明，避免把"没探测"误读成"探测失败"。
+    if !params.config.hardware_accel {
+        "  (hardware acceleration is off: hardware encoders were not probed)"
+    } else if params.config.encoder == "cpu" {
+        "  (cpu preference: hardware encoders were not probed)"
+    } else {
+        ""
+    }
     );
     if !hw_errors.is_empty() {
         info!("  --- Encoder Errors ---");
@@ -1680,7 +1693,8 @@ pub async fn main() -> Result<()> {
         "-b:v"
     };
 
-    if params.config.hardware_accel {
+    // 显式选了 CPU 软编码就不要求存在硬件编码器（否则会误报"硬件加速不支持"并中止）。
+    if params.config.hardware_accel && encoder_type != "cpu" {
         let dx_ok = dx_selected.is_some();
         let h264_supported = encoder_availability.h264_nvenc
             || encoder_availability.h264_qsv
