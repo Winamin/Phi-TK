@@ -4855,6 +4855,7 @@ checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
 [[package]]
 name = "prpr"
 version = "0.4.0"
+source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#5fba386023a8d65404f7fd46a439ee94b63fbf8a"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -4935,6 +4936,7 @@ dependencies = [
 [[package]]
 name = "prpr-avc"
 version = "0.1.0"
+source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#5fba386023a8d65404f7fd46a439ee94b63fbf8a"
 dependencies = [
  "anyhow",
  "tracing",
