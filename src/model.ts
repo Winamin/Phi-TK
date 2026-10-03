@@ -74,7 +74,6 @@ export interface RenderConfig {
   video: boolean;
   audioBit?: number;
   audioFormat: string;
-  // Encoder selection: 'auto', 'nvenc', 'qsv', 'amf', 'vulkan', 'cpu'
   encoder?: string;
 
   aggressive: boolean;

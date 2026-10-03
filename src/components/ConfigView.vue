@@ -9,6 +9,8 @@ en:
   encoder-qsv: Intel QSV
   encoder-amf: AMD AMF
   encoder-vulkan: Vulkan
+  encoder-dx12: DirectX 12
+  encoder-dx12-hint: 此 ffmpeg 构建只带 hevc_d3d12va；若所选编码格式没有对应的 DX12 编码器，会自动回退到 HEVC。
   encoder-cpu: CPU Software
   fps: FPS
   hw-accel: Hardware Acceleration
@@ -107,6 +109,8 @@ zh-CN:
   encoder-qsv: Intel QSV
   encoder-amf: AMD AMF
   encoder-vulkan: Vulkan
+  encoder-dx12: DirectX 12
+  encoder-dx12-hint: This ffmpeg build only ships hevc_d3d12va; if the selected codec has no DX12 encoder, it falls back to HEVC.
   encoder-cpu: CPU 软编码
   fps: 帧率
   hw-accel: 硬件加速
@@ -233,14 +237,13 @@ const VIDEO_CODECS = [
   { value: 'hevc', title: 'HEVC' },
   { value: 'av1', title: 'AV1' },
 ];
-// Titles come from the `encoder-*` i18n keys, which already existed but were bypassed by a
-// hardcoded Chinese list. Computed so the labels follow the interface language.
 const ENCODERS = computed(() => [
   { value: 'auto', title: t('encoder-auto') },
   { value: 'nvenc', title: t('encoder-nvenc') },
   { value: 'qsv', title: t('encoder-qsv') },
   { value: 'amf', title: t('encoder-amf') },
   { value: 'vulkan', title: t('encoder-vulkan') },
+  { value: 'dx12', title: t('encoder-dx12') },
   { value: 'cpu', title: t('encoder-cpu') },
 ]);
 const AUDIO_FORMATS = ['flac', 'mp3', 'aac', 'opus', 'wav'];
@@ -467,7 +470,6 @@ async function openRespackFolder() {
 }
 
 async function buildConfig(): Promise<RenderConfig | null> {
-  // Native constraint validation over the mdui fields, replacing `<v-form>.validate()`.
   if (!validateFields(form.value)) {
     toast(t('has-error'), 'error');
     return null;
@@ -710,6 +712,8 @@ async function replacePreset() {
                 <MdSelect v-model="videoCodec" variant="outlined" :items="VIDEO_CODECS" :label="t('video-codec')" />
                 <MdSelect v-model="encoder" variant="outlined" :items="ENCODERS" :label="t('encoder-select')" />
               </div>
+
+              <div v-if="encoder === 'dx12'" class="field-hint">{{ t('encoder-dx12-hint') }}</div>
               <div class="field-row">
                 <MdSelect v-model="ffmpegPreset" variant="outlined" :items="FFMPEG_PRESETS" :label="t('ffmpeg-preset')" />
                 <MdSelect v-model="videoFormat" variant="outlined" :items="VIDEO_FORMAT" :label="t('video-format')" />
@@ -947,6 +951,13 @@ async function replacePreset() {
 @use '../styles/breakpoints' as bp;
 @use '../styles/states' as st;
 @use '../styles/motion' as mo;
+
+.field-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.65;
+}
 
 /* ============================================================
    ConfigView — landscape tablet MD3

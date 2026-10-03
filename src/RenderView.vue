@@ -21,7 +21,7 @@
     parsing: Parsing chart…
 
     hero:
-      tagline: Turn any Phigros chart into a shareable video.
+      tagline: Turn chart into a shareable video.
     cards:
       open: Open a chart
       open-desc: Archive or an unpacked folder
@@ -86,7 +86,7 @@
     parsing: 解析谱面中…
 
     hero:
-      tagline: 把任意 Phigros 谱面变成可以分享的视频。
+      tagline: 把谱面变成可以分享的视频
     cards:
       open: 打开谱面
       open-desc: 压缩包或已解压的文件夹
@@ -137,6 +137,7 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { getOutputPathArg } from './outputPath';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { toastError, toast, anyFilter, isString, validateFields } from './common';
 import type { ChartInfo, FileDropEvent, Task } from './model';
@@ -299,8 +300,8 @@ async function postRender() {
     }
     let params = await buildParams();
     if (!params) return false;
-    const outputPath = localStorage.getItem('outputPath');
-    await invoke('post_render', { params, outputPath: outputPath || null });
+    const outputPath = getOutputPathArg();
+    await invoke('post_render', { params, outputPath });
     return true;
   } catch (e) {
     toastError(e);

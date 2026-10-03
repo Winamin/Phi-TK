@@ -143,6 +143,7 @@ zh-CN:
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@tauri-apps/api/core';
+import { getOutputPathArg } from './outputPath';
 import { open } from '@tauri-apps/plugin-dialog';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import moment from 'moment';
@@ -348,7 +349,7 @@ async function startRender() {
       renderProgress.value = 0;
       try {
         if (!chart.chartInfo) throw new Error(t('chart-info-missing'));
-        await invoke('post_render', { params: { path: chart.path, info: chart.chartInfo, config: cfg } });
+      await invoke('post_render', { params: { path: chart.path, info: chart.chartInfo, config: cfg }, outputPath: getOutputPathArg() });
         chart.status = 'done';
       } catch (err: any) {
         chart.status = 'failed';

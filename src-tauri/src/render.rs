@@ -1,20 +1,11 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
 prpr::tl_file!("render");
 
 use crate::Path;
 use anyhow::{bail, Context, Result};
-use macroquad::{miniquad::{gl::{
-    GLuint, GL_RGBA, GL_UNSIGNED_BYTE, GL_READ_FRAMEBUFFER, GL_PIXEL_PACK_BUFFER,
-    GL_STREAM_READ, GL_MAP_READ_BIT, GL_MAP_UNSYNCHRONIZED_BIT,
-    GLsizeiptr, GLsizei, GLvoid,
-    glGenBuffers, glBindBuffer, glBufferData, glDeleteBuffers,
-    glViewport, glReadPixels, glReadBuffer,
-    glMapBufferRange, glUnmapBuffer,
-    GL_COLOR_ATTACHMENT0,glBindFramebuffer,GL_FRAMEBUFFER
-}, RenderPass as MQRenderPass}, prelude::*};
+use macroquad::{miniquad::{gl::{GLuint, GL_RGB, GL_RED, GL_RG}, RenderPass as MQRenderPass, Texture, TextureFormat, TextureParams, TextureWrap}, prelude::*};
 use prpr::{
     config::{ChallengeModeColor, Config, Mods},
-    core::{internal_id, MSRenderTarget, NoteKind},
+    core::{internal_id, MSRenderTarget},
     ext::SafeTexture,
     fs,
     info::ChartInfo,
@@ -27,12 +18,16 @@ use sasa::AudioClip;
 use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
+    collections::VecDeque,
     io::{BufRead, BufWriter, Write},
     ops::DerefMut,
     path::PathBuf,
     process::{Command, Stdio},
     rc::Rc,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     time::Instant,
 };
 use std::{ffi::OsStr, fmt::Write as _};
@@ -55,7 +50,7 @@ pub struct RenderConfig {
     pub fps: u32,
     pub hardware_accel: bool,
     pub video_codec: String,
-    pub encoder: String, // 'auto', 'nvenc', 'qsv', 'amf', 'vulkan', 'cpu'
+    pub encoder: String,
     pub show_progress_text: bool,
     pub show_time_text: bool,
     pub target_audio: u32,
@@ -97,8 +92,9 @@ pub struct RenderConfig {
     pub ui_pb: bool,
     pub ui_pause: bool,
 
-    //ffmpeg
     pub ffmpeg_thread: bool,
+
+    pub gpu_yuv: bool,
 }
 
 impl Default for RenderConfig {
@@ -109,7 +105,6 @@ impl Default for RenderConfig {
             ending_length: -2.0,
             disable_loading: true,
             chart_debug: false,
-            //this is the shit
             audio_delay_frames: 0,
             flid_x: false,
             chart_ratio: 1.0,
@@ -157,8 +152,9 @@ impl Default for RenderConfig {
             ui_pause: true,
             bar: false,
 
-            //ffmpeg
             ffmpeg_thread: false,
+
+            gpu_yuv: true,
         }
     }
 }
@@ -237,10 +233,10 @@ struct EncoderAvailability {
     h264_cuvid: bool,
     hevc_cuvid: bool,
     av1_cuvid: bool,
-    // Vulkan encoders
     h264_vulkan: bool,
     hevc_vulkan: bool,
     av1_vulkan: bool,
+    av1_svt: bool,
 }
 
 #[cfg(target_os = "windows")]
@@ -276,8 +272,8 @@ mod hw_detect {
     pub fn detect_intel_qsv() -> bool {
         let mut found = false;
         let classes = [
-            "{4d36e968-e325-11ce-bfc1-08002be10318}", // Display adapters
-            "{4d36e97d-e325-11ce-bfc1-08002be10318}", // System devices
+            "{4d36e968-e325-11ce-bfc1-08002be10318}",
+            "{4d36e97d-e325-11ce-bfc1-08002be10318}",
         ];
 
         for class in classes {
@@ -305,7 +301,6 @@ mod hw_detect {
     }
 
     pub fn detect_vulkan() -> bool {
-        // Check for Vulkan runtime (Vulkan Loader)
         Path::new(r"C:\Windows\System32\vulkan-1.dll").exists()
     }
 }
@@ -336,7 +331,6 @@ mod hw_detect {
     }
 
     pub fn detect_vulkan() -> bool {
-        // Check for Vulkan ICD files (indicates Vulkan driver is installed)
         Path::new("/usr/share/vulkan/icd.d").exists()
             || Path::new("/etc/vulkan/icd.d").exists()
             || Path::new("/usr/local/share/vulkan/icd.d").exists()
@@ -372,8 +366,6 @@ mod hw_detect {
     }
 
     pub fn detect_vulkan() -> bool {
-        // macOS uses MoltenVK for Vulkan support
-        // Check for MoltenVK or Vulkan loader
         Command::new("sh")
             .arg("-c")
             .arg("ls /usr/local/lib/libMoltenVK.dylib 2>/dev/null || ls /opt/homebrew/lib/libMoltenVK.dylib 2>/dev/null || ls ~/Library/Frameworks/libMoltenVK.dylib 2>/dev/null")
@@ -404,7 +396,9 @@ pub async fn build_player(config: &RenderConfig) -> Result<BasicPlayer> {
     })
 }
 
-pub fn cmd_hidden(program: impl AsRef<OsStr>) -> Command {
+const DX_DEVICE: &str = "dx";
+
+pub(crate) fn cmd_hidden(program: impl AsRef<OsStr>) -> Command {
     let cmd = Command::new(program);
     #[cfg(target_os = "windows")]
     {
@@ -416,6 +410,35 @@ pub fn cmd_hidden(program: impl AsRef<OsStr>) -> Command {
     #[cfg(not(target_os = "windows"))]
     cmd
 }
+
+const GL_PACK_ALIGNMENT: u32 = 0x0D05;
+
+pub fn drain_stderr<R>(mut stderr: R) -> std::thread::JoinHandle<String>
+where
+    R: std::io::Read + Send + 'static,
+{
+    const LIMIT: usize = 64 * 1024;
+    std::thread::Builder::new()
+        .name("ffmpeg-stderr".to_owned())
+        .spawn(move || {
+            let mut collected: Vec<u8> = Vec::new();
+            let mut buf = [0u8; 8192];
+            loop {
+                match stderr.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        if collected.len() < LIMIT {
+                            let room = LIMIT - collected.len();
+                            collected.extend_from_slice(&buf[..n.min(room)]);
+                        }
+                    }
+                }
+            }
+            String::from_utf8_lossy(&collected).into_owned()
+        })
+        .expect("failed to spawn ffmpeg stderr reader")
+}
+
 
 pub fn find_ffmpeg() -> Result<Option<String>> {
     fn test(path: impl AsRef<OsStr>) -> bool {
@@ -452,6 +475,201 @@ pub fn find_ffmpeg() -> Result<Option<String>> {
     } else {
         None
     })
+}
+
+
+mod yuv_shader {
+    pub const VERTEX: &str = r#"#version 300 es
+in vec3 position;
+in vec2 texcoord;
+in vec4 color0;
+
+out vec2 uv;
+
+void main() {
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+    uv = vec2(texcoord.x, 1.0 - texcoord.y);
+}"#;
+
+    pub const Y: &str = r#"#version 300 es
+precision mediump float;
+
+in vec2 uv;
+out vec4 FragColor;
+
+uniform sampler2D tex;
+
+void main() {
+    vec3 c = texture(tex, uv).rgb;
+    float y = (16.0 + 219.0 * (0.299 * c.r + 0.587 * c.g + 0.114 * c.b)) / 255.0;
+    FragColor = vec4(y, 0.0, 0.0, 1.0);
+}"#;
+
+    pub const UV: &str = r#"#version 300 es
+precision mediump float;
+
+in vec2 uv;
+out vec4 FragColor;
+
+uniform sampler2D tex;
+
+void main() {
+    vec3 c = texture(tex, uv).rgb;
+    float u = (128.0 + 224.0 * (-0.168736 * c.r - 0.331264 * c.g + 0.5 * c.b)) / 255.0;
+    float v = (128.0 + 224.0 * (0.5 * c.r - 0.418688 * c.g - 0.081312 * c.b)) / 255.0;
+    FragColor = vec4(u, v, 0.0, 1.0);
+}"#;
+
+    pub const U: &str = r#"#version 300 es
+precision mediump float;
+
+in vec2 uv;
+out vec4 FragColor;
+
+uniform sampler2D tex;
+
+void main() {
+    vec3 c = texture(tex, uv).rgb;
+    float u = (128.0 + 224.0 * (-0.168736 * c.r - 0.331264 * c.g + 0.5 * c.b)) / 255.0;
+    FragColor = vec4(u, 0.0, 0.0, 1.0);
+}"#;
+
+    pub const V: &str = r#"#version 300 es
+precision mediump float;
+
+in vec2 uv;
+out vec4 FragColor;
+
+uniform sampler2D tex;
+
+void main() {
+    vec3 c = texture(tex, uv).rgb;
+    float v = (128.0 + 224.0 * (0.5 * c.r - 0.418688 * c.g - 0.081312 * c.b)) / 255.0;
+    FragColor = vec4(v, 0.0, 0.0, 1.0);
+}"#;
+}
+
+pub(crate) fn new_plane(w: u32, h: u32, format: TextureFormat) -> RenderTarget {
+    let gl = unsafe { get_internal_gl() };
+    let texture = Texture::new_render_texture(
+        gl.quad_context,
+        TextureParams {
+            width: w,
+            height: h,
+            format,
+            filter: FilterMode::Linear,
+            wrap: TextureWrap::Clamp,
+        },
+    );
+    RenderTarget {
+        texture: Texture2D::from_miniquad_texture(texture),
+        render_pass: MQRenderPass::new(gl.quad_context, texture, None),
+    }
+}
+
+fn yuv_material(fragment: &str) -> Result<Material> {
+    load_material(
+        yuv_shader::VERTEX,
+        fragment,
+        MaterialParams {
+            pipeline_params: PipelineParams::default(),
+            uniforms: Vec::new(),
+            textures: vec!["tex".to_owned()],
+        },
+    )
+    .map_err(|e| anyhow::anyhow!("{e:?}"))
+}
+
+struct YuvTarget {
+    outputs: Vec<RenderTarget>,
+    materials: Vec<Material>,
+    planar: bool,
+}
+
+impl YuvTarget {
+    fn new(w: u32, h: u32, planar: bool) -> Result<Self> {
+        let mut outputs = vec![new_plane(w, h, TextureFormat::Alpha)];
+        let mut materials = vec![yuv_material(yuv_shader::Y).context("failed to compile Y plane shader")?];
+        if planar {
+            outputs.push(new_plane(w / 2, h / 2, TextureFormat::Alpha));
+            materials.push(yuv_material(yuv_shader::U).context("failed to compile U plane shader")?);
+            outputs.push(new_plane(w / 2, h / 2, TextureFormat::Alpha));
+            materials.push(yuv_material(yuv_shader::V).context("failed to compile V plane shader")?);
+        } else {
+            outputs.push(new_plane(w / 2, h / 2, TextureFormat::LuminanceAlpha));
+            materials.push(yuv_material(yuv_shader::UV).context("failed to compile UV plane shader")?);
+        }
+        Ok(Self {
+            outputs,
+            materials,
+            planar,
+        })
+    }
+
+    fn plane_layout(&self, w: i32, h: i32) -> Vec<(GLuint, usize, i32, i32, u32)> {
+        let (cw, ch) = (w / 2, h / 2);
+        let y = (
+            internal_id(&self.outputs[0]),
+            (w * h) as usize,
+            w,
+            h,
+            GL_RED,
+        );
+        if self.planar {
+            let c = |i: usize| {
+                (
+                    internal_id(&self.outputs[i]),
+                    (cw * ch) as usize,
+                    cw,
+                    ch,
+                    GL_RED,
+                )
+            };
+            vec![y, c(1), c(2)]
+        } else {
+            vec![
+                y,
+                (
+                    internal_id(&self.outputs[1]),
+                    (cw * ch * 2) as usize,
+                    cw,
+                    ch,
+                    GL_RG,
+                ),
+            ]
+        }
+    }
+
+    fn convert(&self, src: &RenderTarget) {
+        unsafe { get_internal_gl() }.flush();
+        for m in &self.materials {
+            m.set_texture("tex", src.texture);
+        }
+
+        let vertices = [
+            Vertex::new(-1., -1., 0., 0., 0., WHITE),
+            Vertex::new(1., -1., 0., 1., 0., WHITE),
+            Vertex::new(-1., 1., 0., 0., 1., WHITE),
+            Vertex::new(1., 1., 0., 1., 1., WHITE),
+        ];
+        let indices = [0u16, 2, 3, 0, 1, 3];
+        let prev_viewport = unsafe { get_internal_gl() }.quad_gl.get_viewport();
+
+        for (material, target) in self.materials.iter().zip(self.outputs.iter()) {
+            gl_use_material(*material);
+            let quad = unsafe { get_internal_gl() }.quad_gl;
+            quad.viewport(None);
+            quad.render_pass(Some(target.render_pass));
+            quad.draw_mode(DrawMode::Triangles);
+            quad.geometry(&vertices, &indices);
+            gl_use_default_material();
+        }
+
+        let quad = unsafe { get_internal_gl() }.quad_gl;
+        quad.render_pass(Some(src.render_pass));
+        quad.viewport(prev_viewport);
+        unsafe { get_internal_gl() }.flush();
+    }
 }
 
 pub async fn main() -> Result<()> {
@@ -498,14 +716,22 @@ pub async fn main() -> Result<()> {
         }
     let music: Result<_> = async { AudioClip::new(fs.load_file(&info.music).await?) }.await;
     let music = music.with_context(|| tl!("load-music-failed"))?;
-    let ending = ld!("ending.mp3"); //煞笔吧
+    let ending = ld!("ending.mp3");
     let track_length = music.length() as f64;
     let sfx_click = ld!("click.ogg");
     let sfx_drag = ld!("drag.ogg");
     let sfx_flick = ld!("flick.ogg");
 
-    //let mut gl = unsafe { get_internal_gl() };
     let gl = unsafe { get_internal_gl() };
+
+    // 零拷贝（GL → D3D11 → NVENC 直连）已移到 crate::zerocopy，且**不接入渲染流程**：实测它比现有管线
+    // 慢约 8%（823 vs 892 fps，同内容 1080p），因为现有管线里 ffmpeg 已经把 NVENC 引擎吃到 98%，
+    // 没有余量可抢。设 PHITK_DX_SELFTEST=1 可以单独跑它的 S1/S2/S3 自检 —— 这样非 N 卡机器上
+    // 不会白建 D3D11 设备、也不加载 nvEncodeAPI64.dll。
+    if std::env::var("PHITK_DX_SELFTEST").is_ok() {
+        crate::zerocopy::probe_zero_copy_support();
+        crate::zerocopy::probe_dx_interop(&params.config.video_codec);
+    }
 
     let volume_music = std::mem::take(&mut config.volume_music);
     let volume_sfx = std::mem::take(&mut config.volume_sfx);
@@ -547,7 +773,6 @@ pub async fn main() -> Result<()> {
 
         info!("Music mixing: original_pos={:.6}s, delayed_pos={:.6}s", original_pos, pos);
 
-        //let count = (music.length() as f64 * sample_rate_f64) as usize;
         let start_index = (pos * sample_rate_f64).round() as usize * 2;
         let ratio = 1.0 / sample_rate_f64;
 
@@ -679,7 +904,6 @@ pub async fn main() -> Result<()> {
         }
     };
 
-    // 构建参数字符串
     let args_str = if target_sample_rate != sample_rate {
         let resample_filter = format!("aresample=resampler=soxr:precision=33:osr={}:dither_method=triangular", target_sample_rate);
         format!(
@@ -704,9 +928,10 @@ pub async fn main() -> Result<()> {
         .arg("-loglevel")
         .arg("warning")
         .stdin(Stdio::piped())
-        .stderr(Stdio::inherit())
+        .stderr(Stdio::piped())
         .spawn()
         .with_context(|| tl!("run-ffmpeg-failed"))?;
+    let audio_stderr = drain_stderr(proc.stderr.take().unwrap());
     let input = proc.stdin.as_mut().unwrap();
     let mut writer = BufWriter::new(input);
     for sample in output.into_iter() {
@@ -714,8 +939,12 @@ pub async fn main() -> Result<()> {
     }
     drop(writer);
     proc.wait()?;
+    if let Ok(text) = audio_stderr.join() {
+        if !text.trim().is_empty() {
+            warn!("[ffmpeg:audio]\n{}", text);
+        }
+    }
 
-    //let (vw, vh) = params.config.resolution;
 
     let target_aspect = info.aspect_ratio as f64;
     let (mut vw, mut vh) = params.config.resolution;
@@ -764,72 +993,12 @@ pub async fn main() -> Result<()> {
     main.viewport = Some((0, 0, vw as _, vh as _));
 
     const O: f64 = LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64;
-    const A: f64 = 1.0; //?
+    const A: f64 = 1.0;
 
     let fps = params.config.fps;
-    //let frame_delta = 1. / fps as f32;
     let frames = (video_length * fps as f64).ceil() as u64;
     send(IPCEvent::StartRender(frames));
-    /*
-        let codecs = String::from_utf8(
-            cmd_hidden(&ffmpeg)
-                .arg("-codecs")
-                .output()
-                .with_context(|| tl!("run-ffmpeg-failed"))?
-                .stdout,
-        )?;
-
-         let use_cuda = params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_nvenc")?;
-         let has_qsv = params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_qsv")?;
-         let has_amf = params.config.hardware_accel && test_encoder(ffmpeg.as_ref(), "h264_amf")?;
-
-         let use_cuda_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_nvenc")?;
-         let has_qsv_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_qsv")?;
-         let has_amf_hevc = params.config.hardware_accel && params.config.hevc && test_encoder(ffmpeg.as_ref(), "hevc_amf")?;
-
-        let ffmpeg_preset =  if !has_qsv && !use_cuda && has_amf {"-quality"} else {"-preset"};
-        let mut ffmpeg_preset_name_list = params.config.ffmpeg_preset.split_whitespace();
-
-        let (qsv, nvenc, _amf, cpu) = if params.config.hevc {
-            ("hevc_qsv", "hevc_nvenc", "hevc_amf", "libx265")
-        } else {
-            ("h264_qsv", "h264_nvenc", "h264_amf", "libx264")
-        };
-        if params.config.hardware_accel && !has_qsv_hevc && !use_cuda_hevc && !has_amf_hevc {bail!(tl!("no-hwacc"));}
-
-        let ffmpeg_preset_name = if has_qsv {ffmpeg_preset_name_list.nth(0)
-        } else if use_cuda {ffmpeg_preset_name_list.nth(1)
-        } else if has_amf {ffmpeg_preset_name_list.nth(2)
-        } else {ffmpeg_preset_name_list.nth(0)};
-
-        let mut args = "-y -f rawvideo -c:v rawvideo".to_owned();
-        if use_cuda {
-            args += " -hwaccel_output_format cuda";
-        }
-        write!(&mut args, " -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
-
-        let args2 = format!(
-            "-c:a copy -c:v {} -pix_fmt yuv420p {} {} {} {} -map 0:v:0 -map 1:a:0 {} -vf vflip -f mov",
-            if has_qsv {qsv}
-            else if use_cuda {nvenc}
-            //else if has_amf {amf}
-            else if params.config.hardware_accel {bail!(tl!("no-hwacc"));}
-            else {cpu},
-            if params.config.bitrate_control == "CRF" {
-                if has_qsv {"-q"}
-                else if use_cuda {"-cq"}
-                //else if has_amf {"-qp_p"}
-                else {"-crf"}
-            } else {
-                "-b:v"
-            },
-            params.config.bitrate,
-            ffmpeg_preset,
-            ffmpeg_preset_name.unwrap(),
-            if params.config.disable_loading{format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)}
-            else{"-ss 0.1".to_string()},
-        );
-    */
+    
 
     fn test_encoder(ffmpeg: &Path, encoder: &str) -> Result<(bool, String)> {
         let mut cmd = Command::new(ffmpeg);
@@ -847,7 +1016,7 @@ pub async fn main() -> Result<()> {
         } else {
             cmd.args(&[
                 "-f", "lavfi",
-                "-i", "color=c=black:s=320x240:d=0",
+                "-i", "testsrc2=size=320x240:rate=30:duration=0.3",
                 "-c:v", encoder,
                 "-f", "null", "-",
             ]);
@@ -865,6 +1034,40 @@ pub async fn main() -> Result<()> {
 
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
         Ok((output.status.success(), stderr))
+    }
+
+    #[derive(Clone, Copy)]
+    struct DxEncoder {
+        name: &'static str,
+        hw: &'static str,
+        pix: &'static str,
+    }
+
+    fn probe_dx_encoder(ffmpeg: &Path, enc: DxEncoder) -> bool {
+        let device = format!("{}={}", enc.hw, DX_DEVICE);
+        let mut cmd = Command::new(ffmpeg);
+        cmd.args([
+            "-init_hw_device",
+            device.as_str(),
+            "-filter_hw_device",
+            DX_DEVICE,
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=640x360:rate=30:duration=0.3",
+            "-vf",
+            "format=nv12,hwupload",
+            "-c:v",
+            enc.name,
+            "-pix_fmt",
+            enc.pix,
+        ]);
+        cmd.args(["-bf", "0"]);
+        cmd.args(["-f", "null", "-", "-loglevel", "error"]);
+        cmd.arg("-hide_banner")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        matches!(cmd.output(), Ok(out) if out.status.success())
     }
 
     let hw_detected = EncoderAvailability {
@@ -890,7 +1093,6 @@ pub async fn main() -> Result<()> {
         av1_amf: params.config.hardware_accel
             && params.config.video_codec == "av1"
             && hw_detect::detect_amd(),
-        // Vulkan encoders - detect Vulkan runtime
         h264_vulkan: params.config.hardware_accel && hw_detect::detect_vulkan(),
         hevc_vulkan: params.config.hardware_accel
             && params.config.video_codec == "hevc"
@@ -898,9 +1100,10 @@ pub async fn main() -> Result<()> {
         av1_vulkan: params.config.hardware_accel
             && params.config.video_codec == "av1"
             && hw_detect::detect_vulkan(),
+        av1_svt: false,
     };
 
-    let mut hw_errors = Vec::new();
+    let hw_errors = Vec::new();
 
     let mut encoder_availability = EncoderAvailability {
         h264_nvenc: false,
@@ -918,43 +1121,103 @@ pub async fn main() -> Result<()> {
         h264_vulkan: false,
         hevc_vulkan: false,
         av1_vulkan: false,
+        av1_svt: false,
     };
 
-    let encoders_to_test = [
-        ("h264_nvenc", hw_detected.h264_nvenc, &mut encoder_availability.h264_nvenc),
-        ("hevc_nvenc", hw_detected.hevc_nvenc, &mut encoder_availability.hevc_nvenc),
-        ("av1_nvenc", hw_detected.av1_nvenc, &mut encoder_availability.av1_nvenc),
-        ("h264_qsv", hw_detected.h264_qsv, &mut encoder_availability.h264_qsv),
-        ("hevc_qsv", hw_detected.hevc_qsv, &mut encoder_availability.hevc_qsv),
-        ("av1_qsv", hw_detected.av1_qsv, &mut encoder_availability.av1_qsv),
-        ("h264_amf", hw_detected.h264_amf, &mut encoder_availability.h264_amf),
-        ("hevc_amf", hw_detected.hevc_amf, &mut encoder_availability.hevc_amf),
-        ("av1_amf", hw_detected.av1_amf, &mut encoder_availability.av1_amf),
-        // Vulkan encoders
-        ("h264_vulkan", hw_detected.h264_vulkan, &mut encoder_availability.h264_vulkan),
-        ("hevc_vulkan", hw_detected.hevc_vulkan, &mut encoder_availability.hevc_vulkan),
-        ("av1_vulkan", hw_detected.av1_vulkan, &mut encoder_availability.av1_vulkan),
-    ];
+    fn set_avail(a: &mut EncoderAvailability, name: &str, ok: bool) {
+        match name {
+            "h264_nvenc" => a.h264_nvenc = ok,
+            "hevc_nvenc" => a.hevc_nvenc = ok,
+            "av1_nvenc" => a.av1_nvenc = ok,
+            "h264_qsv" => a.h264_qsv = ok,
+            "hevc_qsv" => a.hevc_qsv = ok,
+            "av1_qsv" => a.av1_qsv = ok,
+            "h264_amf" => a.h264_amf = ok,
+            "hevc_amf" => a.hevc_amf = ok,
+            "av1_amf" => a.av1_amf = ok,
+            "h264_vulkan" => a.h264_vulkan = ok,
+            "hevc_vulkan" => a.hevc_vulkan = ok,
+            "av1_vulkan" => a.av1_vulkan = ok,
+            "libsvtav1" => a.av1_svt = ok,
+            _ => {}
+        }
+    }
 
-    for (name, detected, availability_flag) in encoders_to_test {
-        if detected {
-            match test_encoder(ffmpeg.as_ref(), name) {
-                Ok((success, error_output)) => {
-                    *availability_flag = success;
-
-                    if !success {
-                        hw_errors.push(format!(
-                            "{} test failed:\n{}",
-                            name,
-                            error_output.trim()
-                        ));
+    let codec_idx = match params.config.video_codec.as_str() {
+        "hevc" => 1usize,
+        "av1" => 2,
+        _ => 0,
+    };
+    const V_NV: [&str; 3] = ["h264_nvenc", "hevc_nvenc", "av1_nvenc"];
+    const V_QSV: [&str; 3] = ["h264_qsv", "hevc_qsv", "av1_qsv"];
+    const V_AMF: [&str; 3] = ["h264_amf", "hevc_amf", "av1_amf"];
+    const V_VK: [&str; 3] = ["h264_vulkan", "hevc_vulkan", "av1_vulkan"];
+    let vendor_detected = |first: &str| -> bool {
+        match first {
+            "h264_nvenc" => hw_detected.h264_nvenc,
+            "h264_qsv" => hw_detected.h264_qsv,
+            "h264_amf" => hw_detected.h264_amf,
+            _ => hw_detected.h264_vulkan,
+        }
+    };
+    let vendors: Vec<[&str; 3]> = match params.config.encoder.as_str() {
+        "cpu" => vec![],
+        "amf" => vec![V_AMF, V_NV, V_QSV, V_VK],
+        "qsv" => vec![V_QSV, V_NV, V_AMF, V_VK],
+        "vulkan" => vec![V_VK, V_NV, V_QSV, V_AMF],
+        _ => vec![V_NV, V_QSV, V_AMF, V_VK],
+    };
+    let mut hw_errors: Vec<String> = hw_errors;
+    for v in vendors {
+        if !vendor_detected(v[0]) {
+            continue;
+        }
+        let names: Vec<&str> = v.iter().copied().filter(|n| !n.trim().is_empty()).collect();
+        let handles: Vec<_> = names
+            .iter()
+            .map(|name| {
+                let name = name.to_string();
+                let ff = ffmpeg.clone();
+                std::thread::spawn(move || {
+                    let (ok, err) = match test_encoder(ff.as_ref(), &name) {
+                        Ok((ok, err)) => (ok, err),
+                        Err(e) => (false, format!("test error: {e}")),
+                    };
+                    (name, ok, err)
+                })
+            })
+            .collect();
+        let mut ok_for_codec = false;
+        for handle in handles {
+            match handle.join() {
+                Ok((name, ok, err)) => {
+                    if ok && name == v[codec_idx] {
+                        ok_for_codec = true;
+                    }
+                    set_avail(&mut encoder_availability, &name, ok);
+                    if !ok {
+                        hw_errors.push(format!("{} test failed:\n{}", name, err.trim()));
                     }
                 }
-                Err(e) => {
-                    *availability_flag = false;
-                    hw_errors.push(format!("{} test error: {}", name, e));
+                Err(_) => hw_errors.push("encoder probe thread panicked".to_owned()),
+            }
+        }
+        if ok_for_codec { break; }
+    }
+    if params.config.video_codec == "av1"
+        && !encoder_availability.av1_nvenc
+        && !encoder_availability.av1_qsv
+        && !encoder_availability.av1_amf
+        && !encoder_availability.av1_vulkan
+    {
+        match test_encoder(ffmpeg.as_ref(), "libsvtav1") {
+            Ok((ok, err)) => {
+                encoder_availability.av1_svt = ok;
+                if !ok {
+                    hw_errors.push(format!("libsvtav1 test failed:\n{}", err.trim()));
                 }
             }
+            Err(e) => hw_errors.push(format!("libsvtav1 test error: {e}")),
         }
     }
 
@@ -971,38 +1234,37 @@ pub async fn main() -> Result<()> {
             } else if name == "hevc_cuvid" {
                 ("libx265", "mpegts")
             } else {
-                ("libaom-av1", "matroska")
+                ("libsvtav1", "matroska")
             };
 
             let mut encode_cmd = Command::new(&ffmpeg);
             encode_cmd.args(&[
                 "-f", "lavfi",
                 "-i", "testsrc=duration=1:size=320x240:rate=30",
-                "-vf", "format=yuv420p",  // 强制使用 yuv420p 格式
+                "-vf", "format=yuv420p",
                 "-c:v", encoder_name,
-                "-t", "0.5",  // 只编码0.5秒
+                "-t", "0.5",
                 "-f", container_format,
-                "-"  // 输出到stdout
+                "-"
             ])
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null());
 
-            // 2. 解码测试
             let mut decode_cmd = Command::new(&ffmpeg);
             decode_cmd.args(&[
                 "-hwaccel", "cuvid",
                 "-hwaccel_device", "0",
                 "-c:v", name,
                 "-f", container_format,
-                "-i", "-",  // 从stdin读取
+                "-i", "-",
                 "-f", "null",
-                "-"  // 输出到null
+                "-"
             ])
                 .stdin(Stdio::piped())
                 .stdout(Stdio::null())
                 .stderr(Stdio::piped());
 
-            let encoded = match encode_cmd.spawn() {
+            let mut encoded = match encode_cmd.spawn() {
                 Ok(child) => child,
                 Err(e) => {
                     *availability_flag = false;
@@ -1017,12 +1279,21 @@ pub async fn main() -> Result<()> {
                 Ok(output) => {
                     *availability_flag = output.status.success();
                     if !output.status.success() {
+                        let mut enc_err = String::new();
+                        if let Some(mut e) = encoded.stderr.take() {
+                            let _ = std::io::Read::read_to_string(&mut e, &mut enc_err);
+                        }
                         let stderr = String::from_utf8_lossy(&output.stderr);
                         hw_errors.push(format!(
-                            "{} decode test failed (code {}):\n{}",
+                            "{} decode test failed (code {}):\n{}{}",
                             name,
                             output.status.code().unwrap_or(-1),
-                            stderr.trim()
+                            stderr.trim(),
+                            if enc_err.trim().is_empty() {
+                                String::new()
+                            } else {
+                                format!("\n[encoder side]\n{}", enc_err.trim())
+                            }
                         ));
                     }
                 }
@@ -1033,8 +1304,93 @@ pub async fn main() -> Result<()> {
             }
         }
     }
+    if let Ok((ok, err)) = test_encoder(ffmpeg.as_ref(), "libsvtav1") {
+        encoder_availability.av1_svt = ok;
+        if !ok {
+            hw_errors.push(format!("libsvtav1 test failed:
+{}", err.trim()));
+        }
+    }
+
     let mut dummy_flag = false;
     let encoder_type = params.config.encoder.as_str();
+    let any_vendor_hw = match params.config.video_codec.as_str() {
+        "hevc" => {
+            encoder_availability.hevc_nvenc
+                || encoder_availability.hevc_qsv
+                || encoder_availability.hevc_amf
+                || encoder_availability.hevc_vulkan
+        }
+        "av1" => {
+            encoder_availability.av1_nvenc
+                || encoder_availability.av1_qsv
+                || encoder_availability.av1_amf
+                || encoder_availability.av1_vulkan
+        }
+        _ => {
+            encoder_availability.h264_nvenc
+                || encoder_availability.h264_qsv
+                || encoder_availability.h264_amf
+                || encoder_availability.h264_vulkan
+        }
+    };
+    let want_dx = match encoder_type {
+        "dx12" => true,
+        "auto" => !any_vendor_hw,
+        _ => false,
+    };
+    const DX12_H264: [DxEncoder; 1] = [DxEncoder { name: "h264_d3d12va", hw: "d3d12va", pix: "d3d12" }];
+    const DX12_HEVC: [DxEncoder; 1] = [DxEncoder { name: "hevc_d3d12va", hw: "d3d12va", pix: "d3d12" }];
+    const DX12_AV1: [DxEncoder; 1] = [DxEncoder { name: "av1_d3d12va", hw: "d3d12va", pix: "d3d12" }];
+    let dx_candidates: Vec<DxEncoder> = match params.config.video_codec.as_str() {
+        "hevc" => vec![DX12_HEVC[0]],
+        "av1" => vec![DX12_AV1[0]],
+        _ => vec![DX12_H264[0]],
+    };
+    let mut dx_selected: Option<DxEncoder> = None;
+    let mut dx_codec_switched: Option<&str> = None;
+    if want_dx {
+        let mut tried = String::new();
+        for enc in &dx_candidates {
+            if probe_dx_encoder(ffmpeg.as_ref(), *enc) {
+                info!(
+                    "  DX upload path: probe OK -> {} ({} default device, -pix_fmt {}, -bf 0)",
+                    enc.name, enc.hw, enc.pix
+                );
+                dx_selected = Some(*enc);
+                break;
+            }
+            tried.push_str(&format!("{}/{} ", enc.name, enc.hw));
+        }
+        if dx_selected.is_none() {
+            for (codec, enc) in [
+                ("hevc", DX12_HEVC[0]),
+                ("h264", DX12_H264[0]),
+                ("av1", DX12_AV1[0]),
+            ] {
+                if codec == params.config.video_codec.as_str() {
+                    continue;
+                }
+                if probe_dx_encoder(ffmpeg.as_ref(), enc) {
+                    info!("  DX upload path: {} unavailable ({}), switching codec to {} via {}",
+                        params.config.video_codec, tried.trim_end(), codec.to_uppercase(), enc.name);
+                    dx_selected = Some(enc);
+                    dx_codec_switched = Some(codec);
+                    break;
+                }
+            }
+        }
+        if dx_selected.is_none() {
+            warn!("  DX upload path: all probes failed ({}), falling back to other encoders", tried.trim_end());
+    if let Some(codec) = dx_codec_switched {
+        warn!(
+            "  Note: this ffmpeg build has no DX12 encoder for {}, the output will be {}",
+            params.config.video_codec,
+            codec.to_uppercase()
+        );
+    }
+        }
+    }
     let candidates: Vec<(&str, bool, &mut bool)> = match params.config.video_codec.as_str() {
         "hevc" => {
             match encoder_type {
@@ -1069,7 +1425,7 @@ pub async fn main() -> Result<()> {
                 "cpu" => vec![
                     ("libx265", true, &mut dummy_flag),
                 ],
-                _ => vec![ // auto
+                _ => vec![
                     ("hevc_nvenc", encoder_availability.hevc_nvenc, &mut encoder_availability.hevc_nvenc),
                     ("hevc_qsv", encoder_availability.hevc_qsv, &mut encoder_availability.hevc_qsv),
                     ("hevc_amf", encoder_availability.hevc_amf, &mut encoder_availability.hevc_amf),
@@ -1084,38 +1440,44 @@ pub async fn main() -> Result<()> {
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
+                    ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
                 "qsv" => vec![
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
+                    ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
                 "amf" => vec![
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
+                    ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
                 "vulkan" => vec![
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
+                    ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
                 "cpu" => vec![
+                    ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
-                _ => vec![ // auto
+                _ => vec![
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
+                    ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
             }
         },
-        _ => { // h264
+        _ => {
             match encoder_type {
                 "nvenc" => vec![
                     ("h264_nvenc", encoder_availability.h264_nvenc, &mut encoder_availability.h264_nvenc),
@@ -1148,7 +1510,7 @@ pub async fn main() -> Result<()> {
                 "cpu" => vec![
                     ("libx264", true, &mut dummy_flag),
                 ],
-                _ => vec![ // auto
+                _ => vec![
                     ("h264_nvenc", encoder_availability.h264_nvenc, &mut encoder_availability.h264_nvenc),
                     ("h264_qsv", encoder_availability.h264_qsv, &mut encoder_availability.h264_qsv),
                     ("h264_amf", encoder_availability.h264_amf, &mut encoder_availability.h264_amf),
@@ -1160,11 +1522,19 @@ pub async fn main() -> Result<()> {
     };
 
 
-    let ffmpeg_encoder = candidates
+    let mut ffmpeg_encoder = candidates
         .iter()
         .find(|&&(_name, available, _)| available)
         .map(|&(name, _, _)| name)
         .expect("At least one software encoder is available.");
+
+    let dx_selected = match encoder_type {
+        "dx12" => dx_selected,
+        _ => dx_selected.filter(|_| matches!(ffmpeg_encoder, "libx264" | "libx265" | "libaom-av1")),
+    };
+    if let Some(enc) = &dx_selected {
+        ffmpeg_encoder = enc.name;
+    }
 
     info!(
     "=== Encoder Selection ===\n\
@@ -1210,41 +1580,93 @@ pub async fn main() -> Result<()> {
     let ffmpeg_preset = match ffmpeg_encoder {
         "h264_amf" | "hevc_amf" | "av1_amf" => "-quality",
         "h264_vulkan" | "hevc_vulkan" | "av1_vulkan" => "-preset",
+        "libaom-av1" => "-cpu-used",
+        "librav1e" => "-speed",
         _ => "-preset",
     };
 
-    let ffmpeg_preset_name = match ffmpeg_encoder {
-        "h264_nvenc" | "hevc_nvenc" | "av1_nvenc" => params
-            .config
-            .ffmpeg_preset
-            .split_whitespace()
-            .nth(1)
-            .unwrap_or("p4"),
-        "h264_qsv" | "hevc_qsv" | "av1_qsv" => params
-            .config
-            .ffmpeg_preset
-            .split_whitespace()
-            .next()
-            .unwrap_or("medium"),
-        "h264_amf" | "hevc_amf" | "av1_amf" => params
-            .config
-            .ffmpeg_preset
-            .split_whitespace()
-            .nth(2)
-            .unwrap_or("balanced"),
-        "h264_vulkan" | "hevc_vulkan" | "av1_vulkan" => params
-            .config
-            .ffmpeg_preset
-            .split_whitespace()
-            .next()
-            .unwrap_or("default"),
-        _ => params
-            .config
-            .ffmpeg_preset
-            .split_whitespace()
-            .next()
-            .unwrap_or("medium"),
+    fn speed_rank(word: &str) -> u32 {
+        match word {
+            "ultrafast" | "veryfast" => 0,
+            "faster" => 1,
+            "fast" => 2,
+            "medium" => 3,
+            "slow" => 4,
+            "slower" => 5,
+            "veryslow" => 6,
+            _ => 3,
+        }
+    }
+
+    let preset_words: Vec<&str> = params.config.ffmpeg_preset.split_whitespace().collect();
+    let ffmpeg_preset_name: String = match ffmpeg_encoder {
+        "h264_nvenc" | "hevc_nvenc" | "av1_nvenc" => {
+            match preset_words.get(1) {
+                Some(w) if w.len() >= 2 && w.starts_with('p') && w[1..].chars().all(|c| c.is_ascii_digit()) => {
+                    (*w).to_string()
+                }
+                Some(w) => format!("p{}", speed_rank(w) + 1),
+                None => format!("p{}", speed_rank(preset_words.first().copied().unwrap_or("medium")) + 1),
+            }
+        }
+        "h264_qsv" | "hevc_qsv" | "av1_qsv" => preset_words
+            .first()
+            .copied()
+            .unwrap_or("medium")
+            .to_string(),
+        "h264_amf" | "hevc_amf" | "av1_amf" => match preset_words.get(2) {
+            Some(w) => (*w).to_string(),
+            None => match speed_rank(preset_words.first().copied().unwrap_or("medium")) {
+                0..=2 => "speed",
+                3 | 4 => "balanced",
+                _ => "quality",
+            }
+            .to_string(),
+        },
+        "h264_vulkan" | "hevc_vulkan" | "av1_vulkan" => preset_words
+            .first()
+            .copied()
+            .unwrap_or("default")
+            .to_string(),
+        "libsvtav1" => match speed_rank(preset_words.first().copied().unwrap_or("medium")) {
+            0 | 1 => "12",
+            2 => "10",
+            3 => "8",
+            4 => "6",
+            5 => "4",
+            _ => "2",
+        }
+        .to_string(),
+        "libaom-av1" => match speed_rank(preset_words.first().copied().unwrap_or("medium")) {
+            0 | 1 => "8",
+            2 => "7",
+            3 => "6",
+            4 => "5",
+            5 => "4",
+            _ => "3",
+        }
+        .to_string(),
+        "librav1e" => match speed_rank(preset_words.first().copied().unwrap_or("medium")) {
+            0 | 1 => "10",
+            2 => "9",
+            3 => "8",
+            4 => "7",
+            5 => "6",
+            _ => "5",
+        }
+        .to_string(),
+        _ => preset_words
+            .first()
+            .copied()
+            .unwrap_or("medium")
+            .to_string(),
     };
+
+    if ffmpeg_encoder.ends_with("_vulkan") {
+        info!("  Speed preset: (vulkan encoder takes no preset, ignoring the configured one)");
+    } else {
+        info!("  Speed preset: {} {}", ffmpeg_preset, ffmpeg_preset_name);
+    }
 
     let bitrate_control = if params.config.bitrate_control == "CRF" {
         match ffmpeg_encoder {
@@ -1259,18 +1681,22 @@ pub async fn main() -> Result<()> {
     };
 
     if params.config.hardware_accel {
+        let dx_ok = dx_selected.is_some();
         let h264_supported = encoder_availability.h264_nvenc
             || encoder_availability.h264_qsv
             || encoder_availability.h264_amf
-            || encoder_availability.h264_vulkan;
+            || encoder_availability.h264_vulkan
+            || dx_ok;
         let hevc_supported = encoder_availability.hevc_nvenc
             || encoder_availability.hevc_qsv
             || encoder_availability.hevc_amf
-            || encoder_availability.hevc_vulkan;
+            || encoder_availability.hevc_vulkan
+            || dx_ok;
         let av1_supported = encoder_availability.av1_nvenc
             || encoder_availability.av1_qsv
             || encoder_availability.av1_amf
-            || encoder_availability.av1_vulkan;
+            || encoder_availability.av1_vulkan
+            || dx_ok;
 
         if (params.config.video_codec == "h264" && !h264_supported)
             || (params.config.video_codec == "hevc" && !hevc_supported)
@@ -1352,7 +1778,6 @@ pub async fn main() -> Result<()> {
                 if encoder_availability.av1_cuvid { "SUCCESS" } else { "FAILED" }
             );
 
-            // 详细的错误日志
             if !hw_errors.is_empty() {
                 detailed_error += "Detailed error logs:\n";
                 for (i, error) in hw_errors.iter().enumerate() {
@@ -1366,15 +1791,51 @@ pub async fn main() -> Result<()> {
             bail!(detailed_error);
         }
     }
+    let gpu_yuv = params.config.gpu_yuv
+        && std::env::var("PHITK_RGB24_READBACK").is_err()
+        && vw % 2 == 0
+        && vh % 2 == 0;
+
+    let planar = matches!(
+        ffmpeg_encoder,
+        "libx265" | "libsvtav1" | "libaom-av1" | "librav1e"
+    );
+    let nv12 = if gpu_yuv {
+        match YuvTarget::new(vw, vh, planar) {
+            Ok(target) => {
+                info!(
+                    "GPU YUV: enabled (shader outputs {}, {:.2} MB/frame, was {:.2} MB/frame)",
+                    if planar { "YUV420P planar" } else { "NV12" },
+                    (vw as f64 * vh as f64 * 1.5) / 1048576.,
+                    (vw as f64 * vh as f64 * 3.) / 1048576.
+                );
+                Some(target)
+            }
+            Err(err) => {
+                warn!("GPU YUV unavailable, falling back to RGB24 readback: {err:?}");
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let gpu_yuv = nv12.is_some();
+
     let global_args = "-y";
     let mut input_args = String::new();
-    write!(&mut input_args, "-f rawvideo -c:v rawvideo -s {vw}x{vh} -r {fps} -pix_fmt rgba -i - -i")?;
-
-    let ffmpeg_thread = if params.config.ffmpeg_thread {
-        "-thread_queue_size 2048 "
-    } else {
-        ""
-    };
+        write!(
+            &mut input_args,
+            "-f rawvideo -c:v rawvideo -s {vw}x{vh} -r {fps} -pix_fmt {}",
+            if gpu_yuv {
+                if planar { "yuv420p" } else { "nv12" }
+            } else {
+                "rgb24"
+            }
+        )?;
+        if params.config.ffmpeg_thread {
+            input_args.push_str(" -thread_queue_size 2048");
+        }
+    input_args.push_str(" -i - -i");
 
     let video = match params.config.video {
         true => "mov",
@@ -1387,35 +1848,63 @@ pub async fn main() -> Result<()> {
         ""
     };
     let is_vulkan_encoder = ffmpeg_encoder.ends_with("_vulkan");
-    let video_filter = if is_vulkan_encoder {
-        // Vulkan encoders need NV12 format uploaded to Vulkan device memory
-        // vflip is needed because OpenGL renders top-to-bottom but video expects bottom-to-top
-        "format=nv12,vflip,hwupload"
+    let is_hw_encoder = matches!(
+        ffmpeg_encoder,
+        "h264_nvenc"
+            | "hevc_nvenc"
+            | "av1_nvenc"
+            | "h264_qsv"
+            | "hevc_qsv"
+            | "av1_qsv"
+            | "h264_amf"
+            | "hevc_amf"
+            | "av1_amf"
+    );
+    let dx = dx_selected;
+    let vf_arg = if dx.is_some() {
+        "-vf format=nv12,hwupload".to_owned()
+    } else if gpu_yuv {
+        if is_vulkan_encoder {
+            "-vf hwupload".to_owned()
+        } else {
+            String::new()
+        }
+    } else if is_vulkan_encoder {
+        "-vf format=nv12,vflip,hwupload".to_owned()
+    } else if is_hw_encoder {
+        "-vf format=nv12,vflip".to_owned()
     } else {
-        "format=yuv420p,vflip"
+        "-vf format=yuv420p,vflip".to_owned()
     };
 
+    let mut out_extra = vf_arg;
+    if ffmpeg_encoder == "libaom-av1" {
+        out_extra.push_str(" -row-mt 1");
+    }
+    if let Some(enc) = &dx {
+        out_extra.push_str(&format!(" -pix_fmt {}", enc.pix));
+        out_extra.push_str(" -bf 0");
+    }
+
     let args2 = if is_vulkan_encoder {
-        // Vulkan
         format!(
-            "-c:a {} -c:v {} {} {} -map 0:v:0 -map 1:a:0 {} {} {} -vf {} -f {}",
+            "-c:a {} -c:v {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} {} -f {}",
             audio_codec,
             ffmpeg_encoder,
             bitrate_control,
             params.config.bitrate,
             strict_flag,
-            ffmpeg_thread,
             if params.config.disable_loading {
                 format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
             } else {
                 "-ss 0.1".to_string()
             },
-            video_filter,
+            out_extra,
             video,
         )
     } else {
         format!(
-            "-c:a {} -c:v {} {} {} {} {} -map 0:v:0 -map 1:a:0 {} {} {} -vf {} -f {}",
+            "-c:a {} -c:v {} {} {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} {} -f {}",
             audio_codec,
             ffmpeg_encoder,
             bitrate_control,
@@ -1423,13 +1912,12 @@ pub async fn main() -> Result<()> {
             ffmpeg_preset,
             ffmpeg_preset_name,
             strict_flag,
-            ffmpeg_thread,
             if params.config.disable_loading {
                 format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
             } else {
                 "-ss 0.1".to_string()
             },
-            video_filter,
+            out_extra,
             video,
         )
     };
@@ -1437,10 +1925,14 @@ pub async fn main() -> Result<()> {
     let mut proc = {
         let mut cmd = cmd_hidden(&ffmpeg);
         cmd.args(global_args.split_whitespace());
-        if is_vulkan_encoder
-        {
+        if is_vulkan_encoder {
             cmd.arg("-init_hw_device").arg("vulkan=vk")
                .arg("-filter_hw_device").arg("vk");
+        } else if let Some(enc) = &dx {
+            cmd.arg("-init_hw_device")
+                .arg(format!("{}={}", enc.hw, DX_DEVICE))
+                .arg("-filter_hw_device")
+                .arg(DX_DEVICE);
         }
         cmd.args(input_args.split_whitespace())
             .arg(mixing_output.path())
@@ -1449,33 +1941,132 @@ pub async fn main() -> Result<()> {
             .arg("-loglevel")
             .arg("error")
             .stdin(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::piped())
             .spawn()
             .with_context(|| tl!("run-ffmpeg-failed"))?
     };
-    let mut input = proc.stdin.take().unwrap();
+    let video_stderr = drain_stderr(proc.stderr.take().unwrap());
 
-    let rgba_size = vw as usize * vh as usize * 4;
-    info!("RGBA buffer size: {}", rgba_size);
+    struct Plane {
+        pbos: Vec<GLuint>,
+        fbo: GLuint,
+        size: usize,
+        w: i32,
+        h: i32,
+        format: u32,
+    }
 
-    const MAX_PBO_COUNT: usize = 8;
-    let n = MAX_PBO_COUNT.min(fps as usize).max(2);
-    let mut pbos: Vec<GLuint> = vec![0; n];
-    info!("Using {} PBOs for async readback (buffering strategy)", n);
+    const PBO_COUNT: usize = 3;
+    let n = PBO_COUNT.min(fps as usize).max(2);
 
+    let plane_specs: Vec<(GLuint, usize, i32, i32, u32)> = if let Some(yuv) = &nv12 {
+        yuv.plane_layout(vw as i32, vh as i32)
+    } else {
+        vec![(
+            internal_id(&mst.output()),
+            vw as usize * vh as usize * 3,
+            vw as i32,
+            vh as i32,
+            GL_RGB,
+        )]
+    };
+
+    let mut planes: Vec<Plane> = Vec::with_capacity(plane_specs.len());
     unsafe {
         use miniquad::gl::*;
-        glGenBuffers(n as _, pbos.as_mut_ptr());
-        for pbo in &pbos {
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
-            glBufferData(
-                GL_PIXEL_PACK_BUFFER,
-                rgba_size as _,
-                std::ptr::null(),
-                GL_STREAM_READ,
-            );
+        for (fbo, size, w, h, format) in plane_specs {
+            let mut pbos: Vec<GLuint> = vec![0; n];
+            glGenBuffers(n as _, pbos.as_mut_ptr());
+            for pbo in &pbos {
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
+                glBufferData(GL_PIXEL_PACK_BUFFER, size as _, std::ptr::null(), GL_STREAM_READ);
+            }
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            planes.push(Plane {
+                pbos,
+                fbo,
+                size,
+                w,
+                h,
+                format,
+            });
         }
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    }
+    let frame_size: usize = planes.iter().map(|p| p.size).sum();
+    info!(
+        "Using {} PBOs per plane, {} plane(s), {} bytes/frame",
+        n,
+        planes.len(),
+        frame_size
+    );
+
+    const WRITE_QUEUE: usize = 3;
+    let (job_tx, job_rx) = mpsc::sync_channel::<Option<Vec<u8>>>(WRITE_QUEUE);
+    let (recycle_tx, recycle_rx) = mpsc::sync_channel::<Vec<u8>>(WRITE_QUEUE + 1);
+    let mut ffmpeg_stdin = proc.stdin.take().unwrap();
+    let writer = std::thread::Builder::new()
+        .name("ffmpeg-writer".to_owned())
+        .spawn(move || -> std::io::Result<u64> {
+            let mut busy: u64 = 0;
+            while let Ok(job) = job_rx.recv() {
+                match job {
+                    Some(buf) => {
+                        let t = Instant::now();
+                        ffmpeg_stdin.write_all(&buf)?;
+                        busy += t.elapsed().as_nanos() as u64;
+                        let _ = recycle_tx.try_send(buf);
+                    }
+                    None => break,
+                }
+            }
+            let t = Instant::now();
+            ffmpeg_stdin.flush()?;
+            busy += t.elapsed().as_nanos() as u64;
+            Ok(busy)
+        })
+        .context("failed to spawn ffmpeg writer thread")?;
+
+    fn flush_frame(
+        planes: &[Plane],
+        pbo_index: usize,
+        frame_size: usize,
+        recycle_rx: &mpsc::Receiver<Vec<u8>>,
+        job_tx: &mpsc::SyncSender<Option<Vec<u8>>>,
+    ) -> Result<(f64, f64, f64)> {
+        let mut dma_wait = 0f64;
+        let mut copy_time = 0f64;
+        let staging = unsafe {
+            use miniquad::gl::*;
+            let mut staging = match recycle_rx.try_recv() {
+                Ok(buf) if buf.len() == frame_size => buf,
+                _ => vec![0u8; frame_size],
+            };
+            let mut off = 0usize;
+            for plane in planes {
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, plane.pbos[pbo_index]);
+                let t = Instant::now();
+                let src =
+                    glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, plane.size as _, GL_MAP_READ_BIT);
+                if src.is_null() {
+                    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+                    bail!("Failed to map PBO");
+                }
+                dma_wait += t.elapsed().as_secs_f64();
+                let t = Instant::now();
+                staging[off..off + plane.size]
+                    .copy_from_slice(std::slice::from_raw_parts(src as *const u8, plane.size));
+                copy_time += t.elapsed().as_secs_f64();
+                off += plane.size;
+                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            }
+            staging
+        };
+        let send_start = Instant::now();
+        job_tx
+            .send(Some(staging))
+            .map_err(|_| anyhow::anyhow!("ffmpeg writer thread exited unexpectedly"))?;
+        Ok((dma_wait, copy_time, send_start.elapsed().as_secs_f64()))
     }
 
     send(IPCEvent::StartRender(frames));
@@ -1484,9 +2075,15 @@ pub async fn main() -> Result<()> {
     let frame_duration = 1.0 / fps_f64;
     let total_frames = frames;
 
-    let frames10 = total_frames / 10;
+    let frames10 = (total_frames / 10).max(1);
     let mut step_time = Instant::now();
-    let mut current_pbo_index = 0;
+    const READBACK_LAG: usize = 2;
+    let lag = READBACK_LAG.min(n.saturating_sub(1)).max(1);
+    let mut next_slot = 0usize;
+    let mut in_flight: VecDeque<usize> = VecDeque::new();
+    let mut dma_wait_time = 0f64;
+    let mut copy_time = 0f64;
+    let mut send_time = 0f64;
     let mut fps_update_timer = Instant::now();
     let mut fps_frame_count = 0u64;
     let mut realtime_fps = 0u64;
@@ -1531,59 +2128,41 @@ pub async fn main() -> Result<()> {
         if MSAA.load(Ordering::SeqCst) {
             mst.blit();
         }
+            if let Some(nv12) = &nv12 {
+                nv12.convert(&mst.output());
+            }
 
+        let slot = next_slot;
+        next_slot = (next_slot + 1) % n;
         unsafe {
             use miniquad::gl::*;
-            if frame > 0 {
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[current_pbo_index]);
-                let src = glMapBufferRange(
-                    GL_PIXEL_PACK_BUFFER,
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            for plane in &planes {
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, plane.fbo);
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, plane.pbos[slot]);
+                glReadPixels(
                     0,
-                    rgba_size as _,
-                    GL_MAP_READ_BIT
+                    0,
+                    plane.w,
+                    plane.h,
+                    plane.format,
+                    GL_UNSIGNED_BYTE,
+                    std::ptr::null_mut(),
                 );
-                if !src.is_null() {
-                    let data_slice = std::slice::from_raw_parts(src as *const u8, rgba_size);
-                    input.write_all(data_slice)?;
-                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-                } else {
-                    bail!("Failed to map PBO at frame {}", frame);
-                }
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
             }
-            let next_pbo_index = (current_pbo_index + 1) % n;
-
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, internal_id(&mst.output()));
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[next_pbo_index]);
-            glReadPixels(
-                0, 0,
-                vw as _, vh as _,
-                GL_RGBA, GL_UNSIGNED_BYTE,
-                std::ptr::null_mut()
-            );
-
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+            glPixelStorei(GL_PACK_ALIGNMENT, 4);
             glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-            if frame == total_frames - 1 {
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, pbos[next_pbo_index]);
-                glFinish();
-                let src = glMapBufferRange(
-                    GL_PIXEL_PACK_BUFFER,
-                    0,
-                    rgba_size as _,
-                    GL_MAP_READ_BIT
-                );
-                if !src.is_null() {
-                    let data_slice = std::slice::from_raw_parts(src as *const u8, rgba_size);
-                    input.write_all(data_slice)?;
-                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-                } else {
-                    bail!("Failed to map final PBO at frame {}", frame);
-                }
+        }
+        in_flight.push_back(slot);
 
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-            }
-            current_pbo_index = next_pbo_index;
+        if in_flight.len() > lag {
+            let old = in_flight.pop_front().unwrap();
+            let (d, c, s) = flush_frame(&planes, old, frame_size, &recycle_rx, &job_tx)
+                .with_context(|| format!("failed to read back frame {}", frame as usize + 1 - lag))?;
+            dma_wait_time += d;
+            copy_time += c;
+            send_time += s;
         }
 
         fps_frame_count += 1;
@@ -1597,15 +2176,51 @@ pub async fn main() -> Result<()> {
         send(IPCEvent::Frame);
     }
 
-    drop(input);
+    while let Some(old) = in_flight.pop_front() {
+        let (d, c, s) = flush_frame(&planes, old, frame_size, &recycle_rx, &job_tx)
+            .context("failed to read back the final frames")?;
+        dma_wait_time += d;
+        copy_time += c;
+        send_time += s;
+    }
+
+
+    let _ = job_tx.send(None);
+    drop(job_tx);
+    let writer_busy = match writer.join() {
+        Ok(Ok(busy)) => busy as f64 / 1e9,
+        Ok(Err(err)) => bail!("failed to write frames to ffmpeg: {err}"),
+        Err(_) => bail!("ffmpeg writer thread panicked"),
+    };
     proc.wait()?;
 
-    info!("Render Time: {:.2?}", render_start_time.elapsed());
+    if let Ok(text) = video_stderr.join() {
+        if !text.trim().is_empty() {
+            warn!("[ffmpeg:video]\n{}", text);
+        }
+    }
+
+
+    let elapsed = render_start_time.elapsed();
+    let wall = elapsed.as_secs_f64().max(1e-9);
+    info!("Render Time: {:.2?}", elapsed);
+    info!(
+        "Render thread waits: readback DMA wait {:.2}s ({:.1}%) | readback memcpy {:.2}s ({:.1}%) | frame queue full {:.2}s ({:.1}%)",
+        dma_wait_time, dma_wait_time / wall * 100.,
+        copy_time, copy_time / wall * 100.,
+        send_time, send_time / wall * 100.
+    );
+    info!(
+        "Writer thread blocked on pipe+ffmpeg: {:.2}s ({:.1}%)",
+        writer_busy, writer_busy / wall * 100.
+    );
     info!("Average FPS: {}", realtime_fps);
 
     unsafe {
         use miniquad::gl::*;
-        glDeleteBuffers(n as _, pbos.as_ptr());
+        for plane in &planes {
+            glDeleteBuffers(n as _, plane.pbos.as_ptr());
+        }
     }
 
     send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));

@@ -26,10 +26,10 @@ tauri = { version = "2", features = [ "protocol-asset", "tray-icon"] }
 
 anyhow = { version = "1.0.70", features = ["backtrace"] }
 
-#prpr = { path = "D:/Github/Phi-TK-render-lib/prpr" }
+prpr = { path = "D:/Github/Phi-TK-render-lib/prpr" }
 #macroquad = { path = "D:/Github/prpr-macroquad", default-features = false}
 macroquad = { git = "https://github.com/Winamin/prpr-macroquad", default-features = false }
-prpr = { git = "https://github.com/Winamin/Phi-TK-render-lib", package = "prpr", branch = "render-lib" }
+#prpr = { git = "https://github.com/Winamin/Phi-TK-render-lib", package = "prpr", branch = "render-lib" }
 
 # prpr = { path = "../../phira/prpr" }
 
@@ -63,3 +63,12 @@ opt-level = 3
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55.0"
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D10",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Direct3D_Fxc",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+] }
