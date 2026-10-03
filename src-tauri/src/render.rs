@@ -724,10 +724,9 @@ pub async fn main() -> Result<()> {
 
     let gl = unsafe { get_internal_gl() };
 
-    // 零拷贝（GL → D3D11 → NVENC 直连）已移到 crate::zerocopy，且**不接入渲染流程**：实测它比现有管线
-    // 慢约 8%（823 vs 892 fps，同内容 1080p），因为现有管线里 ffmpeg 已经把 NVENC 引擎吃到 98%，
-    // 没有余量可抢。设 PHITK_DX_SELFTEST=1 可以单独跑它的 S1/S2/S3 自检 —— 这样非 N 卡机器上
-    // 不会白建 D3D11 设备、也不加载 nvEncodeAPI64.dll。
+    // 零拷贝（GL → D3D11 → NVENC 直连）已移到 crate::zerocopy，且不接入渲染流程：实测它比现有管线慢约 8%（823 vs 892 fps，同内容 1080p），因为现有管线里 ffmpeg 已经把 NVENC 引擎吃到 98%，
+    // 没有余量可抢 设 PHITK_DX_SELFTEST=1 可以单独跑它的 S1/S2/S3 自检 —— 这样非 N 卡机器上
+    // 不会白建 D3D11 设备、也不加载 nvEncodeAPI64.dll
     if std::env::var("PHITK_DX_SELFTEST").is_ok() {
         crate::zerocopy::probe_zero_copy_support();
         crate::zerocopy::probe_dx_interop(&params.config.video_codec);
@@ -1334,8 +1333,7 @@ pub async fn main() -> Result<()> {
                 || encoder_availability.h264_vulkan
         }
     };
-    // 关掉硬件加速时必须完全不碰 DX/D3D12 路径：那同样是硬件编码，而且会经由
-    // 下面的「DX 编码器回退」把用户选的 H.264 悄悄换成 HEVC 硬件编码。
+
     let want_dx = params.config.hardware_accel
         && match encoder_type {
             "dx12" => true,
@@ -1571,8 +1569,6 @@ pub async fn main() -> Result<()> {
     encoder_availability.av1_qsv,
     encoder_availability.av1_amf,
     encoder_availability.av1_vulkan,
-    // 关掉硬件加速、或显式选了 CPU 软编码时，上面的硬件编码器根本不会被探测 ——
-    // 打印一行说明，避免把"没探测"误读成"探测失败"。
     if !params.config.hardware_accel {
         "  (hardware acceleration is off: hardware encoders were not probed)"
     } else if params.config.encoder == "cpu" {
@@ -1693,7 +1689,6 @@ pub async fn main() -> Result<()> {
         "-b:v"
     };
 
-    // 显式选了 CPU 软编码就不要求存在硬件编码器（否则会误报"硬件加速不支持"并中止）。
     if params.config.hardware_accel && encoder_type != "cpu" {
         let dx_ok = dx_selected.is_some();
         let h264_supported = encoder_availability.h264_nvenc
