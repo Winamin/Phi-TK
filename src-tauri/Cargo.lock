@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "Phi-TK"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -32,6 +32,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "windows 0.61.3",
  "winreg",
 ]
 
@@ -1108,19 +1109,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crossbeam"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e71406cd8807725f7ac2f999a4cdd32e98f829fdf65f528343cebf945e41df1e"
-dependencies = [
- "crossbeam-channel",
- "crossbeam-deque",
- "crossbeam-epoch",
- "crossbeam-queue",
- "crossbeam-utils",
-]
-
-[[package]]
 name = "crossbeam-channel"
 version = "0.5.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1144,15 +1132,6 @@ name = "crossbeam-epoch"
 version = "0.9.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc74980687109a3b14c72fd458107bf0baa1da1a1a805e178d15501ba9b86d9d"
-dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
-name = "crossbeam-queue"
-version = "0.3.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03e8bd762f7479489c70ed6c768ddca99d7296857de437a68dcb2a94365b3fae"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -4876,7 +4855,6 @@ checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
 [[package]]
 name = "prpr"
 version = "0.4.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#9948d6d4cc725cba55a8065b10a30b599e28cd2c"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -4893,7 +4871,6 @@ dependencies = [
  "color-thief",
  "colored",
  "concat-string",
- "crossbeam",
  "crossbeam-channel",
  "csv",
  "fastblur",
@@ -4958,7 +4935,6 @@ dependencies = [
 [[package]]
 name = "prpr-avc"
 version = "0.1.0"
-source = "git+https://github.com/Winamin/Phi-TK-render-lib?branch=render-lib#9948d6d4cc725cba55a8065b10a30b599e28cd2c"
 dependencies = [
  "anyhow",
  "tracing",

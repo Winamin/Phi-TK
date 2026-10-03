@@ -77,6 +77,7 @@ import { useI18n } from 'vue-i18n';
 import { open } from '@tauri-apps/plugin-dialog';
 import { appConfigDir } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { getOutputPath, setOutputPath, clearOutputPath } from './outputPath';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
 import { RULES as rules, toast } from './common';
@@ -96,7 +97,7 @@ defineOptions({ name: 'SettingsPanel' });
 
 const { t } = useI18n();
 
-const outputPath = ref<string>(localStorage.getItem('outputPath') || '');
+const outputPath = ref<string>(getOutputPath());
 const selectedInfo = ref<string | null>(null);
 
 const backgroundPath = ref<string>(localStorage.getItem('customBackground') || '');
@@ -144,7 +145,7 @@ async function selectFolder() {
 
 function saveOutputPath() {
   if (rules.non_empty(outputPath.value) !== true) { toast(t('settings.warning.empty'), 'warning'); return; }
-  localStorage.setItem('outputPath', outputPath.value);
+  setOutputPath(outputPath.value);
   toast(t('settings.saved'), 'success');
 }
 
@@ -157,7 +158,7 @@ async function copyPath() {
 function clearPath() {
   outputPath.value = '';
   selectedInfo.value = null;
-  localStorage.removeItem('outputPath');
+  clearOutputPath();
 }
 
 async function selectBackground() {

@@ -38,7 +38,7 @@ zh-CN:
     pending: 等待中…
     loading: 加载中…
     mixing: 混音中…
-    rendering: 渲染中 { fps } FPS  预计 { estimate } 结束
+    rendering: "{ fps } FPS  预计 { estimate } 结束"
     done: 已完成，耗时 { duration }
     canceled: 已取消
     failed: 失败
@@ -70,6 +70,7 @@ import { ref, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Task, TaskStatus } from './model';
 import { invoke } from '@tauri-apps/api/core';
+import { getOutputPathArg } from './outputPath';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import moment from 'moment';
 import { toastError } from './common';
@@ -186,7 +187,7 @@ async function showInFolder(path: string) {
 }
 
 async function showFolder() {
-  try { await invoke('show_folder'); } catch (e) { toastError(e); }
+  try { await invoke('show_folder', { path: getOutputPathArg() }); } catch (e) { toastError(e); }
 }
 
 function showOutput(task: Task) {

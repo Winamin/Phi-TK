@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use std::{path::PathBuf, sync::OnceLock};
+use std::{path::{Path, PathBuf}, sync::OnceLock};
 
 pub static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
 pub static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -25,6 +25,21 @@ pub fn output_dir() -> Result<PathBuf> {
         std::fs::create_dir(&dir)?;
     }
     Ok(dir)
+}
+
+pub fn resolve_output_dir(custom: Option<&Path>) -> Result<PathBuf> {
+    if let Some(path) = custom.filter(|p| !p.as_os_str().is_empty()) {
+        match std::fs::create_dir_all(path) {
+            Ok(()) => return Ok(path.to_path_buf()),
+            Err(err) => {
+                log::warn!(
+                    "custom output path unusable ({}: {err}), falling back to the default output dir",
+                    path.display()
+                );
+            }
+        }
+    }
+    output_dir()
 }
 
 pub fn respack_dir() -> Result<PathBuf> {

@@ -1,5 +1,5 @@
 use crate::{
-    common::output_dir,
+    common::resolve_output_dir,
     render::{IPCEvent, RenderParams},
     ASSET_PATH,
 };
@@ -8,7 +8,6 @@ use chrono::Local;
 use prpr::fs;
 use serde::Serialize;
 use std::{
-    collections::VecDeque,
     io::Write,
     ops::DerefMut,
     path::PathBuf,
@@ -87,11 +86,8 @@ impl Task {
             Local::now().format("%Y-%m-%d %H-%M-%S")
         );
 
-        let output = if let Some(path) = output_path {
-            path.join(file_name)
-        } else {
-            output_dir()?.join(file_name)
-        };
+        // 与「打开文件夹」共用同一套解析规则：自定义路径不存在会自动创建、不可用则退回默认目录。
+        let output = resolve_output_dir(output_path.as_deref())?.join(file_name);
 
         Ok(Self {
             id,
@@ -133,8 +129,6 @@ impl Task {
         let mut total = 0;
         let mut frame_count: u64 = 0;
         let start = Instant::now();
-        //let mut frame_times = VecDeque::new();
-        //let mut last_update_fps_sec: u32 = 0;
         let mut last_fps: usize = 0;
         loop {
             let line = lines.next_line().await?;
@@ -202,7 +196,15 @@ impl Task {
                 }
             }
             if self.request_cancel.load(Ordering::Relaxed) {
-                child.kill().await?;
+                #[cfg(target_os = "windows")]
+                if let Some(pid) = child.id() {
+                    use std::os::windows::process::CommandExt;
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/PID", &pid.to_string(), "/T", "/F"])
+                        .creation_flags(0x08000000)
+                        .output();
+                }
+                let _ = child.kill().await;
                 *self.status.lock().await = TaskStatus::Canceled;
                 return Ok(());
             }
