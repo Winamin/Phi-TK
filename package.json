@@ -1,5 +1,6 @@
 {
   "name": "phi-tk",
+  "packageManager": "pnpm@10.18.3",
   "version": "0.0.0",
   "private": true,
   "scripts": {
