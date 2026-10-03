@@ -41,7 +41,7 @@ WORKDIR /workspace
 COPY . .
 
 # 安装前端依赖
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
 # 下载并解压 static-lib
 RUN mkdir -p static-lib && \
