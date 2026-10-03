@@ -15,31 +15,31 @@ importers:
         specifier: ^1.0.4
         version: 1.0.4
       '@tauri-apps/api':
-        specifier: ^2.11.1
+        specifier: 2.11.1
         version: 2.11.1
       '@tauri-apps/cli':
-        specifier: ^2.11.4
+        specifier: 2.11.4
         version: 2.11.4
       '@tauri-apps/plugin-cli':
-        specifier: ^2.4.1
+        specifier: 2.4.1
         version: 2.4.1
       '@tauri-apps/plugin-clipboard-manager':
-        specifier: ^2.3.3
+        specifier: 2.3.3
         version: 2.3.3
       '@tauri-apps/plugin-dialog':
-        specifier: ^2.7.3
+        specifier: 2.7.3
         version: 2.7.3
       '@tauri-apps/plugin-fs':
-        specifier: ^2.5.2
+        specifier: 2.5.2
         version: 2.5.2
       '@tauri-apps/plugin-http':
-        specifier: ^2.6.1
+        specifier: 2.6.1
         version: 2.6.1
       '@tauri-apps/plugin-os':
-        specifier: ^2.3.2
+        specifier: 2.3.2
         version: 2.3.2
       '@tauri-apps/plugin-shell':
-        specifier: ^2.3.6
+        specifier: 2.3.6
         version: 2.3.6
       gsap:
         specifier: ^3.15.0
