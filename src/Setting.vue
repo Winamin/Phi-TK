@@ -1,4 +1,5 @@
 <i18n>
+
 en:
   settings:
     title: Settings
@@ -19,6 +20,8 @@ en:
       empty: "Path must not be empty"
       select_error: "Failed to select folder: {msg}"
       copy_error: "Copy failed: please copy manually"
+      noBackground: "Set a custom background image first — there is nothing to derive colours from"
+      derive_failed: "Could not derive colours from this image"
     background:
       label: "Custom background"
       placeholder: "Click to select image file"
@@ -34,6 +37,7 @@ en:
       auto: "System"
       wallpaperColor: "Colours from wallpaper"
       wallpaperColorTip: "Derives the whole palette from your background image, Material You style. Turn it off to go back to the default blue."
+      wallpaperColorDone: "Accent colour derived from the wallpaper: {color}"
 zh-CN:
   settings:
     title: 设置
@@ -54,6 +58,8 @@ zh-CN:
       empty: "路径不能为空"
       select_error: "选择文件夹时出错：{msg}"
       copy_error: "复制失败：请手动复制"
+      noBackground: "请先设置自定义背景图，否则没有可取色的来源"
+      derive_failed: "无法从这张图片取色（格式或读取失败）"
     background:
       label: "自定义背景"
       placeholder: "点击选择图片文件"
@@ -69,6 +75,7 @@ zh-CN:
       auto: "跟随系统"
       wallpaperColor: "跟随壁纸取色"
       wallpaperColorTip: "从背景图片中提取主色调，生成整套 Material You 配色。关闭后回到默认的蓝色。"
+      wallpaperColorDone: "已从壁纸取色：{color}"
 </i18n>
 
 <script setup lang="ts">
@@ -89,6 +96,10 @@ import {
   isWallpaperColorEnabled,
   resetColorScheme,
   setWallpaperColorEnabled,
+  BACKGROUND_KEY,
+  getDerivedColor,
+  readAppliedPrimary,
+  colorSchemeDiagnostics,
 } from './theme';
 import TipSwitch from './components/TipSwitch.vue';
 import MdTextField from './components/md/MdTextField.vue';
@@ -100,10 +111,14 @@ const { t } = useI18n();
 const outputPath = ref<string>(getOutputPath());
 const selectedInfo = ref<string | null>(null);
 
-const backgroundPath = ref<string>(localStorage.getItem('customBackground') || '');
+const backgroundPath = ref<string>(localStorage.getItem(BACKGROUND_KEY) || '');
 
 const themeMode = ref<ThemeMode>(getThemeMode());
 const wallpaperColor = ref(isWallpaperColorEnabled());
+const derivedColor = ref<string | null>(getDerivedColor());
+const appliedPrimary = ref(readAppliedPrimary());
+/** 把 `r, g, b` 拼成可用作背景色的 rgb()。 */
+const appliedPrimaryCss = computed(() => `rgb(${appliedPrimary.value})`);
 
 const backgroundPreviewUrl = computed(() => {
   if (backgroundPath.value) {
@@ -122,11 +137,19 @@ function onThemeModeChange(e: Event) {
 async function onWallpaperColorChange(enabled: boolean) {
   wallpaperColor.value = enabled;
   setWallpaperColorEnabled(enabled);
-  if (enabled) {
-    if (backgroundPath.value) await deriveColorFromWallpaper(backgroundPath.value);
-  } else {
+  if (!enabled) {
     resetColorScheme();
+    derivedColor.value = null;
+    return;
   }
+  if (!backgroundPath.value) {
+    toast(t('settings.warning.noBackground'), 'warning');
+    return;
+  }
+  const hex = await deriveColorFromWallpaper(backgroundPath.value);
+  derivedColor.value = hex;
+  if (hex) toast(t('settings.appearance.wallpaperColorDone', { color: hex }), 'success');
+  else toast(t('settings.warning.derive_failed'), 'warning');
 }
 
 async function selectFolder() {
@@ -172,16 +195,20 @@ async function selectBackground() {
 }
 
 async function saveBackground() {
-  if (backgroundPath.value) localStorage.setItem('customBackground', backgroundPath.value);
-  else localStorage.removeItem('customBackground');
+  if (backgroundPath.value) localStorage.setItem(BACKGROUND_KEY, backgroundPath.value);
+  else localStorage.removeItem(BACKGROUND_KEY);
   window.dispatchEvent(new CustomEvent('customBackgroundChanged', { detail: backgroundPath.value }));
-  if (wallpaperColor.value && backgroundPath.value) await deriveColorFromWallpaper(backgroundPath.value);
+  if (wallpaperColor.value && backgroundPath.value) {
+    const hex = await deriveColorFromWallpaper(backgroundPath.value);
+    derivedColor.value = hex;
+    if (!hex) toast(t('settings.warning.derive_failed'), 'warning');
+  }
   toast(t('settings.background.saved'), 'success');
 }
 
 function clearBackground() {
   backgroundPath.value = '';
-  localStorage.removeItem('customBackground');
+  localStorage.removeItem(BACKGROUND_KEY);
   window.dispatchEvent(new CustomEvent('customBackgroundChanged', { detail: null }));
   resetColorScheme();
   toast(t('settings.background.saved'), 'success');
@@ -227,6 +254,12 @@ function clearBackground() {
             <div class="item-text">
               <span class="item-label">{{ t('settings.appearance.wallpaperColor') }}</span>
               <span class="item-hint">{{ t('settings.appearance.wallpaperColorTip') }}</span>
+              <span v-if="wallpaperColor && derivedColor" class="item-hint derived-color">
+                <i class="derived-dot" :style="{ background: derivedColor }"></i>{{ derivedColor }}
+                <i class="derived-dot" :style="{ background: appliedPrimaryCss }"
+                   :title="colorSchemeDiagnostics()"></i>
+                <span class="derived-applied">applied</span>
+              </span>
             </div>
             <TipSwitch
               :model-value="wallpaperColor"
@@ -328,6 +361,24 @@ function clearBackground() {
 <style scoped lang="scss">
 @use './styles/breakpoints' as bp;
 @use './styles/motion' as mo;
+
+.derived-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: monospace;
+}
+
+.derived-applied {
+  margin-left: 6px;
+  opacity: 0.7;
+}
+.derived-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--mdui-color-outline), 0.6);
+}
 
 .settings-container {
   width: 100%;
