@@ -40,7 +40,7 @@ jobs:
       - name: Sync node version and setup cache
         uses: pnpm/action-setup@v2
         with:
-          version: 8
+          version: 10.18.3
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
