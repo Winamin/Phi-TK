@@ -33,6 +33,8 @@ use std::{
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 
+
+
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
@@ -1957,10 +1959,10 @@ pub async fn main() -> Result<()> {
     }
     }
 
-
+    let async_depth = "-async_depth 3"; // the "4" parallel process 4 frames (vulkan encoder)
     let args2 = if is_vulkan_encoder {
         format!(
-            "-c:a {} -c:v {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} {} -f {}",
+            "-c:a {} -c:v {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} {} {} -f {}",
             audio_codec,
             ffmpeg_encoder,
             bitrate_control,
@@ -1972,6 +1974,7 @@ pub async fn main() -> Result<()> {
                 "-ss 0.1".to_string()
             },
             out_extra,
+            async_depth,
             video,
         )
     } else {
@@ -2077,7 +2080,7 @@ pub async fn main() -> Result<()> {
         frame_size
     );
 
-    const WRITE_QUEUE: usize = 2;
+    const WRITE_QUEUE: usize = 4;
     let (job_tx, job_rx) = mpsc::sync_channel::<Option<(usize, Vec<(usize, usize)>)>>(WRITE_QUEUE);
     let (done_tx, done_rx) = mpsc::channel::<usize>();
     let mut ffmpeg_stdin = proc.stdin.take().unwrap();
