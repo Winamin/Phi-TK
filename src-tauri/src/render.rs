@@ -25,7 +25,7 @@ use std::{
     process::{Command, Stdio},
     rc::Rc,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
     time::Instant,
@@ -217,6 +217,7 @@ pub enum IPCEvent {
     StartMixing,
     StartRender(u64),
     Frame,
+    EncoderFps(f64),
     Done(f64),
 }
 
@@ -413,6 +414,7 @@ pub(crate) fn cmd_hidden(program: impl AsRef<OsStr>) -> Command {
 
 const GL_PACK_ALIGNMENT: u32 = 0x0D05;
 
+
 pub fn drain_stderr<R>(mut stderr: R) -> std::thread::JoinHandle<String>
 where
     R: std::io::Read + Send + 'static,
@@ -437,6 +439,98 @@ where
             String::from_utf8_lossy(&collected).into_owned()
         })
         .expect("failed to spawn ffmpeg stderr reader")
+}
+
+pub fn drain_stderr_with_progress<R>(
+    mut stderr: R,
+    frames_written: std::sync::Arc<std::sync::atomic::AtomicU64>,
+) -> std::thread::JoinHandle<String>
+where
+    R: std::io::Read + Send + 'static,
+{
+    const LIMIT: usize = 64 * 1024;
+    std::thread::Builder::new()
+        .name("ffmpeg-progress".to_owned())
+        .spawn(move || {
+            let mut collected: Vec<u8> = Vec::new();
+            let mut line: Vec<u8> = Vec::new();
+            let mut buf = [0u8; 8192];
+            let mut last_sent = f64::NAN;
+            loop {
+                match stderr.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        for &b in &buf[..n] {
+                            if b != b'\n' && b != b'\r' {
+                                line.push(b);
+                                continue;
+                            }
+                            if let Some(n) = parse_progress_u64(&line, "frame=") {
+                                frames_written.store(n, Ordering::Relaxed);
+                            }
+                            if let Some(fps) = parse_progress_fps(&line) {
+                                if fps > 0.0 && fps != last_sent {
+                                    last_sent = fps;
+                                    crate::ipc::client::send(IPCEvent::EncoderFps(fps));
+                                }
+                            } else if !is_progress_line(&line) && collected.len() < LIMIT {
+                                let room = LIMIT - collected.len();
+                                collected.extend_from_slice(&line[..line.len().min(room)]);
+                                collected.push(b'\n');
+                            }
+                            line.clear();
+                        }
+                    }
+                }
+            }
+            String::from_utf8_lossy(&collected).into_owned()
+        })
+        .expect("failed to spawn ffmpeg progress reader")
+}
+
+fn parse_progress_fps(line: &[u8]) -> Option<f64> {
+    let text = std::str::from_utf8(line).ok()?;
+    let rest = text.strip_prefix("fps=")?;
+    let digits: String = rest
+        .trim_start()
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    if digits.is_empty() {
+        None
+    } else {
+        digits.parse().ok()
+    }
+}
+
+fn parse_progress_u64(line: &[u8], key: &str) -> Option<u64> {
+    let text = std::str::from_utf8(line).ok()?;
+    let rest = text.strip_prefix(key)?;
+    let digits: String = rest
+        .trim_start()
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    if digits.is_empty() { None } else { digits.parse().ok() }
+}
+
+fn is_progress_line(line: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(line) else { return false; };
+    let Some((key, _)) = text.split_once('=') else { return false; };
+    matches!(
+        key,
+        "frame"
+            | "fps"
+            | "bitrate"
+            | "total_size"
+            | "out_time_us"
+            | "out_time_ms"
+            | "out_time"
+            | "dup_frames"
+            | "drop_frames"
+            | "speed"
+            | "progress"
+    ) || key.starts_with("stream_")
 }
 
 
@@ -478,76 +572,7 @@ pub fn find_ffmpeg() -> Result<Option<String>> {
 }
 
 
-mod yuv_shader {
-    pub const VERTEX: &str = r#"#version 300 es
-in vec3 position;
-in vec2 texcoord;
-in vec4 color0;
 
-out vec2 uv;
-
-void main() {
-    gl_Position = vec4(position.xy, 0.0, 1.0);
-    uv = vec2(texcoord.x, 1.0 - texcoord.y);
-}"#;
-
-    pub const Y: &str = r#"#version 300 es
-precision mediump float;
-
-in vec2 uv;
-out vec4 FragColor;
-
-uniform sampler2D tex;
-
-void main() {
-    vec3 c = texture(tex, uv).rgb;
-    float y = (16.0 + 219.0 * (0.299 * c.r + 0.587 * c.g + 0.114 * c.b)) / 255.0;
-    FragColor = vec4(y, 0.0, 0.0, 1.0);
-}"#;
-
-    pub const UV: &str = r#"#version 300 es
-precision mediump float;
-
-in vec2 uv;
-out vec4 FragColor;
-
-uniform sampler2D tex;
-
-void main() {
-    vec3 c = texture(tex, uv).rgb;
-    float u = (128.0 + 224.0 * (-0.168736 * c.r - 0.331264 * c.g + 0.5 * c.b)) / 255.0;
-    float v = (128.0 + 224.0 * (0.5 * c.r - 0.418688 * c.g - 0.081312 * c.b)) / 255.0;
-    FragColor = vec4(u, v, 0.0, 1.0);
-}"#;
-
-    pub const U: &str = r#"#version 300 es
-precision mediump float;
-
-in vec2 uv;
-out vec4 FragColor;
-
-uniform sampler2D tex;
-
-void main() {
-    vec3 c = texture(tex, uv).rgb;
-    float u = (128.0 + 224.0 * (-0.168736 * c.r - 0.331264 * c.g + 0.5 * c.b)) / 255.0;
-    FragColor = vec4(u, 0.0, 0.0, 1.0);
-}"#;
-
-    pub const V: &str = r#"#version 300 es
-precision mediump float;
-
-in vec2 uv;
-out vec4 FragColor;
-
-uniform sampler2D tex;
-
-void main() {
-    vec3 c = texture(tex, uv).rgb;
-    float v = (128.0 + 224.0 * (0.5 * c.r - 0.418688 * c.g - 0.081312 * c.b)) / 255.0;
-    FragColor = vec4(v, 0.0, 0.0, 1.0);
-}"#;
-}
 
 pub(crate) fn new_plane(w: u32, h: u32, format: TextureFormat) -> RenderTarget {
     let gl = unsafe { get_internal_gl() };
@@ -579,7 +604,6 @@ fn yuv_material(fragment: &str) -> Result<Material> {
     )
     .map_err(|e| anyhow::anyhow!("{e:?}"))
 }
-
 struct YuvTarget {
     outputs: Vec<RenderTarget>,
     materials: Vec<Material>,
@@ -588,16 +612,17 @@ struct YuvTarget {
 
 impl YuvTarget {
     fn new(w: u32, h: u32, planar: bool) -> Result<Self> {
+        let hd = h > 576;
         let mut outputs = vec![new_plane(w, h, TextureFormat::Alpha)];
-        let mut materials = vec![yuv_material(yuv_shader::Y).context("failed to compile Y plane shader")?];
+        let mut materials = vec![yuv_material(&yuv_shader::y(hd)).context("failed to compile Y plane shader")?];
         if planar {
             outputs.push(new_plane(w / 2, h / 2, TextureFormat::Alpha));
-            materials.push(yuv_material(yuv_shader::U).context("failed to compile U plane shader")?);
+            materials.push(yuv_material(&yuv_shader::u(hd)).context("failed to compile U plane shader")?);
             outputs.push(new_plane(w / 2, h / 2, TextureFormat::Alpha));
-            materials.push(yuv_material(yuv_shader::V).context("failed to compile V plane shader")?);
+            materials.push(yuv_material(&yuv_shader::v(hd)).context("failed to compile V plane shader")?);
         } else {
             outputs.push(new_plane(w / 2, h / 2, TextureFormat::LuminanceAlpha));
-            materials.push(yuv_material(yuv_shader::UV).context("failed to compile UV plane shader")?);
+            materials.push(yuv_material(&yuv_shader::uv(hd)).context("failed to compile UV plane shader")?);
         }
         Ok(Self {
             outputs,
@@ -724,9 +749,6 @@ pub async fn main() -> Result<()> {
 
     let gl = unsafe { get_internal_gl() };
 
-    // 零拷贝（GL → D3D11 → NVENC 直连）已移到 crate::zerocopy，且不接入渲染流程：实测它比现有管线慢约 8%（823 vs 892 fps，同内容 1080p），因为现有管线里 ffmpeg 已经把 NVENC 引擎吃到 98%，
-    // 没有余量可抢 设 PHITK_DX_SELFTEST=1 可以单独跑它的 S1/S2/S3 自检 —— 这样非 N 卡机器上
-    // 不会白建 D3D11 设备、也不加载 nvEncodeAPI64.dll
     if std::env::var("PHITK_DX_SELFTEST").is_ok() {
         crate::zerocopy::probe_zero_copy_support();
         crate::zerocopy::probe_dx_interop(&params.config.video_codec);
@@ -1203,12 +1225,7 @@ pub async fn main() -> Result<()> {
         }
         if ok_for_codec { break; }
     }
-    if params.config.video_codec == "av1"
-        && !encoder_availability.av1_nvenc
-        && !encoder_availability.av1_qsv
-        && !encoder_availability.av1_amf
-        && !encoder_availability.av1_vulkan
-    {
+    if params.config.video_codec == "av1" {
         match test_encoder(ffmpeg.as_ref(), "libsvtav1") {
             Ok((ok, err)) => {
                 encoder_availability.av1_svt = ok;
@@ -1470,10 +1487,11 @@ pub async fn main() -> Result<()> {
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
                 _ => vec![
+                    ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
-                    ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
+                    ("av1_vulkan", encoder_availability.av1_vulkan, &mut encoder_availability.av1_vulkan),
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
             }
@@ -1584,6 +1602,18 @@ pub async fn main() -> Result<()> {
         }
     }
     info!("  Selected encoder: {}", ffmpeg_encoder);
+    if ffmpeg_encoder == "libsvtav1"
+        && encoder_type == "auto"
+        && (encoder_availability.av1_nvenc
+            || encoder_availability.av1_qsv
+            || encoder_availability.av1_amf
+            || encoder_availability.av1_vulkan)
+    {
+        info!(
+            "  Note: AV1 uses the CPU encoder (SVT-AV1) because hardware AV1 quality is clearly weaker."
+        );
+        info!("  Note: it is much slower — select the nvenc/amf encoder explicitly if you want speed.");
+    }
     info!("=========================");
 
     let ffmpeg_preset = match ffmpeg_encoder {
@@ -1893,7 +1923,40 @@ pub async fn main() -> Result<()> {
     if let Some(enc) = &dx {
         out_extra.push_str(&format!(" -pix_fmt {}", enc.pix));
         out_extra.push_str(" -bf 0");
+
     }
+
+    let is_crf = params.config.bitrate_control == "CRF";
+    let av1_quality_extra: &str = match ffmpeg_encoder {
+        "libsvtav1" => " -svtav1-params tune=0:enable-tf=1:aq-mode=2",
+        "libaom-av1" => {
+            if is_crf { " -b:v 0 -aq-mode 1 -enable-restoration 1 -lag-in-frames 35" }
+            else {
+                " -aq-mode 1 -enable-restoration 1 -lag-in-frames 35"
+            }
+        }
+        "av1_amf" => " -bf 2",
+        _ => "",
+    };
+    out_extra.push_str(av1_quality_extra);
+    if !av1_quality_extra.is_empty() {
+        info!("  AV1 quality:{}", av1_quality_extra);
+        if speed_rank(preset_words.first().copied().unwrap_or("medium")) <= 3 { info!("  Note: for the best AV1 quality pick the VerySlow speed preset (SVT-AV1 preset 2)"); }
+    out_extra.push_str(if vh > 576 {
+        " -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv" } else
+    {
+        " -colorspace smpte170m -color_primaries smpte170m -color_trc smpte170m -color_range tv"
+    });
+    if dx.is_none()
+        && matches!(
+            ffmpeg_encoder,
+            "libsvtav1" | "libaom-av1" | "librav1e" | "av1_nvenc"
+        )
+    {
+        out_extra.push_str(" -pix_fmt yuv420p10le");
+    }
+    }
+
 
     let args2 = if is_vulkan_encoder {
         format!(
@@ -1931,9 +1994,11 @@ pub async fn main() -> Result<()> {
         )
     };
 
+    let ffmpeg_frames = std::sync::Arc::new(AtomicU64::new(0));
     let mut proc = {
         let mut cmd = cmd_hidden(&ffmpeg);
         cmd.args(global_args.split_whitespace());
+        cmd.args(["-progress", "pipe:2", "-nostats"]);
         if is_vulkan_encoder {
             cmd.arg("-init_hw_device").arg("vulkan=vk")
                .arg("-filter_hw_device").arg("vk");
@@ -1954,7 +2019,10 @@ pub async fn main() -> Result<()> {
             .spawn()
             .with_context(|| tl!("run-ffmpeg-failed"))?
     };
-    let video_stderr = drain_stderr(proc.stderr.take().unwrap());
+
+
+    let video_stderr =
+        drain_stderr_with_progress(proc.stderr.take().unwrap(), ffmpeg_frames.clone());
 
     struct Plane {
         pbos: Vec<GLuint>,
@@ -1965,7 +2033,7 @@ pub async fn main() -> Result<()> {
         format: u32,
     }
 
-    const PBO_COUNT: usize = 3;
+    const PBO_COUNT: usize = 6;
     let n = PBO_COUNT.min(fps as usize).max(2);
 
     let plane_specs: Vec<(GLuint, usize, i32, i32, u32)> = if let Some(yuv) = &nv12 {
@@ -2009,9 +2077,9 @@ pub async fn main() -> Result<()> {
         frame_size
     );
 
-    const WRITE_QUEUE: usize = 3;
-    let (job_tx, job_rx) = mpsc::sync_channel::<Option<Vec<u8>>>(WRITE_QUEUE);
-    let (recycle_tx, recycle_rx) = mpsc::sync_channel::<Vec<u8>>(WRITE_QUEUE + 1);
+    const WRITE_QUEUE: usize = 2;
+    let (job_tx, job_rx) = mpsc::sync_channel::<Option<(usize, Vec<(usize, usize)>)>>(WRITE_QUEUE);
+    let (done_tx, done_rx) = mpsc::channel::<usize>();
     let mut ffmpeg_stdin = proc.stdin.take().unwrap();
     let writer = std::thread::Builder::new()
         .name("ffmpeg-writer".to_owned())
@@ -2019,11 +2087,15 @@ pub async fn main() -> Result<()> {
             let mut busy: u64 = 0;
             while let Ok(job) = job_rx.recv() {
                 match job {
-                    Some(buf) => {
+                    Some((slot, parts)) => {
                         let t = Instant::now();
-                        ffmpeg_stdin.write_all(&buf)?;
+                        for (ptr, len) in parts {
+                            let bytes =
+                                unsafe { std::slice::from_raw_parts(ptr as *const u8, len) };
+                            ffmpeg_stdin.write_all(bytes)?;
+                        }
                         busy += t.elapsed().as_nanos() as u64;
-                        let _ = recycle_tx.try_send(buf);
+                        let _ = done_tx.send(slot);
                     }
                     None => break,
                 }
@@ -2035,22 +2107,16 @@ pub async fn main() -> Result<()> {
         })
         .context("failed to spawn ffmpeg writer thread")?;
 
-    fn flush_frame(
+    fn submit_frame(
         planes: &[Plane],
         pbo_index: usize,
-        frame_size: usize,
-        recycle_rx: &mpsc::Receiver<Vec<u8>>,
-        job_tx: &mpsc::SyncSender<Option<Vec<u8>>>,
-    ) -> Result<(f64, f64, f64)> {
+        job_tx: &mpsc::SyncSender<Option<(usize, Vec<(usize, usize)>)>>,
+    ) -> Result<(f64, f64)> {
+
         let mut dma_wait = 0f64;
-        let mut copy_time = 0f64;
-        let staging = unsafe {
+        let mut parts = Vec::with_capacity(planes.len());
+        unsafe {
             use miniquad::gl::*;
-            let mut staging = match recycle_rx.try_recv() {
-                Ok(buf) if buf.len() == frame_size => buf,
-                _ => vec![0u8; frame_size],
-            };
-            let mut off = 0usize;
             for plane in planes {
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, plane.pbos[pbo_index]);
                 let t = Instant::now();
@@ -2061,21 +2127,36 @@ pub async fn main() -> Result<()> {
                     bail!("Failed to map PBO");
                 }
                 dma_wait += t.elapsed().as_secs_f64();
-                let t = Instant::now();
-                staging[off..off + plane.size]
-                    .copy_from_slice(std::slice::from_raw_parts(src as *const u8, plane.size));
-                copy_time += t.elapsed().as_secs_f64();
-                off += plane.size;
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+                parts.push((src as usize, plane.size));
+            }
+        }
+        let t = Instant::now();
+        job_tx
+            .send(Some((pbo_index, parts)))
+            .map_err(|_| anyhow::anyhow!("ffmpeg writer thread exited unexpectedly"))?;
+        Ok((dma_wait, t.elapsed().as_secs_f64()))
+    }
+
+    fn unmap_slot(planes: &[Plane], slot: usize) {
+        unsafe {
+            use miniquad::gl::*;
+            for plane in planes {
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, plane.pbos[slot]);
                 glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
             }
-            staging
-        };
-        let send_start = Instant::now();
-        job_tx
-            .send(Some(staging))
-            .map_err(|_| anyhow::anyhow!("ffmpeg writer thread exited unexpectedly"))?;
-        Ok((dma_wait, copy_time, send_start.elapsed().as_secs_f64()))
+        }
+    }
+
+    fn fence_ready(fence: miniquad::gl::GLsync) -> bool { unsafe { miniquad::gl::glClientWaitSync(fence, 0, 0) == miniquad::gl::GL_ALREADY_SIGNALED } }
+    fn fence_block(fence: miniquad::gl::GLsync) -> f64 {
+        let t = Instant::now();
+        unsafe { miniquad::gl::glClientWaitSync(fence, miniquad::gl::GL_SYNC_FLUSH_COMMANDS_BIT, 1_000_000_000); }
+        t.elapsed().as_secs_f64()
+    }
+    fn fence_drop(fence: miniquad::gl::GLsync) {
+        unsafe { miniquad::gl::glDeleteSync(fence) }
     }
 
     send(IPCEvent::StartRender(frames));
@@ -2086,26 +2167,22 @@ pub async fn main() -> Result<()> {
 
     let frames10 = (total_frames / 10).max(1);
     let mut step_time = Instant::now();
-    const READBACK_LAG: usize = 2;
-    let lag = READBACK_LAG.min(n.saturating_sub(1)).max(1);
-    let mut next_slot = 0usize;
+    let mut next_slot: usize = 0;
     let mut in_flight: VecDeque<usize> = VecDeque::new();
-    let mut dma_wait_time = 0f64;
-    let mut copy_time = 0f64;
-    let mut send_time = 0f64;
-    let mut fps_update_timer = Instant::now();
-    let mut fps_frame_count = 0u64;
-    let mut realtime_fps = 0u64;
+    let mut slot_busy = vec![false; n];
+    let mut fences: Vec<Option<miniquad::gl::GLsync>> = vec![None; n];
+    let mut dma_wait_time: f64 = 0.0;
+    let mut queue_wait_time: f64 = 0.0;
 
     for frame in 0..total_frames {
         if frame % frames10 == 0 || frame == total_frames - 1 {
-            let progress = (frame as f64 / total_frames as f64).min(1.0);
-            let percent = (progress * 100.).ceil() as i8;
-            let bar_width = 20;
-            let filled = (progress * bar_width as f64).round() as usize;
-            let empty = bar_width - filled;
+            let p = (frame as f64 / total_frames as f64).min(1.0);
+            let pct = (p * 100.0).ceil() as i8;
+            let w = 20;
+            let fill = (p * w as f64).round() as usize;
+            let pad = w - fill;
 
-            let time_text = if frame == total_frames - 1 {
+            let t = if frame == total_frames - 1 {
                 "Final frame".to_string()
             } else {
                 format!("{:.2}s", step_time.elapsed().as_secs_f32())
@@ -2113,16 +2190,16 @@ pub async fn main() -> Result<()> {
 
             info!(
             "Rendering: [{}{}] {:>3}% | Time: {} | Frames: {}/{}",
-            "█".repeat(filled),
-            " ".repeat(empty),
-            percent,
-            time_text,
+            "█".repeat(fill),
+            " ".repeat(pad),
+            pct,
+            t,
             frame + 1,
             total_frames
         );
+
             step_time = Instant::now();
         }
-
         let current_frame_time = frame as f64 * frame_duration;
         *my_time.borrow_mut() = current_frame_time;
         let output = mst.output();
@@ -2130,19 +2207,31 @@ pub async fn main() -> Result<()> {
         gl.quad_gl.render_pass(Some(render_pass));
         main.update()?;
         main.render(&mut painter)?;
-        if current_frame_time <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading {
-            draw_rectangle(0., 0., 0., 0., Color::default());
-        }
+        if current_frame_time <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading { draw_rectangle(0., 0., 0., 0., Color::default()); }
 
-        if MSAA.load(Ordering::SeqCst) {
-            mst.blit();
-        }
+        if MSAA.load(Ordering::SeqCst) { mst.blit(); }
             if let Some(nv12) = &nv12 {
                 nv12.convert(&mst.output());
             }
 
         let slot = next_slot;
         next_slot = (next_slot + 1) % n;
+        while let Ok(done) = done_rx.try_recv() {
+            unmap_slot(&planes, done);
+            slot_busy[done] = false;
+        }
+        let guard_start = Instant::now();
+        if slot_busy[slot] {
+            loop {
+                let done = done_rx.recv().context("ffmpeg writer thread exited")?;
+                unmap_slot(&planes, done);
+                slot_busy[done] = false;
+                if !slot_busy[slot] {
+                    break;
+                }
+            }
+        }
+        queue_wait_time += guard_start.elapsed().as_secs_f64();
         unsafe {
             use miniquad::gl::*;
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
@@ -2163,44 +2252,54 @@ pub async fn main() -> Result<()> {
             glPixelStorei(GL_PACK_ALIGNMENT, 4);
             glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
         }
+        fences[slot] = unsafe { Some(miniquad::gl::glFenceSync(miniquad::gl::GL_SYNC_GPU_COMMANDS_COMPLETE, 0)) };
+        slot_busy[slot] = true;
         in_flight.push_back(slot);
 
-        if in_flight.len() > lag {
-            let old = in_flight.pop_front().unwrap();
-            let (d, c, s) = flush_frame(&planes, old, frame_size, &recycle_rx, &job_tx)
-                .with_context(|| format!("failed to read back frame {}", frame as usize + 1 - lag))?;
+        while !in_flight.is_empty() {
+            let oldest = *in_flight.front().unwrap();
+            let ready = match fences[oldest] {
+                Some(fence) => fence_ready(fence),
+                None => true,
+            };
+            if !ready && in_flight.len() < n - 1 { break; }
+            if !ready {
+                if let Some(fence) = fences[oldest] {
+                    dma_wait_time += fence_block(fence);
+                }
+            }
+            in_flight.pop_front();
+            if let Some(fence) = fences[oldest].take() { fence_drop(fence); }
+            let (d, q) = submit_frame(&planes, oldest, &job_tx)?;
             dma_wait_time += d;
-            copy_time += c;
-            send_time += s;
+            queue_wait_time += q;
+            while let Ok(done) = done_rx.try_recv() {
+                unmap_slot(&planes, done);
+                slot_busy[done] = false;
+            }
         }
-
-        fps_frame_count += 1;
-        let elapsed = fps_update_timer.elapsed().as_secs_f64();
-        if elapsed >= 0.05 {
-            realtime_fps = (fps_frame_count as f64 / elapsed).round() as u64;
-            fps_frame_count = 0;
-            fps_update_timer = Instant::now();
-        }
-
         send(IPCEvent::Frame);
     }
 
     while let Some(old) = in_flight.pop_front() {
-        let (d, c, s) = flush_frame(&planes, old, frame_size, &recycle_rx, &job_tx)
+        if let Some(fence) = fences[old].take() {
+            dma_wait_time += fence_block(fence);
+            fence_drop(fence);
+        }
+        let (d, q) = submit_frame(&planes, old, &job_tx)
             .context("failed to read back the final frames")?;
         dma_wait_time += d;
-        copy_time += c;
-        send_time += s;
+        queue_wait_time += q;
     }
 
-
-    let _ = job_tx.send(None);
-    drop(job_tx);
     let writer_busy = match writer.join() {
         Ok(Ok(busy)) => busy as f64 / 1e9,
         Ok(Err(err)) => bail!("failed to write frames to ffmpeg: {err}"),
         Err(_) => bail!("ffmpeg writer thread panicked"),
     };
+    while let Ok(done) = done_rx.try_recv() {
+        unmap_slot(&planes, done);
+    }
     proc.wait()?;
 
     if let Ok(text) = video_stderr.join() {
@@ -2214,16 +2313,33 @@ pub async fn main() -> Result<()> {
     let wall = elapsed.as_secs_f64().max(1e-9);
     info!("Render Time: {:.2?}", elapsed);
     info!(
-        "Render thread waits: readback DMA wait {:.2}s ({:.1}%) | readback memcpy {:.2}s ({:.1}%) | frame queue full {:.2}s ({:.1}%)",
-        dma_wait_time, dma_wait_time / wall * 100.,
-        copy_time, copy_time / wall * 100.,
-        send_time, send_time / wall * 100.
+        "Writer thread blocked on pipe+ffmpeg: {:.2}s ({:.1}%)",
+        writer_busy,
+        writer_busy / wall * 100.
     );
     info!(
-        "Writer thread blocked on pipe+ffmpeg: {:.2}s ({:.1}%)",
-        writer_busy, writer_busy / wall * 100.
+        "Render thread waits: readback DMA wait {:.2}s ({:.1}%) | frame queue full {:.2}s ({:.1}%)",
+        dma_wait_time, dma_wait_time / wall * 100.,
+        queue_wait_time, queue_wait_time / wall * 100.
     );
-    info!("Average FPS: {}", realtime_fps);
+    let written = ffmpeg_frames.load(Ordering::Relaxed);
+    let busy = (wall - dma_wait_time - queue_wait_time).max(1e-9);
+    info!(
+        "Render Avg FPS: {:.0}  (busy {:.2}s of {:.2}s, i.e. render side is idle {:.1}%)",
+        total_frames as f64 / busy,
+        busy,
+        wall,
+        (1.0 - busy / wall) * 100.0
+    );
+    if written > 0 {
+        info!(
+            "End-to-End Avg FPS: {:.0} ({} frames written by ffmpeg)",
+            written as f64 / wall,
+            written
+        );
+    } else {
+        info!("End-to-End Avg FPS: n/a (ffmpeg reported no progress)");
+    }
 
     unsafe {
         use miniquad::gl::*;
@@ -2234,4 +2350,108 @@ pub async fn main() -> Result<()> {
 
     send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
     Ok(())
+}
+
+
+// GL 300
+mod yuv_shader {
+    pub const VERTEX: &str = r#"#version 300 es
+in vec3 position;
+in vec2 texcoord;
+in vec4 color0;
+
+out vec2 uv;
+
+void main() {
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+    uv = vec2(texcoord.x, 1.0 - texcoord.y);
+}"#;
+    fn coeffs(hd: bool) -> [f32; 9] {
+        if hd {
+            [0.2126, 0.7152, 0.0722, -0.114572, -0.385428, 0.5, 0.5, -0.454153, -0.045847]
+        } else {
+            [0.299, 0.587, 0.114, -0.168736, -0.331264, 0.5, 0.5, -0.418688, -0.081312]
+        }
+    }
+
+    pub fn y(hd: bool) -> String {
+        let c = coeffs(hd);
+        format!(
+            r#"#version 300 es
+precision mediump float;
+
+in vec2 uv;
+out vec4 FragColor;
+
+uniform sampler2D tex;
+
+void main() {{
+    vec3 c = texture(tex, uv).rgb;
+    float y = (16.0 + 219.0 * ({:.6} * c.r + {:.6} * c.g + {:.6} * c.b)) / 255.0;
+    FragColor = vec4(y, 0.0, 0.0, 1.0);
+}}"#,
+            c[0], c[1], c[2]
+        )
+    }
+
+    pub fn uv(hd: bool) -> String {
+        let c = coeffs(hd);
+        format!(
+            r#"#version 300 es
+precision mediump float;
+
+in vec2 uv;
+out vec4 FragColor;
+
+uniform sampler2D tex;
+
+void main() {{
+    vec3 c = texture(tex, uv).rgb;
+    float u = (128.0 + 224.0 * ({:.6} * c.r + {:.6} * c.g + {:.6} * c.b)) / 255.0;
+    float v = (128.0 + 224.0 * ({:.6} * c.r + {:.6} * c.g + {:.6} * c.b)) / 255.0;
+    FragColor = vec4(u, v, 0.0, 1.0);
+}}"#,
+            c[3], c[4], c[5], c[6], c[7], c[8]
+        )
+    }
+
+    pub fn u(hd: bool) -> String {
+        let c = coeffs(hd);
+        format!(
+            r#"#version 300 es
+precision mediump float;
+
+in vec2 uv;
+out vec4 FragColor;
+
+uniform sampler2D tex;
+
+void main() {{
+    vec3 c = texture(tex, uv).rgb;
+    float u = (128.0 + 224.0 * ({:.6} * c.r + {:.6} * c.g + {:.6} * c.b)) / 255.0;
+    FragColor = vec4(u, 0.0, 0.0, 1.0);
+}}"#,
+            c[3], c[4], c[5]
+        )
+    }
+
+    pub fn v(hd: bool) -> String {
+        let c = coeffs(hd);
+        format!(
+            r#"#version 300 es
+precision mediump float;
+
+in vec2 uv;
+out vec4 FragColor;
+
+uniform sampler2D tex;
+
+void main() {{
+    vec3 c = texture(tex, uv).rgb;
+    float v = (128.0 + 224.0 * ({:.6} * c.r + {:.6} * c.g + {:.6} * c.b)) / 255.0;
+    FragColor = vec4(v, 0.0, 0.0, 1.0);
+}}"#,
+            c[6], c[7], c[8]
+        )
+    }
 }

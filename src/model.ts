@@ -27,6 +27,7 @@ export type TaskStatus =
       type: 'rendering';
       progress: number;
       fps: number;
+      encoder_fps: number;
       estimate: number;
     }
   | {
