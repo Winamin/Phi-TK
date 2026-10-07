@@ -2292,6 +2292,8 @@ pub async fn main() -> Result<()> {
         queue_wait_time += q;
     }
 
+    let _ = job_tx.send(None);
+    drop(job_tx);
     let writer_busy = match writer.join() {
         Ok(Ok(busy)) => busy as f64 / 1e9,
         Ok(Err(err)) => bail!("failed to write frames to ffmpeg: {err}"),
