@@ -6,7 +6,7 @@ en:
     pending: Pending…
     loading: Loading…
     mixing: Mixing…
-    rendering: Rendering { fps } FPS, estimated to end { estimate }
+    rendering: "Exporting { fps } FPS · estimated to end { estimate }"
     done: Done, took { duration }
     canceled: Canceled
     failed: Failed
@@ -27,6 +27,7 @@ en:
     status: Status
     progress: Progress
     fps: Frame rate
+    'encoder-fps': End-to-end frame rate
     duration: Elapsed
     output: Output
     error: Error
@@ -38,7 +39,7 @@ zh-CN:
     pending: 等待中…
     loading: 加载中…
     mixing: 混音中…
-    rendering: "{ fps } FPS  预计 { estimate } 结束"
+    rendering: "导出中 { fps } FPS · 预计 { estimate } 结束"
     done: 已完成，耗时 { duration }
     canceled: 已取消
     failed: 失败
@@ -59,6 +60,7 @@ zh-CN:
     status: 状态
     progress: 进度
     fps: 帧率
+    'encoder-fps': 端到端帧率
     duration: 耗时
     output: 输出
     error: 错误
@@ -136,8 +138,8 @@ function describeStatus(status: TaskStatus): string {
       const progressDisplay = status.progress;
       return t('status.rendering', {
         progress: progressDisplay,
-        fps: status.fps,
         estimate: status.estimate ? formatDuration(status.estimate) : '',
+        fps: status.encoder_fps,
       });
     }
     case 'done': return t('status.done', { duration: status.duration ? formatDuration(status.duration) : '' });
@@ -342,7 +344,9 @@ const showDetail = (task: Task) => {
           <span class="detail-label">{{ t('detail.progress') }}</span><span>{{ Math.round(selectedTask.status.progress * 100) }}%</span>
         </div>
         <div v-if="selectedTask.status.type === 'rendering'" class="detail-row">
-          <span class="detail-label">{{ t('detail.fps') }}</span><span>{{ selectedTask.status.fps }} FPS</span>
+        </div>
+        <div v-if="selectedTask.status.type === 'rendering'" class="detail-row">
+          <span class="detail-label">{{ t('detail.encoder-fps') }}</span><span>{{ selectedTask.status.encoder_fps }} FPS</span>
         </div>
         <div v-if="selectedTask.status.type === 'done' && selectedTask.status.duration" class="detail-row">
           <span class="detail-label">{{ t('detail.duration') }}</span><span>{{ formatDuration(selectedTask.status.duration) }}</span>
