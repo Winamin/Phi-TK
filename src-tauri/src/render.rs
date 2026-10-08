@@ -1959,7 +1959,7 @@ pub async fn main() -> Result<()> {
     }
     }
 
-    let async_depth = "-async_depth 3"; // the "4" parallel process 4 frames (vulkan encoder)
+    let async_depth = "-async_depth 4"; // the "4" parallel process 4 frames (vulkan encoder)
     let args2 = if is_vulkan_encoder {
         format!(
             "-c:a {} -c:v {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} {} {} -f {}",
