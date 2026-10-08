@@ -1723,113 +1723,84 @@ pub async fn main() -> Result<()> {
 
     if params.config.hardware_accel && encoder_type != "cpu" {
         let dx_ok = dx_selected.is_some();
-        let h264_supported = encoder_availability.h264_nvenc
-            || encoder_availability.h264_qsv
-            || encoder_availability.h264_amf
-            || encoder_availability.h264_vulkan
-            || dx_ok;
-        let hevc_supported = encoder_availability.hevc_nvenc
-            || encoder_availability.hevc_qsv
-            || encoder_availability.hevc_amf
-            || encoder_availability.hevc_vulkan
-            || dx_ok;
-        let av1_supported = encoder_availability.av1_nvenc
-            || encoder_availability.av1_qsv
-            || encoder_availability.av1_amf
-            || encoder_availability.av1_vulkan
-            || dx_ok;
+        let any4 = |a: bool, b: bool, c: bool, d: bool| a || b || c || d || dx_ok;
 
-        if (params.config.video_codec == "h264" && !h264_supported)
-            || (params.config.video_codec == "hevc" && !hevc_supported)
-            || (params.config.video_codec == "av1" && !av1_supported) {
-            let mut detailed_error = String::new();
-            detailed_error += &format!("{}\n", tl!("no-hwacc"));
+        let h264_supported = any4(
+            encoder_availability.h264_nvenc,
+            encoder_availability.h264_qsv,
+            encoder_availability.h264_amf,
+            encoder_availability.h264_vulkan,
+        );
+        let hevc_supported = any4(
+            encoder_availability.hevc_nvenc,
+            encoder_availability.hevc_qsv,
+            encoder_availability.hevc_amf,
+            encoder_availability.hevc_vulkan,
+        );
+        let av1_supported = any4(
+            encoder_availability.av1_nvenc,
+            encoder_availability.av1_qsv,
+            encoder_availability.av1_amf,
+            encoder_availability.av1_vulkan,
+        );
 
-            detailed_error += &format!(
+        let codec_unsupported = match params.config.video_codec.as_str() {
+            "h264" => !h264_supported,
+            "hevc" => !hevc_supported,
+            "av1"  => !av1_supported,
+            _ => false,
+        };
+
+        if codec_unsupported {
+            let yesno = |b: bool| if b { "SUCCESS" } else { "FAILED" };
+            let mut msg = format!("{}\n", tl!("no-hwacc"));
+
+            let _ = write!(
+                msg,
                 "Hardware detection summary:\n\
-         - NVIDIA: {}\n\
-         - Intel Quick Sync: {}\n\
-         - AMD AMF: {}\n\
-         - Vulkan: {}\n\n",
+             - NVIDIA: {}\n\
+             - Intel Quick Sync: {}\n\
+             - AMD AMF: {}\n\
+             - Vulkan: {}\n\n",
                 hw_detected.h264_nvenc,
                 hw_detected.h264_qsv,
                 hw_detected.h264_amf,
-                hw_detected.h264_vulkan
+                hw_detected.h264_vulkan,
             );
 
-            detailed_error += "Encoder test results:\n";
-            detailed_error += &format!(
-                "- h264_nvenc: {}\n",
-                if encoder_availability.h264_nvenc { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- hevc_nvenc: {}\n",
-                if encoder_availability.hevc_nvenc { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- av1_nvenc: {}\n",
-                if encoder_availability.av1_nvenc { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- h264_qsv: {}\n",
-                if encoder_availability.h264_qsv { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- hevc_qsv: {}\n",
-                if encoder_availability.hevc_qsv { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- av1_qsv: {}\n",
-                if encoder_availability.av1_qsv { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- h264_amf: {}\n",
-                if encoder_availability.h264_amf { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- hevc_amf: {}\n",
-                if encoder_availability.hevc_amf { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- av1_amf: {}\n",
-                if encoder_availability.av1_amf { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- h264_vulkan: {}\n",
-                if encoder_availability.h264_vulkan { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- hevc_vulkan: {}\n",
-                if encoder_availability.hevc_vulkan { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- av1_vulkan: {}\n",
-                if encoder_availability.av1_vulkan { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- h264_cuvid: {}\n",
-                if encoder_availability.h264_cuvid { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- hevc_cuvid: {}\n",
-                if encoder_availability.hevc_cuvid { "SUCCESS" } else { "FAILED" }
-            );
-            detailed_error += &format!(
-                "- av1_cuvid: {}\n\n",
-                if encoder_availability.av1_cuvid { "SUCCESS" } else { "FAILED" }
-            );
+            msg += "Encoder test results:\n";
+            for (name, ok) in [
+                ("h264_nvenc",  encoder_availability.h264_nvenc),
+                ("hevc_nvenc",  encoder_availability.hevc_nvenc),
+                ("av1_nvenc",   encoder_availability.av1_nvenc),
+                ("h264_qsv",    encoder_availability.h264_qsv),
+                ("hevc_qsv",    encoder_availability.hevc_qsv),
+                ("av1_qsv",     encoder_availability.av1_qsv),
+                ("h264_amf",    encoder_availability.h264_amf),
+                ("hevc_amf",    encoder_availability.hevc_amf),
+                ("av1_amf",     encoder_availability.av1_amf),
+                ("h264_vulkan", encoder_availability.h264_vulkan),
+                ("hevc_vulkan", encoder_availability.hevc_vulkan),
+                ("av1_vulkan",  encoder_availability.av1_vulkan),
+                ("h264_cuvid",  encoder_availability.h264_cuvid),
+                ("hevc_cuvid",  encoder_availability.hevc_cuvid),
+                ("av1_cuvid",   encoder_availability.av1_cuvid),
+            ] {
+                let _ = writeln!(msg, "- {}: {}", name, yesno(ok));
+            }
+            msg.push('\n');
 
-            if !hw_errors.is_empty() {
-                detailed_error += "Detailed error logs:\n";
-                for (i, error) in hw_errors.iter().enumerate() {
-                    detailed_error += &format!("{}. {}\n", i + 1, error);
-                }
-                detailed_error += "\n";
+            if hw_errors.is_empty() {
+                msg += "No hardware encoders were tested (all detection failed).\n\n";
             } else {
-                detailed_error += "No hardware encoders were tested (all detection failed).\n\n";
+                msg += "Detailed error logs:\n";
+                for (i, error) in hw_errors.iter().enumerate() {
+                    let _ = writeln!(msg, "{}. {}", i + 1, error);
+                }
+                msg.push('\n');
             }
 
-            bail!(detailed_error);
+            bail!(msg);
         }
     }
     let gpu_yuv = params.config.gpu_yuv
@@ -1931,6 +1902,8 @@ pub async fn main() -> Result<()> {
     let is_crf = params.config.bitrate_control == "CRF";
     let av1_quality_extra: &str = match ffmpeg_encoder {
         "libsvtav1" => " -svtav1-params tune=0:enable-tf=1:aq-mode=2",
+
+        // Not using it for now because it's too slow
         "libaom-av1" => {
             if is_crf { " -b:v 0 -aq-mode 1 -enable-restoration 1 -lag-in-frames 35" }
             else {
