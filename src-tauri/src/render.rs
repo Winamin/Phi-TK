@@ -25,7 +25,7 @@ use std::{
     process::{Command, Stdio},
     rc::Rc,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicU64, Ordering},
         mpsc,
     },
     time::Instant,
@@ -751,7 +751,7 @@ pub async fn main() -> Result<()> {
 
     let gl = unsafe { get_internal_gl() };
 
-    if std::env::var("PHITK_DX_SELFTEST").is_ok() {
+    if std::env::var("DX_SELFTEST").is_ok() {
         crate::zerocopy::probe_zero_copy_support();
         crate::zerocopy::probe_dx_interop(&params.config.video_codec);
     }
@@ -779,12 +779,12 @@ pub async fn main() -> Result<()> {
     let frame_duration = 1.0 / fps_f64;
     let audio_delay = params.config.audio_delay_frames as f64 * frame_duration;
 
-    info!("=== Audio/Video Sync Configuration ===");
-    info!("  Audio delay: {} frames", params.config.audio_delay_frames);
-    info!("  Audio delay: {:.6} seconds", audio_delay);
-    info!("  Frame duration: {:.6}s @ {}fps", frame_duration, params.config.fps);
-    info!("  Sample delay: {} samples @ {}Hz", (audio_delay * sample_rate_f64).round() as i64, sample_rate);
-    info!("======================================");
+    //info!("=== Audio/Video Sync Configuration ===");
+    //info!("  Audio delay: {} frames", params.config.audio_delay_frames);
+    //info!("  Audio delay: {:.6} seconds", audio_delay);
+    //info!("  Frame duration: {:.6}s @ {}fps", frame_duration, params.config.fps);
+    //info!("  Sample delay: {} samples @ {}Hz", (audio_delay * sample_rate_f64).round() as i64, sample_rate);
+    //info!("======================================");
 
     let audio_buffer_length = video_length + audio_delay.abs();
     let mut output = vec![0.0_f32; (audio_buffer_length * sample_rate_f64).ceil() as usize * 2];
@@ -794,7 +794,7 @@ pub async fn main() -> Result<()> {
         let original_pos = O - chart.offset.min(0.) as f64;
         let pos = original_pos + audio_delay;
 
-        info!("Music mixing: original_pos={:.6}s, delayed_pos={:.6}s", original_pos, pos);
+        //info!("Music mixing: original_pos={:.6}s, delayed_pos={:.6}s", original_pos, pos);
 
         let start_index = (pos * sample_rate_f64).round() as usize * 2;
         let ratio = 1.0 / sample_rate_f64;
@@ -850,7 +850,7 @@ pub async fn main() -> Result<()> {
         let offset_f64 = offset as f64;
         let o_offset = O + offset_f64 + audio_delay;
 
-        info!("SFX mixing: offset={:.6}s (includes {:.6}s delay)", o_offset, audio_delay);
+        //info!("SFX mixing: offset={:.6}s (includes {:.6}s delay)", o_offset, audio_delay);
 
         let sfx_lut =
         [
@@ -989,7 +989,7 @@ pub async fn main() -> Result<()> {
         let my_time = Rc::clone(&my_time);
         move || *(*my_time).borrow()
     }));
-    static MSAA: AtomicBool = AtomicBool::new(false);
+    //static MSAA: AtomicBool = AtomicBool::new(false);
     let player = build_player(&params.config).await?;
     let mut main = Main::new(
         Box::new(
@@ -997,18 +997,18 @@ pub async fn main() -> Result<()> {
         ),
         tm,
         {
-            let mut cnt = 0;
+            //let mut cnt = 0;
             let mst = Rc::clone(&mst);
-            move || {
-                cnt += 1;
-                if cnt % 2 == 1 {
-                    MSAA.store(true, Ordering::SeqCst);
-                    Some(mst.input())
-                } else {
-                    MSAA.store(false, Ordering::SeqCst);
-                    Some(mst.output())
-                }
-            }
+            //move || {
+            //    cnt += 1;
+           //     if cnt % 2 == 1 {
+            //        MSAA.store(true, Ordering::SeqCst);
+            //        Some(mst.input())
+            //    } else {
+            //        MSAA.store(false, Ordering::SeqCst);
+            //        Some(mst.output())
+            //    }
+            move || Some(mst.input())
         },
     )
         .await?;
@@ -1239,6 +1239,7 @@ pub async fn main() -> Result<()> {
         }
     }
 
+    // This will be a future feature (cuvid)
     let cuvid_to_test = [
         ("h264_cuvid", hw_detected.h264_cuvid, &mut encoder_availability.h264_cuvid),
         ("hevc_cuvid", hw_detected.hevc_cuvid, &mut encoder_availability.hevc_cuvid),
@@ -1803,8 +1804,10 @@ pub async fn main() -> Result<()> {
             bail!(msg);
         }
     }
+
+
     let gpu_yuv = params.config.gpu_yuv
-        && std::env::var("PHITK_RGB24_READBACK").is_err()
+        && std::env::var("RGB24_READBACK").is_err() //test
         && vw % 2 == 0
         && vh % 2 == 0;
 
@@ -1812,18 +1815,21 @@ pub async fn main() -> Result<()> {
         ffmpeg_encoder,
         "libx265" | "libsvtav1" | "libaom-av1" | "librav1e"
     );
+
+    let oa = 1048576.; // 1024*1024
     let nv12 = if gpu_yuv {
         match YuvTarget::new(vw, vh, planar) {
             Ok(target) => {
                 info!(
                     "GPU YUV: enabled (shader outputs {}, {:.2} MB/frame, was {:.2} MB/frame)",
                     if planar { "YUV420P planar" } else { "NV12" },
-                    (vw as f64 * vh as f64 * 1.5) / 1048576.,
-                    (vw as f64 * vh as f64 * 3.) / 1048576.
+                    (vw as f64 * vh as f64 * 1.5) / oa,
+                    (vw as f64 * vh as f64 * 3.) / oa
                 );
                 Some(target)
             }
             Err(err) => {
+                //But the environment using this software must have a GPU (prpr does not support pure CPU rendering).
                 warn!("GPU YUV unavailable, falling back to RGB24 readback: {err:?}");
                 None
             }
@@ -2178,17 +2184,16 @@ pub async fn main() -> Result<()> {
         }
         let current_frame_time = frame as f64 * frame_duration;
         *my_time.borrow_mut() = current_frame_time;
-        let output = mst.output();
-        let render_pass: MQRenderPass = unsafe { std::mem::transmute(output.render_pass) };
+        let input = mst.input();
+        let render_pass: MQRenderPass = unsafe { std::mem::transmute(input.render_pass) };
         gl.quad_gl.render_pass(Some(render_pass));
         main.update()?;
         main.render(&mut painter)?;
         if current_frame_time <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading { draw_rectangle(0., 0., 0., 0., Color::default()); }
-
-        if MSAA.load(Ordering::SeqCst) { mst.blit(); }
-            if let Some(nv12) = &nv12 {
-                nv12.convert(&mst.output());
-            }
+        mst.blit();
+        if let Some(nv12) = &nv12 {
+            nv12.convert(&mst.output());
+        }
 
         let slot = next_slot;
         next_slot = (next_slot + 1) % n;
