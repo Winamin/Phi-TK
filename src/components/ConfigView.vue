@@ -32,6 +32,7 @@ en:
   challenge-rank: Challenge Rank
   respack: Resource Pack
   respack-default: '[Default]'
+  score-anim: Score Anim
   note-scale: Note Scale
   render: UI Display
   double-hint: Double Hint
@@ -129,6 +130,7 @@ zh-CN:
   player-rks: RKS
   challenge-color: 课题颜色
   challenge-colors: 白,绿,蓝,红,金,彩
+  score-anim: 分数动画
   challenge-rank: 课题等级
   respack: 资源包
   respack-default: '[默认]'
@@ -305,6 +307,7 @@ const disableEffect = ref(false);
 const render = ref<string[]>([]);
 const DEFAULT_RENDER_LIST = ['Judge Line', 'Score', 'Combo', 'Level', 'Name', 'Progress', 'Percent', 'Time', 'Pause'];
 const renderList = ref(t('render-list').split(',').length === 9 ? t('render-list').split(',') : DEFAULT_RENDER_LIST);
+const scoreAmin = ref(false);
 
 const playerAvatar = ref<string>();
 const playerName = ref('');
@@ -429,6 +432,7 @@ const DEFAULT_PRESET: Preset = {
     uiPb: true,
     uiPause: true,
     bar: false,
+    scoreAmin: false,
   },
 };
 const presets = ref([DEFAULT_PRESET]);
@@ -517,6 +521,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
     combo: combo.value,
     watermark: watermark.value,
     ffmpegThread: ffmpegThread.value,
+    scoreAmin: scoreAmin.value,
     uiLine: render.value.includes(renderList.value[0]),
     uiScore: render.value.includes(renderList.value[1]),
     uiCombo: render.value.includes(renderList.value[2]),
@@ -569,6 +574,7 @@ function applyConfig(c: RenderConfig) {
   combo.value = c.combo;
   watermark.value = c.watermark;
   bar.value = c.bar ?? false;
+  scoreAmin.value = c.scoreAmin;
   ffmpegThread.value = c.ffmpegThread ?? false;
   render.value = [];
   const list = renderList.value;
@@ -801,6 +807,7 @@ async function replacePreset() {
               <div class="switch-grid">
                 <TipSwitch v-model="background" :label="t('background')" />
                 <TipSwitch v-model="bar" :label="t('bar')" />
+                <TipSwitch v-model="scoreAmin" :label="t('score-anim')" />
               </div>
             </div>
           </section>

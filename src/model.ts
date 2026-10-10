@@ -105,6 +105,7 @@ export interface RenderConfig {
   uiPause: boolean;
   bar: boolean;
   ffmpegThread: boolean;
+  scoreAmin: boolean;
 }
 
 export interface RPEChart {

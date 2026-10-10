@@ -84,6 +84,7 @@ pub struct RenderConfig {
     pub hand_split: bool,
     pub note_speed_factor: f32,
     pub bar: bool,
+    pub score_aim: bool,
 
     pub ui_score: bool,
     pub ui_combo: bool,
@@ -152,6 +153,7 @@ impl Default for RenderConfig {
             ui_pb: true,
             ui_pause: true,
             bar: false,
+            score_aim: false,
 
             ffmpeg_thread: false,
 
@@ -200,6 +202,7 @@ impl RenderConfig {
             ui_pb: self.ui_pb,
             ui_pause: self.ui_pause,
             bar: self.bar,
+            score_aim: self.score_aim,
             ..Default::default()
         }
     }
