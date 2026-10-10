@@ -25,8 +25,7 @@ use std::{
     process::{Command, Stdio},
     rc::Rc,
     sync::{
-        atomic::{AtomicU64, Ordering},
-        mpsc,
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
     time::Instant,
 };
@@ -2059,28 +2058,85 @@ pub async fn main() -> Result<()> {
         frame_size
     );
 
-    const WRITE_QUEUE: usize = 4;
-    let (job_tx, job_rx) = mpsc::sync_channel::<Option<(usize, Vec<(usize, usize)>)>>(WRITE_QUEUE);
-    let (done_tx, done_rx) = mpsc::channel::<usize>();
+    struct Rq {
+        b: Vec<AtomicUsize>,
+        h: AtomicUsize,
+        t: AtomicUsize,
+        n: usize,
+    }
+    impl Rq {
+        fn new(c: usize) -> Rq {
+            Rq {
+                b: (0..c).map(|_| AtomicUsize::new(0)).collect(),
+                h: AtomicUsize::new(0),
+                t: AtomicUsize::new(0),
+                n: c,
+            }
+        }
+        fn put(&self, v: usize) {
+            loop {
+                let t = self.t.load(Ordering::Relaxed);
+                let h = self.h.load(Ordering::Acquire);
+                if t.wrapping_sub(h) >= self.n {
+                    std::hint::spin_loop();
+                    continue;
+                }
+                self.b[t % self.n].store(v, Ordering::Relaxed);
+                self.t.store(t.wrapping_add(1), Ordering::Release);
+                return;
+            }
+        }
+        fn get(&self) -> Option<usize> {
+            let h = self.h.load(Ordering::Relaxed);
+            let t = self.t.load(Ordering::Acquire);
+            if h == t {
+                return None;
+            }
+            let v = self.b[h % self.n].load(Ordering::Relaxed);
+            self.h.store(h.wrapping_add(1), Ordering::Release);
+            Some(v)
+        }
+        fn getb(&self) -> usize {
+            loop {
+                if let Some(v) = self.get() {
+                    return v;
+                }
+                std::thread::yield_now();
+            }
+        }
+    }
+    const STOP: usize = usize::MAX;
+    let jobq = std::sync::Arc::new(Rq::new(n + 2));
+    let ptrs = std::sync::Arc::new(
+        (0..n)
+            .map(|_| [0usize; 3].map(|_| AtomicUsize::new(0)))
+            .collect::<Vec<_>>(),
+    );
+    let free = std::sync::Arc::new((0..n).map(|_| AtomicBool::new(true)).collect::<Vec<_>>());
+    let sizes = std::sync::Arc::new(planes.iter().map(|p| p.size).collect::<Vec<_>>());
+    let pc = planes.len();
     let mut ffmpeg_stdin = proc.stdin.take().unwrap();
+    let jq = jobq.clone();
+    let pt = ptrs.clone();
+    let fr = free.clone();
+    let sz = sizes.clone();
     let writer = std::thread::Builder::new()
         .name("ffmpeg-writer".to_owned())
         .spawn(move || -> std::io::Result<u64> {
             let mut busy: u64 = 0;
-            while let Ok(job) = job_rx.recv() {
-                match job {
-                    Some((slot, parts)) => {
-                        let t = Instant::now();
-                        for (ptr, len) in parts {
-                            let bytes =
-                                unsafe { std::slice::from_raw_parts(ptr as *const u8, len) };
-                            ffmpeg_stdin.write_all(bytes)?;
-                        }
-                        busy += t.elapsed().as_nanos() as u64;
-                        let _ = done_tx.send(slot);
-                    }
-                    None => break,
+            loop {
+                let s = jq.getb();
+                if s == STOP {
+                    break;
                 }
+                let t = Instant::now();
+                for i in 0..pc {
+                    let p = pt[s][i].load(Ordering::Relaxed) as *const u8;
+                    let bytes = unsafe { std::slice::from_raw_parts(p, sz[i]) };
+                    ffmpeg_stdin.write_all(bytes)?;
+                }
+                busy += t.elapsed().as_nanos() as u64;
+                fr[s].store(true, Ordering::Release);
             }
             let t = Instant::now();
             ffmpeg_stdin.flush()?;
@@ -2089,35 +2145,31 @@ pub async fn main() -> Result<()> {
         })
         .context("failed to spawn ffmpeg writer thread")?;
 
-    fn submit_frame(
-        planes: &[Plane],
-        pbo_index: usize,
-        job_tx: &mpsc::SyncSender<Option<(usize, Vec<(usize, usize)>)>>,
-    ) -> Result<(f64, f64)> {
-
+    fn submit_frame(planes: &[Plane], ptrs: &[[AtomicUsize; 3]], jobq: &Rq, slot: usize) -> Result<f64> {
         let mut dma_wait = 0f64;
-        let mut parts = Vec::with_capacity(planes.len());
         unsafe {
             use miniquad::gl::*;
-            for plane in planes {
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, plane.pbos[pbo_index]);
+            for (i, plane) in planes.iter().enumerate() {
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, plane.pbos[slot]);
                 let t = Instant::now();
-                let src =
-                    glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, plane.size as _, GL_MAP_READ_BIT);
+                let src = glMapBufferRange(
+                    GL_PIXEL_PACK_BUFFER,
+                    0,
+                    plane.size as _,
+                    GL_MAP_READ_BIT,
+                    //GL_MAP_READ_BIT | GL_MAP_UNSYNCHRONIZED_BIT,
+                );
                 if src.is_null() {
                     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
                     bail!("Failed to map PBO");
                 }
                 dma_wait += t.elapsed().as_secs_f64();
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-                parts.push((src as usize, plane.size));
+                ptrs[slot][i].store(src as usize, Ordering::Release);
             }
         }
-        let t = Instant::now();
-        job_tx
-            .send(Some((pbo_index, parts)))
-            .map_err(|_| anyhow::anyhow!("ffmpeg writer thread exited unexpectedly"))?;
-        Ok((dma_wait, t.elapsed().as_secs_f64()))
+        jobq.put(slot);
+        Ok(dma_wait)
     }
 
     fn unmap_slot(planes: &[Plane], slot: usize) {
@@ -2151,7 +2203,7 @@ pub async fn main() -> Result<()> {
     let mut step_time = Instant::now();
     let mut next_slot: usize = 0;
     let mut in_flight: VecDeque<usize> = VecDeque::new();
-    let mut slot_busy = vec![false; n];
+    let mut busy = vec![false; n];
     let mut fences: Vec<Option<miniquad::gl::GLsync>> = vec![None; n];
     let mut dma_wait_time: f64 = 0.0;
     let mut queue_wait_time: f64 = 0.0;
@@ -2197,21 +2249,15 @@ pub async fn main() -> Result<()> {
 
         let slot = next_slot;
         next_slot = (next_slot + 1) % n;
-        while let Ok(done) = done_rx.try_recv() {
-            unmap_slot(&planes, done);
-            slot_busy[done] = false;
-        }
         let guard_start = Instant::now();
-        if slot_busy[slot] {
-            loop {
-                let done = done_rx.recv().context("ffmpeg writer thread exited")?;
-                unmap_slot(&planes, done);
-                slot_busy[done] = false;
-                if !slot_busy[slot] {
-                    break;
-                }
+        if busy[slot] {
+            while !free[slot].load(Ordering::Acquire) {
+                std::thread::yield_now();
             }
+            unmap_slot(&planes, slot);
+            busy[slot] = false;
         }
+        free[slot].store(false, Ordering::Release);
         queue_wait_time += guard_start.elapsed().as_secs_f64();
         unsafe {
             use miniquad::gl::*;
@@ -2234,7 +2280,6 @@ pub async fn main() -> Result<()> {
             glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
         }
         fences[slot] = unsafe { Some(miniquad::gl::glFenceSync(miniquad::gl::GL_SYNC_GPU_COMMANDS_COMPLETE, 0)) };
-        slot_busy[slot] = true;
         in_flight.push_back(slot);
 
         while !in_flight.is_empty() {
@@ -2251,13 +2296,8 @@ pub async fn main() -> Result<()> {
             }
             in_flight.pop_front();
             if let Some(fence) = fences[oldest].take() { fence_drop(fence); }
-            let (d, q) = submit_frame(&planes, oldest, &job_tx)?;
-            dma_wait_time += d;
-            queue_wait_time += q;
-            while let Ok(done) = done_rx.try_recv() {
-                unmap_slot(&planes, done);
-                slot_busy[done] = false;
-            }
+            dma_wait_time += submit_frame(&planes, &ptrs, &jobq, oldest)?;
+            busy[oldest] = true;
         }
         send(IPCEvent::Frame);
     }
@@ -2267,21 +2307,21 @@ pub async fn main() -> Result<()> {
             dma_wait_time += fence_block(fence);
             fence_drop(fence);
         }
-        let (d, q) = submit_frame(&planes, old, &job_tx)
+        dma_wait_time += submit_frame(&planes, &ptrs, &jobq, old)
             .context("failed to read back the final frames")?;
-        dma_wait_time += d;
-        queue_wait_time += q;
+        busy[old] = true;
     }
 
-    let _ = job_tx.send(None);
-    drop(job_tx);
+    jobq.put(STOP);
     let writer_busy = match writer.join() {
         Ok(Ok(busy)) => busy as f64 / 1e9,
         Ok(Err(err)) => bail!("failed to write frames to ffmpeg: {err}"),
         Err(_) => bail!("ffmpeg writer thread panicked"),
     };
-    while let Ok(done) = done_rx.try_recv() {
-        unmap_slot(&planes, done);
+    for s in 0..n {
+        if busy[s] {
+            unmap_slot(&planes, s);
+        }
     }
     proc.wait()?;
 
