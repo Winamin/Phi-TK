@@ -244,7 +244,7 @@ function loadDefaultConfig(): RenderConfig {
     combo: 'AUTOPLAY', watermark: '', handSplit: false, noteSpeedFactor: 1.0,
     ffmpegThread: false, showProgressText: false, showTimeText: false,
     uiLine: true, uiScore: true, uiCombo: true, uiLevel: true, uiName: true,
-    uiPb: true, uiPause: true, bar: false,
+    uiPb: true, uiPause: true, bar: false, scoreAmin: false
   };
 }
 
