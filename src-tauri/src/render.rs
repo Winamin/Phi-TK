@@ -25,14 +25,23 @@ use std::{
     process::{Command, Stdio},
     rc::Rc,
     sync::{
-        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicU64, Ordering},
+        Condvar, Mutex,
     },
     time::Instant,
 };
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 
+const GL_MAP_PERSISTENT_BIT: u32 = 0x0040;
+const GL_MAP_COHERENT_BIT: u32 = 0x0080;
+const GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT: u32 = 0x00004000;
+const POOL_TARGET_BYTES: usize = 256 << 20;
 
+struct GlExt {
+    buffer_storage: Option<unsafe extern "system" fn(u32, isize, *const std::ffi::c_void, u32)>,
+    memory_barrier: Option<unsafe extern "system" fn(u32)>,
+}
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -223,6 +232,15 @@ pub enum IPCEvent {
     Frame,
     EncoderFps(f64),
     Done(f64),
+}
+
+struct FramePipeline {
+    pool: Vec<Vec<u8>>,
+    pool_addrs: Vec<usize>,
+    free_pool: Mutex<Vec<usize>>,
+    free_cv: Condvar,
+    jobq: Mutex<(VecDeque<usize>, bool)>, // (queue, stopped)
+    jobq_cv: Condvar,
 }
 
 struct EncoderAvailability {
@@ -701,6 +719,62 @@ impl YuvTarget {
     }
 }
 
+impl FramePipeline {
+    fn new(frame_size: usize) -> Self {
+        let pool_size = (POOL_TARGET_BYTES / frame_size).clamp(8, 32);
+        Self {
+            pool: (0..pool_size).map(|_| vec![0u8; frame_size]).collect(),
+            pool_addrs: Vec::new(),
+            free_pool: Mutex::new((0..pool_size).collect()),
+            free_cv: Condvar::new(),
+            jobq: Mutex::new((VecDeque::new(), false)),
+            jobq_cv: Condvar::new(),
+        }
+    }
+
+    fn finish_init(&mut self) {
+        self.pool_addrs = self.pool.iter_mut().map(|b| b.as_mut_ptr() as usize).collect();
+    }
+
+    fn acquire_buf(&self) -> usize {
+        let mut free = self.free_pool.lock().unwrap();
+        loop {
+            if let Some(idx) = free.pop() {
+                return idx;
+            }
+            free = self.free_cv.wait(free).unwrap();
+        }
+    }
+
+    fn release_buf(&self, idx: usize) {
+        self.free_pool.lock().unwrap().push(idx);
+        self.free_cv.notify_one();
+    }
+
+    fn push_job(&self, idx: usize) {
+        self.jobq.lock().unwrap().0.push_back(idx);
+        self.jobq_cv.notify_one();
+    }
+
+    fn push_stop(&self) {
+        self.jobq.lock().unwrap().1 = true;
+        self.jobq_cv.notify_one();
+    }
+
+    fn pop_job(&self) -> Option<usize> {
+        let mut jobq = self.jobq.lock().unwrap();
+        loop {
+            if let Some(idx) = jobq.0.pop_front() {
+                return Some(idx);
+            }
+            if jobq.1 {
+                return None;
+            }
+            jobq = self.jobq_cv.wait(jobq).unwrap();
+        }
+    }
+}
+
 pub async fn main() -> Result<()> {
     use crate::ipc::client::*;
 
@@ -750,6 +824,7 @@ pub async fn main() -> Result<()> {
     let sfx_click = ld!("click.ogg");
     let sfx_drag = ld!("drag.ogg");
     let sfx_flick = ld!("flick.ogg");
+
 
     let gl = unsafe { get_internal_gl() };
 
@@ -2010,6 +2085,8 @@ pub async fn main() -> Result<()> {
 
     struct Plane {
         pbos: Vec<GLuint>,
+        // Persistent-coherent mapping per slot (null => per-frame map/unmap).
+        mapped: Vec<*mut u8>,
         fbo: GLuint,
         size: usize,
         w: i32,
@@ -2032,19 +2109,75 @@ pub async fn main() -> Result<()> {
         )]
     };
 
+    fn get_gl_proc(name: &str) -> Option<*const std::ffi::c_void> {
+        #[cfg(windows)]
+        {
+            let c = match std::ffi::CString::new(name) {
+                Ok(c) => c,
+                Err(_) => return None,
+            };
+            let proc = unsafe {
+                windows::Win32::Graphics::OpenGL::wglGetProcAddress(windows::core::PCSTR(
+                    c.as_ptr() as *const u8,
+                ))
+            };
+            let f = proc?;
+            let addr = f as usize as isize;
+            // Some drivers return 1..=3 / -1 instead of null when missing.
+            if addr == -1 || (0..=3).contains(&addr) {
+                return None;
+            }
+            Some(f as *const () as *const std::ffi::c_void)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = name;
+            None
+        }
+    }
+    let gl_ext = GlExt {
+        buffer_storage: get_gl_proc("glBufferStorage")
+            .map(|p| unsafe { std::mem::transmute(p) }),
+        memory_barrier: get_gl_proc("glMemoryBarrier").map(|p| unsafe { std::mem::transmute(p) }),
+    };
+    let persistent = gl_ext.buffer_storage.is_some() && gl_ext.memory_barrier.is_some();
+
     let mut planes: Vec<Plane> = Vec::with_capacity(plane_specs.len());
     unsafe {
         use miniquad::gl::*;
         for (fbo, size, w, h, format) in plane_specs {
             let mut pbos: Vec<GLuint> = vec![0; n];
             glGenBuffers(n as _, pbos.as_mut_ptr());
-            for pbo in &pbos {
+            let mut mapped: Vec<*mut u8> = vec![std::ptr::null_mut(); n];
+            for (i, pbo) in pbos.iter().enumerate() {
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
-                glBufferData(GL_PIXEL_PACK_BUFFER, size as _, std::ptr::null(), GL_STREAM_READ);
+                let mut used_storage = false;
+                if persistent {
+                    (gl_ext.buffer_storage.unwrap())(
+                        GL_PIXEL_PACK_BUFFER,
+                        size as _,
+                        std::ptr::null(),
+                        GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT,
+                    );
+                    let p = glMapBufferRange(
+                        GL_PIXEL_PACK_BUFFER,
+                        0,
+                        size as _,
+                        GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT,
+                    );
+                    if !p.is_null() {
+                        mapped[i] = p as *mut u8;
+                        used_storage = true;
+                    }
+                }
+                if !used_storage {
+                    glBufferData(GL_PIXEL_PACK_BUFFER, size as _, std::ptr::null(), GL_STREAM_READ);
+                }
             }
             glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
             planes.push(Plane {
                 pbos,
+                mapped,
                 fbo,
                 size,
                 w,
@@ -2054,139 +2187,92 @@ pub async fn main() -> Result<()> {
         }
     }
     let frame_size: usize = planes.iter().map(|p| p.size).sum();
-    info!(
-        "Using {} PBOs per plane, {} plane(s), {} bytes/frame",
-        n,
-        planes.len(),
-        frame_size
-    );
+    //info!(
+    //    "Using {} PBOs per plane, {} plane(s), {} bytes/frame, {} mapping",
+    //    n,
+    //    planes.len(),
+    //    frame_size,
+    //    if persistent {
+    //        "persistent-coherent"
+    //    } else {
+    //        "per-frame map/unmap"
+    //    }
+    //);
 
-    struct Rq {
-        b: Vec<AtomicUsize>,
-        h: AtomicUsize,
-        t: AtomicUsize,
-        n: usize,
-    }
-    impl Rq {
-        fn new(c: usize) -> Rq {
-            Rq {
-                b: (0..c).map(|_| AtomicUsize::new(0)).collect(),
-                h: AtomicUsize::new(0),
-                t: AtomicUsize::new(0),
-                n: c,
-            }
-        }
-        fn put(&self, v: usize) {
-            loop {
-                let t = self.t.load(Ordering::Relaxed);
-                let h = self.h.load(Ordering::Acquire);
-                if t.wrapping_sub(h) >= self.n {
-                    std::hint::spin_loop();
-                    continue;
-                }
-                self.b[t % self.n].store(v, Ordering::Relaxed);
-                self.t.store(t.wrapping_add(1), Ordering::Release);
-                return;
-            }
-        }
-        fn get(&self) -> Option<usize> {
-            let h = self.h.load(Ordering::Relaxed);
-            let t = self.t.load(Ordering::Acquire);
-            if h == t {
-                return None;
-            }
-            let v = self.b[h % self.n].load(Ordering::Relaxed);
-            self.h.store(h.wrapping_add(1), Ordering::Release);
-            Some(v)
-        }
-        fn getb(&self) -> usize {
-            loop {
-                if let Some(v) = self.get() {
-                    return v;
-                }
-                std::thread::yield_now();
-            }
-        }
-    }
-    const STOP: usize = usize::MAX;
-    let jobq = std::sync::Arc::new(Rq::new(n + 2));
-    let ptrs = std::sync::Arc::new(
-        (0..n)
-            .map(|_| [0usize; 3].map(|_| AtomicUsize::new(0)))
-            .collect::<Vec<_>>(),
-    );
-    let free = std::sync::Arc::new((0..n).map(|_| AtomicBool::new(true)).collect::<Vec<_>>());
-    let sizes = std::sync::Arc::new(planes.iter().map(|p| p.size).collect::<Vec<_>>());
-    let pc = planes.len();
+    let mut pipeline = FramePipeline::new(frame_size);
+    pipeline.finish_init();
+    let pipeline = std::sync::Arc::new(pipeline);
     let mut ffmpeg_stdin = proc.stdin.take().unwrap();
-    let jq = jobq.clone();
-    let pt = ptrs.clone();
-    let fr = free.clone();
-    let sz = sizes.clone();
-    let writer = std::thread::Builder::new()
-        .name("ffmpeg-writer".to_owned())
-        .spawn(move || -> std::io::Result<u64> {
-            let mut busy: u64 = 0;
-            loop {
-                let s = jq.getb();
-                if s == STOP {
-                    break;
+    let writer = {
+        let pipeline = std::sync::Arc::clone(&pipeline);
+        std::thread::Builder::new()
+            .name("ffmpeg-writer".to_owned())
+            .spawn(move || -> std::io::Result<u64> {
+                let mut busy: u64 = 0;
+                while let Some(buf) = pipeline.pop_job() {
+                    let t = Instant::now();
+                    ffmpeg_stdin.write_all(&pipeline.pool[buf])?;
+                    busy += t.elapsed().as_nanos() as u64;
+                    pipeline.release_buf(buf);
                 }
                 let t = Instant::now();
-                for i in 0..pc {
-                    let p = pt[s][i].load(Ordering::Relaxed) as *const u8;
-                    let bytes = unsafe { std::slice::from_raw_parts(p, sz[i]) };
-                    ffmpeg_stdin.write_all(bytes)?;
-                }
+                ffmpeg_stdin.flush()?;
                 busy += t.elapsed().as_nanos() as u64;
-                fr[s].store(true, Ordering::Release);
-            }
-            let t = Instant::now();
-            ffmpeg_stdin.flush()?;
-            busy += t.elapsed().as_nanos() as u64;
-            Ok(busy)
-        })
-        .context("failed to spawn ffmpeg writer thread")?;
+                Ok(busy)
+            })
+            .context("failed to spawn ffmpeg writer thread")?
+    };
 
-    fn submit_frame(planes: &[Plane], ptrs: &[[AtomicUsize; 3]], jobq: &Rq, slot: usize) -> Result<f64> {
-        let mut dma_wait = 0f64;
+    fn submit_frame(pipeline: &FramePipeline, planes: &[Plane], ext: &GlExt, slot: usize, ) -> Result<(f64, f64)> {
+        let acquire_start = Instant::now();
+        let buf = pipeline.acquire_buf();
+        let pool_wait = acquire_start.elapsed().as_secs_f64();
+        let base = pipeline.pool_addrs[buf] as *mut u8;
+        let mut dma_wait = 0.;
+        let mut off: usize = 0;
         unsafe {
             use miniquad::gl::*;
-            for (i, plane) in planes.iter().enumerate() {
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, plane.pbos[slot]);
-                let t = Instant::now();
-                let src = glMapBufferRange(
-                    GL_PIXEL_PACK_BUFFER,
-                    0,
-                    plane.size as _,
-                    GL_MAP_READ_BIT,
-                    //GL_MAP_READ_BIT | GL_MAP_UNSYNCHRONIZED_BIT,
-                );
-                if src.is_null() {
-                    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-                    bail!("Failed to map PBO");
+            if planes.iter().any(|p| !p.mapped[slot].is_null()) {
+                if let Some(memory_barrier) = ext.memory_barrier {
+                    memory_barrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
                 }
-                dma_wait += t.elapsed().as_secs_f64();
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-                ptrs[slot][i].store(src as usize, Ordering::Release);
             }
+            for plane in planes.iter() {
+                let mapped = plane.mapped[slot];
+                if !mapped.is_null() {
+                    std::ptr::copy_nonoverlapping(mapped, base.add(off), plane.size);
+                } else {
+                    glBindBuffer(GL_PIXEL_PACK_BUFFER, plane.pbos[slot]);
+                    let t = Instant::now();
+                    let src = glMapBufferRange(
+                        GL_PIXEL_PACK_BUFFER,
+                        0,
+                        plane.size as _,
+                        GL_MAP_READ_BIT,
+                    );
+                    if src.is_null() {
+                        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+                        pipeline.release_buf(buf);
+                        return Ok((dma_wait, pool_wait));
+                    }
+                    dma_wait += t.elapsed().as_secs_f64();
+                    std::ptr::copy_nonoverlapping(src as *const u8, base.add(off), plane.size);
+                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                }
+                off += plane.size;
+            }
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
         }
-        jobq.put(slot);
-        Ok(dma_wait)
+        pipeline.push_job(buf);
+        Ok((dma_wait, pool_wait))
     }
 
-    fn unmap_slot(planes: &[Plane], slot: usize) {
-        unsafe {
-            use miniquad::gl::*;
-            for plane in planes {
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, plane.pbos[slot]);
-                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-            }
-        }
+    fn fence_ready(fence: miniquad::gl::GLsync) -> bool {
+        let r = unsafe {
+            miniquad::gl::glClientWaitSync(fence, miniquad::gl::GL_SYNC_FLUSH_COMMANDS_BIT, 0)
+        };
+        r == miniquad::gl::GL_ALREADY_SIGNALED || r == miniquad::gl::GL_CONDITION_SATISFIED
     }
-
-    fn fence_ready(fence: miniquad::gl::GLsync) -> bool { unsafe { miniquad::gl::glClientWaitSync(fence, 0, 0) == miniquad::gl::GL_ALREADY_SIGNALED } }
     fn fence_block(fence: miniquad::gl::GLsync) -> f64 {
         let t = Instant::now();
         unsafe { miniquad::gl::glClientWaitSync(fence, miniquad::gl::GL_SYNC_FLUSH_COMMANDS_BIT, 1_000_000_000); }
@@ -2206,10 +2292,9 @@ pub async fn main() -> Result<()> {
     let mut step_time = Instant::now();
     let mut next_slot: usize = 0;
     let mut in_flight: VecDeque<usize> = VecDeque::new();
-    let mut busy = vec![false; n];
     let mut fences: Vec<Option<miniquad::gl::GLsync>> = vec![None; n];
     let mut dma_wait_time: f64 = 0.0;
-    let mut queue_wait_time: f64 = 0.0;
+    let mut pool_wait_time: f64 = 0.0;
 
     for frame in 0..total_frames {
         if frame % frames10 == 0 || frame == total_frames - 1 {
@@ -2252,21 +2337,17 @@ pub async fn main() -> Result<()> {
 
         let slot = next_slot;
         next_slot = (next_slot + 1) % n;
-        let guard_start = Instant::now();
-        if busy[slot] {
-            while !free[slot].load(Ordering::Acquire) {
-                std::thread::yield_now();
-            }
-            unmap_slot(&planes, slot);
-            busy[slot] = false;
-        }
-        free[slot].store(false, Ordering::Release);
-        queue_wait_time += guard_start.elapsed().as_secs_f64();
+
+        //debug_assert!(fences[slot].is_none(), "PBO slot reused before readback finished");
         unsafe {
             use miniquad::gl::*;
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            let mut last_fbo: GLuint = 0;
             for plane in &planes {
-                glBindFramebuffer(GL_READ_FRAMEBUFFER, plane.fbo);
+                if plane.fbo != last_fbo {
+                    glBindFramebuffer(GL_READ_FRAMEBUFFER, plane.fbo);
+                    last_fbo = plane.fbo;
+                }
                 glBindBuffer(GL_PIXEL_PACK_BUFFER, plane.pbos[slot]);
                 glReadPixels(
                     0,
@@ -2277,16 +2358,16 @@ pub async fn main() -> Result<()> {
                     GL_UNSIGNED_BYTE,
                     std::ptr::null_mut(),
                 );
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
             }
-            glPixelStorei(GL_PACK_ALIGNMENT, 4);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
             glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+            glPixelStorei(GL_PACK_ALIGNMENT, 4);
         }
         fences[slot] = unsafe { Some(miniquad::gl::glFenceSync(miniquad::gl::GL_SYNC_GPU_COMMANDS_COMPLETE, 0)) };
         in_flight.push_back(slot);
 
         while !in_flight.is_empty() {
-            let oldest = *in_flight.front().unwrap();
+            let oldest = *in_flight.front().expect("no free slots!");
             let ready = match fences[oldest] {
                 Some(fence) => fence_ready(fence),
                 None => true,
@@ -2299,8 +2380,9 @@ pub async fn main() -> Result<()> {
             }
             in_flight.pop_front();
             if let Some(fence) = fences[oldest].take() { fence_drop(fence); }
-            dma_wait_time += submit_frame(&planes, &ptrs, &jobq, oldest)?;
-            busy[oldest] = true;
+            let (dma, pool) = submit_frame(&pipeline, &planes, &gl_ext, oldest)?;
+            dma_wait_time += dma;
+            pool_wait_time += pool;
         }
         send(IPCEvent::Frame);
     }
@@ -2310,22 +2392,18 @@ pub async fn main() -> Result<()> {
             dma_wait_time += fence_block(fence);
             fence_drop(fence);
         }
-        dma_wait_time += submit_frame(&planes, &ptrs, &jobq, old)
+        let (dma, pool) = submit_frame(&pipeline, &planes, &gl_ext, old)
             .context("failed to read back the final frames")?;
-        busy[old] = true;
+        dma_wait_time += dma;
+        pool_wait_time += pool;
     }
 
-    jobq.put(STOP);
+    pipeline.push_stop();
     let writer_busy = match writer.join() {
         Ok(Ok(busy)) => busy as f64 / 1e9,
         Ok(Err(err)) => bail!("failed to write frames to ffmpeg: {err}"),
         Err(_) => bail!("ffmpeg writer thread panicked"),
     };
-    for s in 0..n {
-        if busy[s] {
-            unmap_slot(&planes, s);
-        }
-    }
     proc.wait()?;
 
     if let Ok(text) = video_stderr.join() {
@@ -2344,12 +2422,12 @@ pub async fn main() -> Result<()> {
         writer_busy / wall * 100.
     );
     info!(
-        "Render thread waits: readback DMA wait {:.2}s ({:.1}%) | frame queue full {:.2}s ({:.1}%)",
+        "Render thread waits: readback DMA wait {:.2}s ({:.1}%) | frame pool exhausted {:.2}s ({:.1}%)",
         dma_wait_time, dma_wait_time / wall * 100.,
-        queue_wait_time, queue_wait_time / wall * 100.
+        pool_wait_time, pool_wait_time / wall * 100.
     );
     let written = ffmpeg_frames.load(Ordering::Relaxed);
-    let busy = (wall - dma_wait_time - queue_wait_time).max(1e-9);
+    let busy = (wall - dma_wait_time - pool_wait_time).max(1e-9);
     info!(
         "Render Avg FPS: {:.0}  (busy {:.2}s of {:.2}s, i.e. render side is idle {:.1}%)",
         total_frames as f64 / busy,
@@ -2367,9 +2445,18 @@ pub async fn main() -> Result<()> {
         info!("End-to-End Avg FPS: n/a (ffmpeg reported no progress)");
     }
 
+
+    //clear
     unsafe {
         use miniquad::gl::*;
         for plane in &planes {
+            for (i, pbo) in plane.pbos.iter().enumerate() {
+                if !plane.mapped[i].is_null() {
+                    glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
+                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                }
+            }
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
             glDeleteBuffers(n as _, plane.pbos.as_ptr());
         }
     }
