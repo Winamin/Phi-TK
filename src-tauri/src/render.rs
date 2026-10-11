@@ -865,6 +865,10 @@ pub async fn main() -> Result<()> {
 
     let audio_buffer_length = video_length + audio_delay.abs();
     let mut output = vec![0.0_f32; (audio_buffer_length * sample_rate_f64).ceil() as usize * 2];
+    
+    let ss = if params.config.disable_loading { O } else { 0.1 };
+    let ss_samples = (ss * sample_rate_f64).round() as usize * 2;
+    let skip = ((ss * params.config.fps as f64 - 1e-6).ceil().max(0.)) as u64;
 
     if volume_music != 0.0 {
         let start_time = Instant::now();
@@ -1034,7 +1038,7 @@ pub async fn main() -> Result<()> {
     let audio_stderr = drain_stderr(proc.stderr.take().unwrap());
     let input = proc.stdin.as_mut().unwrap();
     let mut writer = BufWriter::new(input);
-    for sample in output.into_iter() {
+    for sample in output.into_iter().skip(ss_samples) {
         writer.write_all(&sample.to_le_bytes())?;
     }
     drop(writer);
@@ -1097,7 +1101,8 @@ pub async fn main() -> Result<()> {
 
     let fps = params.config.fps;
     let frames = (video_length * fps as f64).ceil() as u64;
-    send(IPCEvent::StartRender(frames));
+    let out_frames = frames.saturating_sub(skip);
+    send(IPCEvent::StartRender(out_frames));
     
 
     fn test_encoder(ffmpeg: &Path, encoder: &str) -> Result<(bool, String)> {
@@ -2018,24 +2023,19 @@ pub async fn main() -> Result<()> {
     let async_depth = "-async_depth 4"; // the "4" parallel process 4 frames (vulkan encoder)
     let args2 = if is_vulkan_encoder {
         format!(
-            "-c:a {} -c:v {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} {} {} -f {}",
+            "-c:a {} -c:v {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} {} -f {}",
             audio_codec,
             ffmpeg_encoder,
             bitrate_control,
             params.config.bitrate,
             strict_flag,
-            if params.config.disable_loading {
-                format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
-            } else {
-                "-ss 0.1".to_string()
-            },
             out_extra,
             async_depth,
             video,
         )
     } else {
         format!(
-            "-c:a {} -c:v {} {} {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} {} -f {}",
+            "-c:a {} -c:v {} {} {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} -f {}",
             audio_codec,
             ffmpeg_encoder,
             bitrate_control,
@@ -2043,11 +2043,6 @@ pub async fn main() -> Result<()> {
             ffmpeg_preset,
             ffmpeg_preset_name,
             strict_flag,
-            if params.config.disable_loading {
-                format!("-ss {}", LoadingScene::TOTAL_TIME + GameScene::BEFORE_TIME)
-            } else {
-                "-ss 0.1".to_string()
-            },
             out_extra,
             video,
         )
@@ -2282,14 +2277,28 @@ pub async fn main() -> Result<()> {
         unsafe { miniquad::gl::glDeleteSync(fence) }
     }
 
-    send(IPCEvent::StartRender(frames));
-
     let fps_f64 = params.config.fps as f64;
     let frame_duration = 1.0 / fps_f64;
     let total_frames = frames;
 
-    let frames10 = (total_frames / 10).max(1);
+    let frames10 = (out_frames / 10).max(1);
+    let mut next_mark = frames10;
     let mut step_time = Instant::now();
+    let show = |done: u64, label: &str, step_time: &mut Instant| {
+        let p = (done as f64 / out_frames.max(1) as f64).min(1.0);
+        let pct = (p * 100.0).ceil() as i8;
+        let fill = (p * 20.).round() as usize;
+        info!(
+            "Rendering: [{}{}] {:>3}% | Time: {} | Frames: {}/{}",
+            "█".repeat(fill),
+            " ".repeat(20 - fill),
+            pct,
+            label,
+            done,
+            out_frames
+        );
+        *step_time = Instant::now();
+    };
     let mut next_slot: usize = 0;
     let mut in_flight: VecDeque<usize> = VecDeque::new();
     let mut fences: Vec<Option<miniquad::gl::GLsync>> = vec![None; n];
@@ -2297,40 +2306,29 @@ pub async fn main() -> Result<()> {
     let mut pool_wait_time: f64 = 0.0;
 
     for frame in 0..total_frames {
-        if frame % frames10 == 0 || frame == total_frames - 1 {
-            let p = (frame as f64 / total_frames as f64).min(1.0);
-            let pct = (p * 100.0).ceil() as i8;
-            let w = 20;
-            let fill = (p * w as f64).round() as usize;
-            let pad = w - fill;
-
-            let t = if frame == total_frames - 1 {
-                "Final frame".to_string()
-            } else {
-                format!("{:.2}s", step_time.elapsed().as_secs_f32())
-            };
-
-            info!(
-            "Rendering: [{}{}] {:>3}% | Time: {} | Frames: {}/{}",
-            "█".repeat(fill),
-            " ".repeat(pad),
-            pct,
-            t,
-            frame + 1,
-            total_frames
-        );
-
-            step_time = Instant::now();
-        }
         let current_frame_time = frame as f64 * frame_duration;
         *my_time.borrow_mut() = current_frame_time;
-        let input = mst.input();
-        let render_pass: MQRenderPass = unsafe { std::mem::transmute(input.render_pass) };
-        gl.quad_gl.render_pass(Some(render_pass));
+        let keep = frame >= skip;
+        if keep {
+            let input = mst.input();
+            let render_pass: MQRenderPass = unsafe { std::mem::transmute(input.render_pass) };
+            gl.quad_gl.render_pass(Some(render_pass));
+        }
         main.update()?;
+        if !keep {
+            continue;
+        }
         main.render(&mut painter)?;
         if current_frame_time <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading { draw_rectangle(0., 0., 0., 0., Color::default()); }
         mst.blit();
+
+        let done = ffmpeg_frames.load(Ordering::Relaxed).min(out_frames);
+        if done >= next_mark {
+            let label = format!("{:.2}s", step_time.elapsed().as_secs_f32());
+            show(done, &label, &mut step_time);
+            next_mark = done + frames10;
+        }
+
         if let Some(nv12) = &nv12 {
             nv12.convert(&mst.output());
         }
@@ -2427,10 +2425,13 @@ pub async fn main() -> Result<()> {
         pool_wait_time, pool_wait_time / wall * 100.
     );
     let written = ffmpeg_frames.load(Ordering::Relaxed);
+    if written > 0 {
+        show(written.min(out_frames), "Final frame", &mut step_time);
+    }
     let busy = (wall - dma_wait_time - pool_wait_time).max(1e-9);
     info!(
-        "Render Avg FPS: {:.0}  (busy {:.2}s of {:.2}s, i.e. render side is idle {:.1}%)",
-        total_frames as f64 / busy,
+        "prpr avg fps: {:.0}  (busy {:.2}s of {:.2}s, i.e. render side is idle {:.1}%)",
+        out_frames as f64 / busy,
         busy,
         wall,
         (1.0 - busy / wall) * 100.0
@@ -2444,7 +2445,6 @@ pub async fn main() -> Result<()> {
     } else {
         info!("End-to-End Avg FPS: n/a (ffmpeg reported no progress)");
     }
-
 
     //clear
     unsafe {
