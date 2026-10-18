@@ -27,6 +27,7 @@ export type TaskStatus =
       type: 'rendering';
       progress: number;
       fps: number;
+      encoder_fps: number;
       estimate: number;
     }
   | {
@@ -74,7 +75,6 @@ export interface RenderConfig {
   video: boolean;
   audioBit?: number;
   audioFormat: string;
-  // Encoder selection: 'auto', 'nvenc', 'qsv', 'amf', 'vulkan', 'cpu'
   encoder?: string;
 
   aggressive: boolean;
@@ -105,6 +105,7 @@ export interface RenderConfig {
   uiPause: boolean;
   bar: boolean;
   ffmpegThread: boolean;
+  scoreAmin: boolean;
 }
 
 export interface RPEChart {

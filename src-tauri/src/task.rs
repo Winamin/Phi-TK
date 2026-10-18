@@ -1,5 +1,5 @@
 use crate::{
-    common::output_dir,
+    common::resolve_output_dir,
     render::{IPCEvent, RenderParams},
     ASSET_PATH,
 };
@@ -8,7 +8,6 @@ use chrono::Local;
 use prpr::fs;
 use serde::Serialize;
 use std::{
-    collections::VecDeque,
     io::Write,
     ops::DerefMut,
     path::PathBuf,
@@ -34,6 +33,7 @@ pub enum TaskStatus {
     Loading,
     Mixing,
     Rendering {
+        encoder_fps: u64,
         progress: f64,
         fps: u64,
         estimate: f64,
@@ -87,11 +87,7 @@ impl Task {
             Local::now().format("%Y-%m-%d %H-%M-%S")
         );
 
-        let output = if let Some(path) = output_path {
-            path.join(file_name)
-        } else {
-            output_dir()?.join(file_name)
-        };
+        let output = resolve_output_dir(output_path.as_deref())?.join(file_name);
 
         Ok(Self {
             id,
@@ -133,8 +129,6 @@ impl Task {
         let mut total = 0;
         let mut frame_count: u64 = 0;
         let start = Instant::now();
-        //let mut frame_times = VecDeque::new();
-        //let mut last_update_fps_sec: u32 = 0;
         let mut last_fps: usize = 0;
         loop {
             let line = lines.next_line().await?;
@@ -150,10 +144,17 @@ impl Task {
                     *self.status.lock().await = TaskStatus::Rendering {
                         progress: 0.,
                         fps: 0,
+                    encoder_fps: 0,
                         estimate: 0.,
                     };
                     total = total_frame;
                 }
+            IPCEvent::EncoderFps(fps) => {
+                let mut status = self.status.lock().await;
+                if let TaskStatus::Rendering { encoder_fps, .. } = &mut *status {
+                    *encoder_fps = fps.max(0.0).round() as u64;
+                }
+            }
                 IPCEvent::Frame => {
                     frame_count += 1;
                     if frame_count % 10 == 0 {
@@ -167,7 +168,15 @@ impl Task {
                     }
 
                     let cur = start.elapsed().as_secs_f64();
-                    let estimate = total.saturating_sub(frame_count).max(1) as f64 / last_fps.max(1) as f64;
+                    let prev_encoder_fps = {
+                        let guard = self.status.lock().await;
+                        match &*guard {
+                            TaskStatus::Rendering { encoder_fps, .. } => *encoder_fps,
+                            _ => 0,
+                        }
+                    };
+                    let rate = if prev_encoder_fps > 0 { prev_encoder_fps as f64 } else { last_fps.max(1) as f64 };
+                    let estimate = total.saturating_sub(frame_count).max(1) as f64 / rate;
 
                     if frame_count as f64 / total as f64 >= 1.0 {
                         let output = child.wait_with_output().await?;
@@ -184,6 +193,7 @@ impl Task {
                         *self.status.lock().await = TaskStatus::Rendering {
                             progress: frame_count as f64 / total as f64,
                             fps: last_fps as u64,
+                            encoder_fps: prev_encoder_fps,
                             estimate,
                         };
                     }
@@ -202,7 +212,15 @@ impl Task {
                 }
             }
             if self.request_cancel.load(Ordering::Relaxed) {
-                child.kill().await?;
+                #[cfg(target_os = "windows")]
+                if let Some(pid) = child.id() {
+                    use std::os::windows::process::CommandExt;
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/PID", &pid.to_string(), "/T", "/F"])
+                        .creation_flags(0x08000000)
+                        .output();
+                }
+                let _ = child.kill().await;
                 *self.status.lock().await = TaskStatus::Canceled;
                 return Ok(());
             }
