@@ -40,10 +40,10 @@ jobs:
       - name: Sync node version and setup cache
         uses: pnpm/action-setup@v2
         with:
-          version: 8
+          version: 10.18.3
 
       - name: Install frontend dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Download static-lib
         uses: suisei-cn/actions-download-file@v1.3.0

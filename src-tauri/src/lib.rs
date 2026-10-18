@@ -6,11 +6,12 @@ prpr::tl_file!("main" mtl);
 mod common;
 mod ipc;
 mod preview;
-mod render;
+pub mod render;
+pub mod zerocopy;
 mod task;
 
 use anyhow::{bail, Context, Result};
-use common::{ensure_dir, output_dir, respack_dir, CONFIG_DIR, DATA_DIR};
+use common::{resolve_output_dir, ensure_dir, respack_dir, CONFIG_DIR, DATA_DIR};
 use fs4::tokio::AsyncFileExt;
 use macroquad::prelude::set_pc_assets_folder;
 use prpr::{
@@ -199,9 +200,25 @@ fn exit_program() {
 }
 
 #[tauri::command]
-fn show_folder() -> Result<(), InvokeError> {
-    let dir = output_dir().unwrap();
-    show_in_folder(&dir)
+fn show_folder(path: Option<String>) -> Result<(), InvokeError> {
+    let dir = resolve_output_dir(path.as_deref().map(Path::new)).map_err(InvokeError::from_anyhow)?;
+    open_dir(&dir).map_err(InvokeError::from_anyhow)
+}
+
+fn open_dir(path: &Path) -> anyhow::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer").arg(path).spawn()?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open").arg(path).spawn()?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").arg(path).spawn()?;
+    }
+    Ok(())
 }
 
 #[tauri::command]

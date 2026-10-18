@@ -1,0 +1,13 @@
+# Keep the build context small: "COPY . ." in .github/workflows/Dockerfile.arm64
+# would otherwise copy the host build outputs into the image.
+.git
+.github
+.idea
+.vscode
+node_modules
+dist
+dist-ssr
+static-lib
+src-tauri/target
+**/target
+*.log

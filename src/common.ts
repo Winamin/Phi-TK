@@ -1,6 +1,8 @@
-import { toast as sonnerToast } from 'vuetify-sonner';
-
 import { SUPPORTED_LOCALES, i18n } from './main';
+
+import { setLocale } from 'mdui/functions/setLocale.js';
+import { snackbar } from 'mdui/functions/snackbar.js';
+import { mduiLocaleFor } from './mdui-locale';
 
 import moment from 'moment';
 
@@ -19,11 +21,24 @@ export function isString(s: unknown): s is string {
 }
 
 export const RULES = {
-  // Vuetify's `clearable` sets the model to null, so accept nullish values here.
   non_empty: (value: string | null | undefined) => (value ?? '').trim().length > 0 || i18n.global.t('rules.non-empty'),
   positive: (value: string) => (isNumeric(value) && Number(value) >= 0) || i18n.global.t('rules.positive'),
-  positiveInt: (value: string) => (isNumeric(value) && Math.abs(Number(value) - Math.round(Number(value))) < 1e-4 && Number(value) > 0) || i18n.global.t('rules.positive-int'),
 };
+
+/**
+ * Runs native constraint validation over every mdui form control inside `root`, focusing
+ * and annotating the first invalid one. mdui's fields are form-associated custom elements,
+ * so `required` / `min` / `max` / `type="number"` are enforced by the browser — this
+ * replaces Vuetify's `<v-form>.validate()`.
+ */
+export function validateFields(root: HTMLElement | null | undefined): boolean {
+  if (!root) return true;
+  const fields = root.querySelectorAll<HTMLElement & { reportValidity?: () => boolean }>('mdui-text-field, mdui-select, mdui-checkbox, mdui-radio-group');
+  for (const field of fields) {
+    if (field.reportValidity && !field.reportValidity()) return false;
+  }
+  return true;
+}
 
 export function isNumeric(num: any) {
   return (typeof num === 'number' || (typeof num === 'string' && num.trim() !== '')) && !isNaN(num as number);
@@ -38,6 +53,8 @@ export function changeLocale(locale: string) {
   if (!SUPPORTED_LOCALES.includes(locale)) locale = 'en';
   i18n.global.locale.value = (locale === 'zh-TW' ? 'zh-CN' : locale) as typeof i18n.global.locale.value;
   localStorage.setItem('locale', locale);
+  // Keep mdui's own built-in strings in step with the UI language.
+  setLocale(mduiLocaleFor(locale)).catch((e) => console.error('failed to set mdui locale', e));
   const momentLocale =
     {
       'zh-CN': 'zh-cn',
@@ -48,14 +65,13 @@ export function changeLocale(locale: string) {
 }
 
 export function toast(message: string, kind?: 'success' | 'info' | 'warning' | 'error') {
-  sonnerToast(message, {
-    duration: 2000,
-    cardProps: {
-      color: kind,
-      // @ts-ignore
-      style: 'width: var(--width)',
-    },
+  const bar = snackbar({
+    message,
+    placement: 'top',
+    autoCloseDelay: 2000,
+    closeOnOutsideClick: true,
   });
+  if (kind) bar.classList.add(`toast-${kind}`);
 }
 
 export function toastError(error: any) {
