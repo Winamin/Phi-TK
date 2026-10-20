@@ -108,6 +108,7 @@ import '@mdui/icons/person--outlined.js';
 import '@mdui/icons/sports-esports.js';
 import '@mdui/icons/sports-esports--outlined.js';
 import '@mdui/icons/warning.js';
+import '@mdui/icons/error.js';
 import '@mdui/icons/error--outlined.js';
 import '@mdui/icons/bug-report--outlined.js';
 import '@mdui/icons/workspace-premium.js';

@@ -31,7 +31,12 @@ impl Scene for BaseScene {
     fn update(&mut self, _tm: &mut TimeManager) -> Result<()> {
         Ok(())
     }
-    fn render(&mut self, _tm: &mut TimeManager, _ui: &mut Ui) -> Result<()> {
+    fn render(
+        &mut self,
+        _tm: &mut TimeManager,
+        _ui: &mut Ui,
+        _target: Option<RenderTarget>,
+    ) -> Result<()> {
         Ok(())
     }
     fn next_scene(&mut self, _tm: &mut TimeManager) -> prpr::scene::NextScene {

@@ -17,6 +17,7 @@ name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
+ash = "0.38"
 futures = "0.3"
 log = "0.4"
 rayon = "1.5"
@@ -29,7 +30,7 @@ anyhow = { version = "1.0.70", features = ["backtrace"] }
 #prpr = { path = "D:/Github/Phi-TK-render-lib/prpr" }
 #macroquad = { path = "D:/Github/prpr-macroquad", default-features = false}
 macroquad = { git = "https://github.com/Winamin/prpr-macroquad", default-features = false }
-prpr = { git = "https://github.com/Winamin/Phi-TK-render-lib", package = "prpr", branch = "render-lib" }
+prpr = { git = "https://github.com/Winamin/Phi-TK-render-lib", package = "prpr", branch = "vulkan" }
 
 # prpr = { path = "../../phira/prpr" }
 

@@ -3,16 +3,22 @@
 
 prpr::tl_file!("main" mtl);
 
+mod cli;
 mod common;
+mod gpu_info;
 mod ipc;
 mod preview;
+mod av1_level;
 pub mod render;
-pub mod zerocopy;
+mod vulkan_encode;
+pub mod vulkan_video;
+mod vulkan_readback;
 mod task;
 
 use anyhow::{bail, Context, Result};
 use common::{resolve_output_dir, ensure_dir, respack_dir, CONFIG_DIR, DATA_DIR};
 use fs4::tokio::AsyncFileExt;
+use gpu_info::get_msaa_sample_counts;
 use macroquad::prelude::set_pc_assets_folder;
 use prpr::{
     fs::{self, FileSystem},
@@ -75,6 +81,9 @@ pub async fn run() -> Result<()> {
             Some("preview") => {
                 run_wrapped(preview::main()).await;
             }
+            Some("cli") => {
+                run_wrapped(cli::main()).await;
+            }
             cmd => {
                 eprintln!("Unknown subcommand: {cmd:?}");
                 std::process::exit(1);
@@ -94,6 +103,8 @@ pub async fn run() -> Result<()> {
             exit_program,
             show_folder,
             show_in_folder,
+            save_text_file,
+            save_binary_file,
             preview_chart,
             parse_chart,
             batch_add_tasks,
@@ -102,6 +113,7 @@ pub async fn run() -> Result<()> {
             cancel_task,
             get_respacks,
             open_respack_folder,
+            get_msaa_sample_counts,
             get_presets,
             add_preset,
             remove_preset,
@@ -259,6 +271,16 @@ fn show_in_folder(path: &Path) -> Result<(), InvokeError> {
         Ok(())
     })()
     .map_err(InvokeError::from_anyhow)
+}
+
+#[tauri::command]
+fn save_text_file(path: PathBuf, content: String) -> Result<(), InvokeError> {
+    std::fs::write(path, content).map_err(|e| InvokeError::from_anyhow(e.into()))
+}
+
+#[tauri::command]
+fn save_binary_file(path: PathBuf, data: Vec<u8>) -> Result<(), InvokeError> {
+    std::fs::write(path, data).map_err(|e| InvokeError::from_anyhow(e.into()))
 }
 
 #[tauri::command]
