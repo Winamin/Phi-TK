@@ -14,6 +14,8 @@ en:
     image-copied: Screenshot copied
     image-copy-failed: Could not copy screenshot
     copy-log: Copy log
+    copy-selection: Copy selection
+    selection-copied: Selected lines copied
     save: Save
     saved: Saved
     save-failed: Save failed
@@ -93,6 +95,8 @@ zh-CN:
     image-copied: 截图已复制
     image-copy-failed: 截图复制失败
     copy-log: 复制日志
+    copy-selection: 复制选中
+    selection-copied: 选中日志已复制
     save: 保存
     saved: 已保存
     save-failed: 保存失败
@@ -337,6 +341,12 @@ const selectedLines = computed(() => {
 const selectedLineCount = computed(() => selectedLines.value?.length ?? 0);
 
 const fullLogText = computed(() => allLines.value.map((line) => line.text).join('\n'));
+
+const detailCopyText = computed(() =>
+  selectedLines.value?.length
+    ? selectedLines.value.map((line) => line.text).join('\n')
+    : fullLogText.value,
+);
 
 const lineCountLabel = computed(() =>
   t('log.lines', {
@@ -1364,8 +1374,9 @@ async function copyLog() {
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
       toast(t('log.image-copied'), 'success');
     } else {
-      await navigator.clipboard.writeText(fullLogText.value);
-      toast(t('log.copied'), 'success');
+      const copyingSelection = !!selectedLines.value?.length;
+      await navigator.clipboard.writeText(detailCopyText.value);
+      toast(t(copyingSelection ? 'log.selection-copied' : 'log.copied'), 'success');
     }
   } catch (e) {
     console.error(e);
@@ -1789,7 +1800,15 @@ onUnmounted(() => {
           <div class="log-footer-actions">
             <mdui-button variant="tonal" :disabled="exporting" @click="copyLog">
               <mdui-icon-content-copy slot="icon"></mdui-icon-content-copy>
-              {{ t(mode === 'simple' ? 'log.copy-image' : 'log.copy-log') }}
+              {{
+                t(
+                  mode === 'simple'
+                    ? 'log.copy-image'
+                    : selectedLineCount
+                      ? 'log.copy-selection'
+                      : 'log.copy-log',
+                )
+              }}
             </mdui-button>
             <mdui-button variant="tonal" :disabled="exporting" @click="saveLog">
               <mdui-icon-save--outlined slot="icon"></mdui-icon-save--outlined>

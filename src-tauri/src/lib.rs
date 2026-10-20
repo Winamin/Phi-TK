@@ -81,9 +81,9 @@ pub async fn run() -> Result<()> {
             Some("preview") => {
                 run_wrapped(preview::main()).await;
             }
-            Some("cli") => {
-                run_wrapped(cli::main()).await;
-            }
+            //Some("cli") => {
+            //    run_wrapped(cli::main()).await;
+           // }
             cmd => {
                 eprintln!("Unknown subcommand: {cmd:?}");
                 std::process::exit(1);
