@@ -117,7 +117,6 @@ const themeMode = ref<ThemeMode>(getThemeMode());
 const wallpaperColor = ref(isWallpaperColorEnabled());
 const derivedColor = ref<string | null>(getDerivedColor());
 const appliedPrimary = ref(readAppliedPrimary());
-/** 把 `r, g, b` 拼成可用作背景色的 rgb()。 */
 const appliedPrimaryCss = computed(() => `rgb(${appliedPrimary.value})`);
 
 const backgroundPreviewUrl = computed(() => {
@@ -409,8 +408,6 @@ function clearBackground() {
   flex-direction: column;
   gap: 0;
   /* Sections are flex items of the scrolling `.settings-scroll`, which squeezes them
-     before it scrolls. A squeezed section clips its card's rows (they are
-     `overflow: hidden`), so a row's text gets sliced in half. Keep the natural height. */
   flex-shrink: 0;
 
   /* Sections rise in sequence as the page appears. */

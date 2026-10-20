@@ -18,9 +18,12 @@ en:
   fxaa: FXAA
   fxaa-tips: Causes blur, not recommended
   sample-count: Sample Count
-  sample-count-tips: Power of 2 for MSAA
+  sample-count-off: Off (1x)
+  sample-count-device: 'GPU: {device}, up to {max}x MSAA'
+  sample-count-unknown: 'GPU capability unavailable; using 1/2/4/8'
   bitrate-control: Bitrate Control
   bitrate: Bitrate/CRF
+  vulkan-qp-hint: "Vulkan encoder constant QP: {qp} (derived from the existing CRF/bitrate setting)"
   ffmpeg-thread: Thread Optimization
   video-format: Video Format
   video-format-flac-error: Not available with FLAC audio
@@ -119,9 +122,12 @@ zh-CN:
   fxaa: FXAA 抗锯齿
   fxaa-tips: 会导致画面模糊
   sample-count: 采样数
-  sample-count-tips: 非1启用MSAA
+  sample-count-off: 关闭
+  sample-count-device: 显卡：{device}，最高支持 {max}x MSAA
+  sample-count-unknown: 未能检测到显卡信息，使用 1/2/4/8
   bitrate-control: 码率控制
   bitrate: 码率/CRF
+  vulkan-qp-hint: "Vulkan 编码器常量 QP：{qp}（由现有 CRF/码率设置换算）"
   ffmpeg-thread: 线程优化
   video-format: 视频格式
   video-format-flac-error: FLAC 音频下不可用
@@ -276,7 +282,40 @@ const activeCategory = ref<(typeof categories)[number]['key']>('output');
 
 const resolution = ref('1920x1080');
 const fps = ref('60');
-const sampleCount = ref('1');
+const sampleCount = ref(1);
+const FALLBACK_MSAA_COUNTS = [1, 2, 4, 8];
+const msaaCounts = ref(FALLBACK_MSAA_COUNTS);
+const msaaDevice = ref('');
+const msaaLoaded = ref(false);
+
+const msaaItems = computed(() =>
+  msaaCounts.value.map((samples) => ({
+    title: samples === 1 ? t('sample-count-off') : `${samples}x`,
+    value: samples,
+  })),
+);
+const maxMsaa = computed(() => msaaCounts.value[msaaCounts.value.length - 1] ?? 1);
+
+function clampSampleCount(samples: number) {
+  const usable = msaaCounts.value.filter((n) => n <= samples);
+  return usable.length ? usable[usable.length - 1] : 1;
+}
+
+async function updateMsaaSupport() {
+  try {
+    const support = (await invoke('get_msaa_sample_counts')) as { device: string; counts: number[] };
+    if (support.counts.length) {
+      msaaCounts.value = support.counts;
+      msaaDevice.value = support.device;
+      sampleCount.value = clampSampleCount(sampleCount.value);
+    }
+  } catch {
+    /* empty */
+  } finally {
+    msaaLoaded.value = true;
+  }
+}
+updateMsaaSupport();
 const videoCodec = ref('h264');
 const encoder = ref('auto');
 const ffmpegPreset = ref('medium');
@@ -342,6 +381,84 @@ watch([audioFormat, video], ([newAudio, newVideo]) => {
 watch(videoFormat, (val) => {
   video.value = val === 'mov';
 });
+
+/*
+ * Rust Vulkan encoder mapping.
+ *
+ * The encoder is constant-QP and only implements H.264, so it deliberately has
+ * no dedicated UI.  Instead the controls that already exist are mapped onto it:
+ *   - Hardware Acceleration + Encoder (auto/vulkan) + Video Codec decide
+ *     whether the Rust Vulkan path is used at all;
+ *   - Bitrate Control + Bitrate/CRF produce the QP (CRF is the QP directly,
+ *     CBR is converted from the target bitrate), exactly like the backend.
+ * buildConfig() writes these normalized values back into the existing
+ * RenderConfig fields, so no extra input or option is introduced.
+ */
+const VULKAN_CODEC = 'h264';
+
+function parseBitrateBps(raw: string): number | null {
+  const s = raw.trim().toLowerCase().replace(/\s+/g, '');
+  if (!s) return null;
+  let num = s;
+  let mult = 1;
+  if (s.endsWith('kbps')) {
+    num = s.slice(0, -4);
+    mult = 1e3;
+  } else if (s.endsWith('mbps')) {
+    num = s.slice(0, -4);
+    mult = 1e6;
+  } else if (s.endsWith('k')) {
+    num = s.slice(0, -1);
+    mult = 1e3;
+  } else if (s.endsWith('m')) {
+    num = s.slice(0, -1);
+    mult = 1e6;
+  }
+  const n = Number(num);
+  return Number.isFinite(n) && n > 0 ? n * mult : null;
+}
+
+/** Keep in sync with `encoder_qp()` in src-tauri/src/render.rs. */
+function resolveVulkanQp(control: string, bitrate: string, width: number, height: number, fps: number): number {
+  if (control.toUpperCase() === 'CBR') {
+    const bps = parseBitrateBps(bitrate);
+    if (!bps) return 28;
+    const bpp = bps / Math.max(width * height * Math.max(fps, 1), 1);
+    return Math.min(51, Math.max(1, Math.round(28 - 6 * Math.log2(bpp / 0.04))));
+  }
+  const raw = bitrate.trim();
+  const crf = Number(raw);
+  return Math.min(51, Math.max(1, Math.round(raw && Number.isFinite(crf) ? crf : 28)));
+}
+
+const vulkanEligible = computed(
+  () => hwAccel.value && videoCodec.value === VULKAN_CODEC && (encoder.value === 'auto' || encoder.value === 'vulkan'),
+);
+
+const vulkanQp = computed(() => {
+  const [width, height] = resolution.value.split('x').map(Number);
+  return resolveVulkanQp(
+    bitrateControl.value,
+    bitrate.value,
+    width || 1920,
+    height || 1080,
+    parseInt(fps.value) || 60,
+  );
+});
+
+// The Rust encoder implements H.264 only.  Do not rewrite the existing
+// encoder choice here: for HEVC/AV1 the same "vulkan" selection still means
+// ffmpeg's hevc_vulkan/av1_vulkan encoder, and the backend gates only the
+// Rust encoder by codec.
+
+/** Normalize the existing encoder controls into the values the backend reads. */
+function resolveEncoderParams(width: number, height: number) {
+  const control = bitrateControl.value.toUpperCase() === 'CBR' ? 'CBR' : 'CRF';
+  const value = vulkanEligible.value && control === 'CRF'
+    ? String(resolveVulkanQp(control, bitrate.value, width, height, parseInt(fps.value) || 60))
+    : bitrate.value.trim();
+  return { encoder: encoder.value, bitrateControl: control, bitrate: value };
+}
 
 const pctLabel = (value: number) => `${Math.round(value * 100)}%`;
 const numLabel = (value: number) => value.toFixed(2);
@@ -412,7 +529,7 @@ const DEFAULT_PRESET: Preset = {
     playerAvatar: null,
     playerName: '',
     playerRks: 15,
-    sampleCount: 1,
+    sampleCount: 4,
     resPackPath: null,
     speed: 1,
     volumeMusic: 1,
@@ -479,9 +596,10 @@ async function buildConfig(): Promise<RenderConfig | null> {
     return null;
   }
   const [w, h] = resolution.value.split('x').map(Number);
+  const encoderParams = resolveEncoderParams(w, h);
   return {
     resolution: [w, h],
-    ffmpegPreset: ffmpegPreset.value,
+    ffmpegPreset: ffmpegPreset.value || 'medium',
     endingLength: parseFloat(endingLength.value),
     disableLoading: disableLoading.value,
     chartDebug: chartDebug.value,
@@ -491,9 +609,9 @@ async function buildConfig(): Promise<RenderConfig | null> {
     fps: parseInt(fps.value),
     hardwareAccel: hwAccel.value,
     videoCodec: videoCodec.value,
-    encoder: encoder.value,
-    bitrateControl: bitrateControl.value,
-    bitrate: bitrate.value,
+    encoder: encoderParams.encoder,
+    bitrateControl: encoderParams.bitrateControl,
+    bitrate: encoderParams.bitrate,
     targetAudio: targetAudio.value,
     background: background.value,
     handSplit: handSplit.value,
@@ -513,7 +631,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
     playerAvatar: playerAvatar.value?.length ? playerAvatar.value : null,
     playerName: playerName.value,
     playerRks: parseFloat(playerRks.value),
-    sampleCount: parseInt(sampleCount.value),
+    sampleCount: clampSampleCount(sampleCount.value),
     resPackPath: respack.value.path,
     speed: 1,
     volumeMusic: volumeMusic.value,
@@ -536,7 +654,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
 
 function applyConfig(c: RenderConfig) {
   resolution.value = c.resolution.join('x');
-  ffmpegPreset.value = c.ffmpegPreset;
+  ffmpegPreset.value = c.ffmpegPreset || 'medium';
   endingLength.value = String(c.endingLength);
   disableLoading.value = c.disableLoading;
   chartDebug.value = c.chartDebug;
@@ -545,10 +663,10 @@ function applyConfig(c: RenderConfig) {
   bufferSize.value = c.bufferSize;
   fps.value = String(c.fps);
   hwAccel.value = c.hardwareAccel;
-  videoCodec.value = c.videoCodec;
+  videoCodec.value = c.videoCodec || VULKAN_CODEC;
   encoder.value = c.encoder || 'auto';
-  bitrateControl.value = c.bitrateControl;
-  bitrate.value = c.bitrate;
+  bitrateControl.value = (c.bitrateControl || 'CRF').toUpperCase() === 'CBR' ? 'CBR' : 'CRF';
+  bitrate.value = c.bitrate || '28';
   targetAudio.value = c.targetAudio;
   background.value = c.background ?? false;
   handSplit.value = c.handSplit ?? false;
@@ -567,7 +685,7 @@ function applyConfig(c: RenderConfig) {
   playerAvatar.value = c.playerAvatar || undefined;
   playerName.value = c.playerName;
   playerRks.value = String(c.playerRks);
-  sampleCount.value = String(c.sampleCount);
+  sampleCount.value = clampSampleCount(c.sampleCount || 1);
   respack.value = respacks.value.find((x) => x.path === c.resPackPath) || respacks.value[0];
   volumeMusic.value = c.volumeMusic;
   volumeSfx.value = c.volumeSfx;
@@ -706,7 +824,14 @@ async function replacePreset() {
               </div>
               <div class="field-row">
                 <MdTextField v-model="fps" variant="outlined" inputmode="numeric" :label="t('fps')" />
-                <MdTextField v-model="sampleCount" variant="outlined" inputmode="numeric" :label="t('sample-count')" :helper="t('sample-count-tips')" />
+                <MdSelect v-model="sampleCount" variant="outlined" :items="msaaItems" :label="t('sample-count')" />
+              </div>
+              <div v-if="msaaLoaded" class="field-hint">
+                {{
+                  msaaDevice
+                    ? t('sample-count-device', { device: msaaDevice, max: maxMsaa })
+                    : t('sample-count-unknown')
+                }}
               </div>
             </div>
           </section>
@@ -734,6 +859,9 @@ async function replacePreset() {
                 <MdSelect v-model="bitrateControl" variant="outlined" :items="BITRATE_CONTROLS" :label="t('bitrate-control')" />
                 <MdTextField v-model="bitrate" variant="outlined" :label="t('bitrate')" />
               </div>
+              <!-- Read-only mapping of the existing CRF/bitrate controls to the
+                   Vulkan encoder's constant QP.  No extra input is added. -->
+              <div v-if="vulkanEligible" class="field-hint">{{ t('vulkan-qp-hint', { qp: vulkanQp }) }}</div>
             </div>
           </section>
 

@@ -33,3 +33,5 @@ coverage
 /.cargo
 
 target/
+/.phitk-test
+/target-release-test

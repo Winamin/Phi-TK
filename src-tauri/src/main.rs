@@ -4,6 +4,10 @@ pub fn build_conf() -> macroquad::window::Conf {
         window_width: 1280,
         window_height: 720,
         headless: std::env::args().skip(1).next().as_deref() != Some("preview"),
+        platform: macroquad::miniquad::conf::Platform {
+            rendering_backend: macroquad::miniquad::conf::RenderingBackend::Vulkan,
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

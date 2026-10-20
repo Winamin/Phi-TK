@@ -2,10 +2,10 @@ prpr::tl_file!("render");
 
 use crate::Path;
 use anyhow::{bail, Context, Result};
-use macroquad::{miniquad::{gl::{GLuint, GL_RGB, GL_RED, GL_RG}, RenderPass as MQRenderPass, Texture, TextureFormat, TextureParams, TextureWrap}, prelude::*};
+use macroquad::{miniquad::{MipmapFilter, RenderPass as MQRenderPass, Texture, TextureFormat, TextureParams, TextureWrap}, prelude::*, window::miniquad_context};
 use prpr::{
     config::{ChallengeModeColor, Config, Mods},
-    core::{internal_id, MSRenderTarget},
+    core::{MSRenderTarget},
     ext::SafeTexture,
     fs,
     info::ChartInfo,
@@ -17,31 +17,23 @@ use prpr::{
 use sasa::AudioClip;
 use serde::{Deserialize, Serialize};
 use std::{
-    cell::RefCell,
-    collections::VecDeque,
+    cell::{Cell, RefCell},
+    collections::{BTreeMap, VecDeque},
     io::{BufRead, BufWriter, Write},
     ops::DerefMut,
     path::PathBuf,
     process::{Command, Stdio},
     rc::Rc,
     sync::{
-        atomic::{AtomicU64, Ordering},
-        Condvar, Mutex,
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+        mpsc, Condvar, Mutex,
     },
     time::Instant,
 };
 use std::{ffi::OsStr, fmt::Write as _};
 use tempfile::NamedTempFile;
 
-const GL_MAP_PERSISTENT_BIT: u32 = 0x0040;
-const GL_MAP_COHERENT_BIT: u32 = 0x0080;
-const GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT: u32 = 0x00004000;
 const POOL_TARGET_BYTES: usize = 256 << 20;
-
-struct GlExt {
-    buffer_storage: Option<unsafe extern "system" fn(u32, isize, *const std::ffi::c_void, u32)>,
-    memory_barrier: Option<unsafe extern "system" fn(u32)>,
-}
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -144,7 +136,7 @@ impl Default for RenderConfig {
             player_avatar: None,
             player_name: "".to_string(),
             player_rks: 15.0,
-            sample_count: 1,
+            sample_count: 4,
             res_pack_path: None,
             speed: 1.0,
             volume_music: 1.0,
@@ -241,6 +233,16 @@ struct FramePipeline {
     free_cv: Condvar,
     jobq: Mutex<(VecDeque<usize>, bool)>, // (queue, stopped)
     jobq_cv: Condvar,
+    /// How often / how long the render thread had to wait for a free buffer.
+    acquire_blocks: AtomicU64,
+    acquire_wait_ns: AtomicU64,
+    acquire_max_ns: AtomicU64,
+    /// Deepest writer backlog ever observed, in frames.
+    queue_max: AtomicUsize,
+    /// Time spent inside `write_all` (i.e. blocked on the ffmpeg pipe).
+    write_ns: AtomicU64,
+    write_count: AtomicU64,
+    write_max_ns: AtomicU64,
 }
 
 struct EncoderAvailability {
@@ -434,11 +436,8 @@ pub(crate) fn cmd_hidden(program: impl AsRef<OsStr>) -> Command {
     cmd
 }
 
-const GL_PACK_ALIGNMENT: u32 = 0x0D05;
-
-
-pub fn drain_stderr<R>(mut stderr: R) -> std::thread::JoinHandle<String>
-where
+/// Bind a loopback TCP listener for the raw video input.
+pub fn drain_stderr<R>(mut stderr: R) -> std::thread::JoinHandle<String>where
     R: std::io::Read + Send + 'static,
 {
     const LIMIT: usize = 64 * 1024;
@@ -597,20 +596,21 @@ pub fn find_ffmpeg() -> Result<Option<String>> {
 
 
 pub(crate) fn new_plane(w: u32, h: u32, format: TextureFormat) -> RenderTarget {
-    let gl = unsafe { get_internal_gl() };
+    let quad_context = miniquad_context();
     let texture = Texture::new_render_texture(
-        gl.quad_context,
+        quad_context,
         TextureParams {
             width: w,
             height: h,
             format,
-            filter: FilterMode::Linear,
+            filter: FilterMode::Nearest,
             wrap: TextureWrap::Clamp,
+            mipmap_filter: MipmapFilter::None,
         },
     );
     RenderTarget {
         texture: Texture2D::from_miniquad_texture(texture),
-        render_pass: MQRenderPass::new(gl.quad_context, texture, None),
+        render_pass: MQRenderPass::new(quad_context, texture, None),
     }
 }
 
@@ -626,73 +626,33 @@ fn yuv_material(fragment: &str) -> Result<Material> {
     )
     .map_err(|e| anyhow::anyhow!("{e:?}"))
 }
+
 struct YuvTarget {
-    outputs: Vec<RenderTarget>,
-    materials: Vec<Material>,
-    planar: bool,
+    y: RenderTarget,
+    uv: RenderTarget,
+    y_material: Material,
+    uv_material: Material,
+    y_index: usize,
+    uv_index: usize,
 }
 
 impl YuvTarget {
-    fn new(w: u32, h: u32, planar: bool) -> Result<Self> {
-        let hd = h > 576;
-        let mut outputs = vec![new_plane(w, h, TextureFormat::Alpha)];
-        let mut materials = vec![yuv_material(&yuv_shader::y(hd)).context("failed to compile Y plane shader")?];
-        if planar {
-            outputs.push(new_plane(w / 2, h / 2, TextureFormat::Alpha));
-            materials.push(yuv_material(&yuv_shader::u(hd)).context("failed to compile U plane shader")?);
-            outputs.push(new_plane(w / 2, h / 2, TextureFormat::Alpha));
-            materials.push(yuv_material(&yuv_shader::v(hd)).context("failed to compile V plane shader")?);
-        } else {
-            outputs.push(new_plane(w / 2, h / 2, TextureFormat::LuminanceAlpha));
-            materials.push(yuv_material(&yuv_shader::uv(hd)).context("failed to compile UV plane shader")?);
-        }
+    fn new(w: u32, h: u32) -> Result<Self> {
+        let y = new_plane(w, h, TextureFormat::Alpha);
+        let uv = new_plane(w / 2, h / 2, TextureFormat::LuminanceAlpha);
         Ok(Self {
-            outputs,
-            materials,
-            planar,
+            y_index: y.texture.raw_miniquad_texture_handle().gl_internal_id() as usize,
+            uv_index: uv.texture.raw_miniquad_texture_handle().gl_internal_id() as usize,
+            y,
+            uv,
+            y_material: yuv_material(&yuv_shader::Y)?,
+            uv_material: yuv_material(&yuv_shader::UV)?,
         })
     }
 
-    fn plane_layout(&self, w: i32, h: i32) -> Vec<(GLuint, usize, i32, i32, u32)> {
-        let (cw, ch) = (w / 2, h / 2);
-        let y = (
-            internal_id(&self.outputs[0]),
-            (w * h) as usize,
-            w,
-            h,
-            GL_RED,
-        );
-        if self.planar {
-            let c = |i: usize| {
-                (
-                    internal_id(&self.outputs[i]),
-                    (cw * ch) as usize,
-                    cw,
-                    ch,
-                    GL_RED,
-                )
-            };
-            vec![y, c(1), c(2)]
-        } else {
-            vec![
-                y,
-                (
-                    internal_id(&self.outputs[1]),
-                    (cw * ch * 2) as usize,
-                    cw,
-                    ch,
-                    GL_RG,
-                ),
-            ]
-        }
-    }
-
     fn convert(&self, src: &RenderTarget) {
-        unsafe { get_internal_gl() }.flush();
-        for m in &self.materials {
-            m.set_texture("tex", src.texture);
-        }
-
+        self.y_material.set_texture("tex", src.texture);
+        self.uv_material.set_texture("tex", src.texture);
         let vertices = [
             Vertex::new(-1., -1., 0., 0., 0., WHITE),
             Vertex::new(1., -1., 0., 1., 0., WHITE),
@@ -700,28 +660,46 @@ impl YuvTarget {
             Vertex::new(1., 1., 0., 1., 1., WHITE),
         ];
         let indices = [0u16, 2, 3, 0, 1, 3];
-        let prev_viewport = unsafe { get_internal_gl() }.quad_gl.get_viewport();
-
-        for (material, target) in self.materials.iter().zip(self.outputs.iter()) {
+        let previous = unsafe { get_internal_gl() }.quad_gl.get_viewport();
+        for (material, target) in [(&self.y_material, &self.y), (&self.uv_material, &self.uv)] {
             gl_use_material(*material);
             let quad = unsafe { get_internal_gl() }.quad_gl;
+            quad.scissor(None);
             quad.viewport(None);
             quad.render_pass(Some(target.render_pass));
             quad.draw_mode(DrawMode::Triangles);
             quad.geometry(&vertices, &indices);
+            unsafe { get_internal_gl() }.flush();
             gl_use_default_material();
         }
-
         let quad = unsafe { get_internal_gl() }.quad_gl;
         quad.render_pass(Some(src.render_pass));
-        quad.viewport(prev_viewport);
-        unsafe { get_internal_gl() }.flush();
+        quad.viewport(previous);
     }
+}
+
+struct SendVideoContext(crate::vulkan_video::VideoContext);
+unsafe impl Send for SendVideoContext {}
+
+struct VulkanPipe {
+    job_tx: mpsc::Sender<(u64, usize)>,
+    nv12_raw: Vec<u64>,
+    free: VecDeque<usize>,
+    free_rx: mpsc::Receiver<usize>,
+}
+
+struct Nv12Pipe {
+    readback: crate::vulkan_readback::Nv12Readback,
+    free: VecDeque<usize>,
+    ptrs: Vec<usize>,
+    frame_bytes: usize,
+    pending: [Option<(u64, usize)>; 2],
+    current_read: Option<usize>,
 }
 
 impl FramePipeline {
     fn new(frame_size: usize) -> Self {
-        let pool_size = (POOL_TARGET_BYTES / frame_size).clamp(8, 32);
+        let pool_size = (POOL_TARGET_BYTES / frame_size.max(1)).clamp(8, 32);
         Self {
             pool: (0..pool_size).map(|_| vec![0u8; frame_size]).collect(),
             pool_addrs: Vec::new(),
@@ -729,6 +707,16 @@ impl FramePipeline {
             free_cv: Condvar::new(),
             jobq: Mutex::new((VecDeque::new(), false)),
             jobq_cv: Condvar::new(),
+
+            acquire_blocks: AtomicU64::new(0),
+            acquire_wait_ns: AtomicU64::new(0),
+            acquire_max_ns: AtomicU64::new(0),
+
+            queue_max: AtomicUsize::new(0),
+
+            write_ns: AtomicU64::new(0),
+            write_count: AtomicU64::new(0),
+            write_max_ns: AtomicU64::new(0),
         }
     }
 
@@ -738,10 +726,18 @@ impl FramePipeline {
 
     fn acquire_buf(&self) -> usize {
         let mut free = self.free_pool.lock().unwrap();
+        let mut wait_start: Option<Instant> = None;
         loop {
             if let Some(idx) = free.pop() {
+                if let Some(start) = wait_start {
+                    let d = start.elapsed().as_nanos() as u64;
+                    self.acquire_blocks.fetch_add(1, Ordering::Relaxed);
+                    self.acquire_wait_ns.fetch_add(d, Ordering::Relaxed);
+                    self.acquire_max_ns.fetch_max(d, Ordering::Relaxed);
+                }
                 return idx;
             }
+            wait_start.get_or_insert_with(Instant::now);
             free = self.free_cv.wait(free).unwrap();
         }
     }
@@ -752,7 +748,11 @@ impl FramePipeline {
     }
 
     fn push_job(&self, idx: usize) {
-        self.jobq.lock().unwrap().0.push_back(idx);
+        let mut jobq = self.jobq.lock().unwrap();
+        jobq.0.push_back(idx);
+        let queued = jobq.0.len();
+        drop(jobq);
+        self.queue_max.fetch_max(queued, Ordering::Relaxed);
         self.jobq_cv.notify_one();
     }
 
@@ -775,8 +775,57 @@ impl FramePipeline {
     }
 }
 
+/// Parse an ffmpeg-style bitrate (`8000k`, `8M`, `8000kbps`, or plain bits/s)
+fn parse_bitrate_bps(raw: &str) -> Option<f64> {
+    let s = raw.trim().to_ascii_lowercase().replace(' ', "");
+    if s.is_empty() {
+        return None;
+    }
+    let (num, mult) = if let Some(v) = s.strip_suffix("kbps") {
+        (v, 1e3)
+    } else if let Some(v) = s.strip_suffix("mbps") {
+        (v, 1e6)
+    } else if let Some(v) = s.strip_suffix('k') {
+        (v, 1e3)
+    } else if let Some(v) = s.strip_suffix('m') {
+        (v, 1e6)
+    } else {
+        (s.as_str(), 1.0)
+    };
+    let num: f64 = num.parse().ok()?;
+    (num > 0.0).then_some(num * mult)
+}
+
+fn encoder_qp(config: &RenderConfig, width: u32, height: u32) -> u8 {
+    let is_cbr = config.bitrate_control.eq_ignore_ascii_case("CBR");
+    if is_cbr {
+        if let Some(bps) = parse_bitrate_bps(&config.bitrate) {
+            let pixels = width as f64 * height as f64 * config.fps.max(1) as f64;
+            let bpp = bps / pixels.max(1.0);
+            let qp = 28.0 - 6.0 * (bpp / 0.040).log2();
+            return qp.round().clamp(1.0, 51.0) as u8;
+        }
+        warn!(
+            "Invalid CBR bitrate '{}', falling back to QP 28",
+            config.bitrate
+        );
+        return 28;
+    }
+    let crf = config
+        .bitrate
+        .trim()
+        .parse::<f64>()
+        .unwrap_or(28.0)
+        .round();
+    crf.clamp(1.0, 51.0) as u8
+}
+
+const KEYFRAME_INTERVAL_SECS: u32 = 2;
+
 pub async fn main() -> Result<()> {
     use crate::ipc::client::*;
+
+    let process_start = Instant::now();
 
     set_pc_assets_folder(&std::env::args().nth(2).unwrap());
 
@@ -805,6 +854,7 @@ pub async fn main() -> Result<()> {
 
     let mut config = params.config.to_config();
     config.mods = Mods::AUTOPLAY;
+    config.interactive = false;
 
     let info = params.info;
 
@@ -826,13 +876,6 @@ pub async fn main() -> Result<()> {
     let sfx_flick = ld!("flick.ogg");
 
 
-    let gl = unsafe { get_internal_gl() };
-
-    if std::env::var("DX_SELFTEST").is_ok() {
-        crate::zerocopy::probe_zero_copy_support();
-        crate::zerocopy::probe_dx_interop(&params.config.video_codec);
-    }
-
     let volume_music = std::mem::take(&mut config.volume_music);
     let volume_sfx = std::mem::take(&mut config.volume_sfx);
 
@@ -841,9 +884,21 @@ pub async fn main() -> Result<()> {
     let offset = chart.offset.max(0.);
 
     let render_start_time = Instant::now();
+    info!(
+        "setup chart + audio load: {:.3}s",
+        process_start.elapsed().as_secs_f64()
+    );
+    let mut phase = render_start_time;
+    macro_rules! mark {
+        ($name:literal) => {{
+            let d = phase.elapsed().as_secs_f64();
+            info!("setup {}: {:.3}s", $name, d);
+            phase = Instant::now();
+            d
+        }};
+    }
 
     send(IPCEvent::StartMixing);
-    let mixing_output = NamedTempFile::new()?;
     let target_sample_rate = params.config.target_audio;
     let sample_rate = 44100;
     let sample_rate_f64 = sample_rate as f64;
@@ -969,6 +1024,7 @@ pub async fn main() -> Result<()> {
     while place(pos, &ending, volume_music) != 0 && params.config.ending_length > 0.1 {
         pos += ending.frame_count() as f64 / sample_rate_f64;
     }
+    let mixing_s = mark!("mixing");
 
     let audio_bit = params.config.audio_bit;
     let audio_format = params.config.audio_format.to_lowercase();
@@ -991,19 +1047,25 @@ pub async fn main() -> Result<()> {
         { return Err(anyhow::anyhow!("PCM audio bit depth requires WAV format, but {} was specified", audio_format)); }
     }
 
-    let (audio_codec, output_format) = if let Some(bit) = audio_bit {
-        (format!("pcm_f{}le", bit), "wav".to_string())
+    let (audio_mux_args, output_format) = if let Some(bit) = audio_bit {
+        (
+            format!("-c:a pcm_f{}le", bit),
+            "wav".to_string(),
+        )
     } else {
         match audio_format.as_str()
         {
-            "flac" => ("flac".to_string(), "flac".to_string()),
-            "mp3" => ("libmp3lame".to_string(), "mp3".to_string()),
-            "aac" => ("aac".to_string(), "mp4".to_string()),
-            "opus" => ("libopus".to_string(), "opus".to_string()),
-            "wav" => ("pcm_f16le".to_string(), "wav".to_string()),
+            "flac" => (
+                "-c:a flac -sample_fmt s32 -bits_per_raw_sample 24 -strict -2".to_string(),
+                "flac".to_string(),
+            ),
+            "mp3" => ("-c:a libmp3lame".to_string(), "mp3".to_string()),
+            "aac" => ("-c:a aac".to_string(), "mp4".to_string()),
+            "opus" => ("-c:a libopus".to_string(), "opus".to_string()),
+            "wav" => ("-c:a pcm_f16le".to_string(), "wav".to_string()),
             _ => {
                 warn!("Unknown audio format '{}', using AAC/MP4 as default", audio_format);
-                ("aac".to_string(), "mp4".to_string())
+                ("-c:a aac".to_string(), "mp4".to_string())
             }
         }
     };
@@ -1011,24 +1073,26 @@ pub async fn main() -> Result<()> {
     let args_str = if target_sample_rate != sample_rate {
         let resample_filter = format!("aresample=resampler=soxr:precision=33:osr={}:dither_method=triangular", target_sample_rate);
         format!(
-            "-y -f f32le -ar {} -ac 2 -i - -af {} -c:a {} -f {}",
+            "-y -f f32le -ar {} -ac 2 -i - -af {} {} -f {}",
             sample_rate,
             resample_filter,
-            audio_codec,
+            audio_mux_args,
             output_format
         )
     } else {
         format!(
-            "-y -f f32le -ar {} -ac 2 -i - -c:a {} -f {}",
+            "-y -f f32le -ar {} -ac 2 -i - {} -f {}",
             sample_rate,
-            audio_codec,
+            audio_mux_args,
             output_format
         )
     };
 
+    let audio_suffix = format!(".{output_format}");
+    let audio_output_file = NamedTempFile::with_suffix(&audio_suffix)?;
     let mut proc = cmd_hidden(&ffmpeg)
         .args(args_str.split_whitespace())
-        .arg(mixing_output.path())
+        .arg(audio_output_file.path())
         .arg("-loglevel")
         .arg("warning")
         .stdin(Stdio::piped())
@@ -1042,12 +1106,17 @@ pub async fn main() -> Result<()> {
         writer.write_all(&sample.to_le_bytes())?;
     }
     drop(writer);
-    proc.wait()?;
+    let audio_status = proc.wait()?;
     if let Ok(text) = audio_stderr.join() {
         if !text.trim().is_empty() {
             warn!("[ffmpeg:audio]\n{}", text);
         }
     }
+    if !audio_status.success() {
+        bail!("audio encoding failed: {audio_status}");
+    }
+    let audio_s = mark!("audio encode + resample");
+
 
 
     let target_aspect = info.aspect_ratio as f64;
@@ -1064,12 +1133,91 @@ pub async fn main() -> Result<()> {
         info!("{}x{} -> {}x{} (target {:.9})", ow, oh, vw, vh, target_aspect);
     }
 
-    let mst = Rc::new(MSRenderTarget::new((vw, vh), config.sample_count));
+    let qp = encoder_qp(&params.config, vw, vh);
+    // The Rust Vulkan encoder implements H.264 only, so the existing
+    // "Hardware Encoder", "Video Codec" and "Hardware Acceleration" controls
+    // decide whether it is used at all.  Other selections keep using the
+    // ffmpeg encoder path.
+    let want_vulkan_video = params.config.hardware_accel
+        && params.config.video_codec == "h264"
+        && matches!(params.config.encoder.as_str(), "auto" | "vulkan");
+    let mut video_context = if want_vulkan_video {
+        crate::vulkan_video::VideoContext::new(vw, vh, qp, 16)
+    } else {
+        None
+    };
+    let vulkan_video = video_context.is_some();
+    if want_vulkan_video && !vulkan_video {
+        warn!("Rust Vulkan encoder unavailable; falling back to the ffmpeg encoder");
+    }
+    info!(
+        "Vulkan Video H.264: {} ({} source images, {}x{}, qp={})",
+        if vulkan_video { "enabled" } else { "disabled" },
+        video_context
+            .as_ref()
+            .map(|context| context.source_count())
+            .unwrap_or(0),
+        vw,
+        vh,
+        qp
+    );
+    if want_vulkan_video {
+        if params.config.bitrate_control.eq_ignore_ascii_case("CBR") {
+            info!(
+                "Vulkan encoder is constant-QP: CBR target '{}' mapped to qp={}",
+                params.config.bitrate, qp
+            );
+        } else {
+            info!(
+                "Vulkan encoder quality: CRF {} -> qp={}",
+                params.config.bitrate, qp
+            );
+        }
+    }
+
+    let yuv_count = if !vulkan_video && vw % 2 == 0 && vh % 2 == 0 {
+        2
+    } else {
+        1
+    };
+    let yuvs: Vec<YuvTarget> = (0..yuv_count)
+        .filter_map(|_| YuvTarget::new(vw, vh).ok())
+        .collect();
+    let mut ffmpeg_nv12 = if !vulkan_video && yuvs.len() == 2 {
+        match crate::vulkan_readback::Nv12Readback::new(vw, vh, 8) {
+            Some(readback) => {
+                info!(
+                    "ffmpeg NV12: Vulkan async readback, {} slots, {:.2} MB/frame",
+                    readback.slot_count(),
+                    readback.frame_size() as f64 / 1048576.0
+                );
+                Some(readback)
+            }
+            None => {
+                warn!(
+                    "ffmpeg NV12: readback ring creation failed, falling back to RGBA readback"
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let nv12_mode = ffmpeg_nv12.is_some();
+    let mst_count = if nv12_mode { 2 } else { 1 };
+    let msts: Vec<Rc<MSRenderTarget>> = (0..mst_count)
+        .map(|_| Rc::new(MSRenderTarget::new((vw, vh), config.sample_count)))
+        .collect();
+    let mst_slot = Rc::new(Cell::new(0usize));
     let my_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.));
     let tm = TimeManager::manual(Box::new({
         let my_time = Rc::clone(&my_time);
         move || *(*my_time).borrow()
     }));
+    if nv12_mode && !crate::vulkan_readback::enable_offscreen_video() {
+        bail!("failed to enable the Vulkan offscreen video mode");
+    }
+    mark!("offscreen/readback setup");
     //static MSAA: AtomicBool = AtomicBool::new(false);
     let player = build_player(&params.config).await?;
     let mut main = Main::new(
@@ -1078,23 +1226,18 @@ pub async fn main() -> Result<()> {
         ),
         tm,
         {
-            //let mut cnt = 0;
-            let mst = Rc::clone(&mst);
-            //move || {
-            //    cnt += 1;
-           //     if cnt % 2 == 1 {
-            //        MSAA.store(true, Ordering::SeqCst);
-            //        Some(mst.input())
-            //    } else {
-            //        MSAA.store(false, Ordering::SeqCst);
-            //        Some(mst.output())
-            //    }
-            move || Some(mst.input())
+            let msts = Rc::new(msts.iter().cloned().collect::<Vec<_>>());
+            let mst_slot = Rc::clone(&mst_slot);
+            move || Some(msts[mst_slot.get()].input())
         },
     )
         .await?;
     main.top_level = false;
     main.viewport = Some((0, 0, vw as _, vh as _));
+
+    *my_time.borrow_mut() = 0.;
+    main.update()?;
+    mark!("player + scene load");
 
     const O: f64 = LoadingScene::TOTAL_TIME as f64 + GameScene::BEFORE_TIME as f64;
     const A: f64 = 1.0;
@@ -1103,9 +1246,15 @@ pub async fn main() -> Result<()> {
     let frames = (video_length * fps as f64).ceil() as u64;
     let out_frames = frames.saturating_sub(skip);
     send(IPCEvent::StartRender(out_frames));
-    
+
+    static VULKAN_PROBE_LOCK: Mutex<()> = Mutex::new(());
 
     fn test_encoder(ffmpeg: &Path, encoder: &str) -> Result<(bool, String)> {
+        let _vulkan_guard = if encoder.ends_with("_vulkan") {
+            Some(VULKAN_PROBE_LOCK.lock().unwrap_or_else(|e| e.into_inner()))
+        } else {
+            None
+        };
         let mut cmd = Command::new(ffmpeg);
 
         if encoder.ends_with("_vulkan") {
@@ -1274,6 +1423,11 @@ pub async fn main() -> Result<()> {
     };
     let mut hw_errors: Vec<String> = hw_errors;
     for v in vendors {
+        // The built-in Vulkan encoder produces the stream itself; probing
+        // ffmpeg's encoders would only mislabel the run and waste ~0.5s.
+        if vulkan_video {
+            break;
+        }
         if !vendor_detected(v[0]) {
             continue;
         }
@@ -1405,11 +1559,13 @@ pub async fn main() -> Result<()> {
             }
         }
     }
-    if let Ok((ok, err)) = test_encoder(ffmpeg.as_ref(), "libsvtav1") {
-        encoder_availability.av1_svt = ok;
-        if !ok {
-            hw_errors.push(format!("libsvtav1 test failed:
+    if !vulkan_video {
+        if let Ok((ok, err)) = test_encoder(ffmpeg.as_ref(), "libsvtav1") {
+            encoder_availability.av1_svt = ok;
+            if !ok {
+                hw_errors.push(format!("libsvtav1 test failed:
 {}", err.trim()));
+            }
         }
     }
 
@@ -1437,6 +1593,7 @@ pub async fn main() -> Result<()> {
     };
 
     let want_dx = params.config.hardware_accel
+        && !vulkan_video
         && match encoder_type {
             "dx12" => true,
             "auto" => !any_vendor_hw,
@@ -1543,6 +1700,7 @@ pub async fn main() -> Result<()> {
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
+                    ("av1_vulkan", encoder_availability.av1_vulkan, &mut encoder_availability.av1_vulkan),
                     ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
@@ -1550,6 +1708,7 @@ pub async fn main() -> Result<()> {
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
+                    ("av1_vulkan", encoder_availability.av1_vulkan, &mut encoder_availability.av1_vulkan),
                     ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
@@ -1557,10 +1716,12 @@ pub async fn main() -> Result<()> {
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
+                    ("av1_vulkan", encoder_availability.av1_vulkan, &mut encoder_availability.av1_vulkan),
                     ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
                 "vulkan" => vec![
+                    ("av1_vulkan", encoder_availability.av1_vulkan, &mut encoder_availability.av1_vulkan),
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
@@ -1572,11 +1733,11 @@ pub async fn main() -> Result<()> {
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
                 _ => vec![
-                    ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
                     ("av1_nvenc", encoder_availability.av1_nvenc, &mut encoder_availability.av1_nvenc),
                     ("av1_qsv", encoder_availability.av1_qsv, &mut encoder_availability.av1_qsv),
                     ("av1_amf", encoder_availability.av1_amf, &mut encoder_availability.av1_amf),
                     ("av1_vulkan", encoder_availability.av1_vulkan, &mut encoder_availability.av1_vulkan),
+                    ("libsvtav1", encoder_availability.av1_svt, &mut encoder_availability.av1_svt),
                     ("libaom-av1", true, &mut dummy_flag),
                 ],
             }
@@ -1640,6 +1801,9 @@ pub async fn main() -> Result<()> {
         ffmpeg_encoder = enc.name;
     }
 
+    if vulkan_video {
+        info!("  (encoder probing skipped: the built-in Vulkan Video encoder produces the stream)");
+    }
     info!(
     "=== Encoder Selection ===\n\
      Video codec: {}\n\
@@ -1686,7 +1850,12 @@ pub async fn main() -> Result<()> {
             info!("    {}", error);
         }
     }
-    info!("  Selected encoder: {}", ffmpeg_encoder);
+    info!("  Selected encoder: {}", if vulkan_video {
+        "Vulkan Video H.264 (built-in; ffmpeg only remuxes with -c:v copy)"
+    } else {
+        ffmpeg_encoder
+    });
+    let probe_s = mark!("encoder probe");
     if ffmpeg_encoder == "libsvtav1"
         && encoder_type == "auto"
         && (encoder_availability.av1_nvenc
@@ -1697,7 +1866,7 @@ pub async fn main() -> Result<()> {
         info!(
             "  Note: AV1 uses the CPU encoder (SVT-AV1) because hardware AV1 quality is clearly weaker."
         );
-        info!("  Note: it is much slower — select the nvenc/amf encoder explicitly if you want speed.");
+        info!("  Note: it is much slower 閳?select the nvenc/amf encoder explicitly if you want speed.");
     }
     info!("=========================");
 
@@ -1786,7 +1955,9 @@ pub async fn main() -> Result<()> {
             .to_string(),
     };
 
-    if ffmpeg_encoder.ends_with("_vulkan") {
+    if vulkan_video {
+        info!("  Speed preset: (built-in Vulkan Video encoder; the ffmpeg preset is not used)");
+    } else if ffmpeg_encoder.ends_with("_vulkan") {
         info!("  Speed preset: (vulkan encoder takes no preset, ignoring the configured one)");
     } else {
         info!("  Speed preset: {} {}", ffmpeg_preset, ffmpeg_preset_name);
@@ -1827,12 +1998,16 @@ pub async fn main() -> Result<()> {
             encoder_availability.av1_vulkan,
         );
 
-        let codec_unsupported = match params.config.video_codec.as_str() {
-            "h264" => !h264_supported,
-            "hevc" => !hevc_supported,
-            "av1"  => !av1_supported,
-            _ => false,
-        };
+        // The built-in Vulkan Video encoder is the hardware encoder here; the
+        // ffmpeg probes above were skipped on purpose, so do not treat their
+        // empty result as "no hardware acceleration".
+        let codec_unsupported = !vulkan_video
+            && match params.config.video_codec.as_str() {
+                "h264" => !h264_supported,
+                "hevc" => !hevc_supported,
+                "av1" => !av1_supported,
+                _ => false,
+            };
 
         if codec_unsupported {
             let yesno = |b: bool| if b { "SUCCESS" } else { "FAILED" };
@@ -1888,65 +2063,57 @@ pub async fn main() -> Result<()> {
     }
 
 
-    let gpu_yuv = params.config.gpu_yuv
-        && std::env::var("RGB24_READBACK").is_err() //test
-        && vw % 2 == 0
-        && vh % 2 == 0;
-
-    let planar = matches!(
-        ffmpeg_encoder,
-        "libx265" | "libsvtav1" | "libaom-av1" | "librav1e"
-    );
-
-    let oa = 1048576.; // 1024*1024
-    let nv12 = if gpu_yuv {
-        match YuvTarget::new(vw, vh, planar) {
-            Ok(target) => {
-                info!(
-                    "GPU YUV: enabled (shader outputs {}, {:.2} MB/frame, was {:.2} MB/frame)",
-                    if planar { "YUV420P planar" } else { "NV12" },
-                    (vw as f64 * vh as f64 * 1.5) / oa,
-                    (vw as f64 * vh as f64 * 3.) / oa
-                );
-                Some(target)
-            }
-            Err(err) => {
-                //But the environment using this software must have a GPU (prpr does not support pure CPU rendering).
-                warn!("GPU YUV unavailable, falling back to RGB24 readback: {err:?}");
-                None
-            }
-        }
+    if vulkan_video {
+        info!("Readback: none (Vulkan encoder reads GPU NV12 directly)");
+    } else if nv12_mode {
+        info!(
+            "Readback: Vulkan NV12 {:.2} MB/frame, async ring (no per-frame fence wait)",
+            (vw as f64 * vh as f64 * 1.5) / 1048576.
+        );
     } else {
-        None
-    };
-    let gpu_yuv = nv12.is_some();
+        info!(
+            "Readback: RGBA {:.2} MB/frame, one transfer per frame",
+            (vw as f64 * vh as f64 * 4.) / 1048576.
+        );
+    }
 
+    let video_url = "-".to_owned();
     let global_args = "-y";
     let mut input_args = String::new();
+    if vulkan_video {
+        write!(&mut input_args, "-f h264 -r {fps} -i {video_url} -i")?;
+    } else if nv12_mode {
         write!(
             &mut input_args,
-            "-f rawvideo -c:v rawvideo -s {vw}x{vh} -r {fps} -pix_fmt {}",
-            if gpu_yuv {
-                if planar { "yuv420p" } else { "nv12" }
-            } else {
-                "rgb24"
-            }
+            "-f rawvideo -c:v rawvideo -s {vw}x{vh} -r {fps} -pix_fmt nv12"
         )?;
         if params.config.ffmpeg_thread {
             input_args.push_str(" -thread_queue_size 2048");
         }
-    input_args.push_str(" -i - -i");
-
-    let video = match params.config.video {
-        true => "mov",
-        false => "mp4",
-    };
-
-    let strict_flag = if params.config.audio_format == "flac" && video == "mp4" {
-        "-strict -2 "
+        write!(&mut input_args, " -i {video_url} -i")?;
     } else {
-        ""
+        write!(
+            &mut input_args,
+            "-f rawvideo -c:v rawvideo -s {vw}x{vh} -r {fps} -pix_fmt rgba"
+        )?;
+        if params.config.ffmpeg_thread {
+            input_args.push_str(" -thread_queue_size 2048");
+        }
+        write!(&mut input_args, " -i {video_url} -i")?;
+    }
+
+    let video = if audio_format == "flac" && params.config.video {
+        warn!("FLAC audio is not supported in MOV; muxing into MP4 instead");
+        "mp4"
+    } else if params.config.video {
+        "mov"
+    } else {
+        "mp4"
     };
+
+    let null_sink = std::env::var_os("PHITK_NULL_SINK").is_some();
+    let video_mux = if null_sink { "null" } else { video };
+
     let is_vulkan_encoder = ffmpeg_encoder.ends_with("_vulkan");
     let is_hw_encoder = matches!(
         ffmpeg_encoder,
@@ -1961,20 +2128,20 @@ pub async fn main() -> Result<()> {
             | "av1_amf"
     );
     let dx = dx_selected;
-    let vf_arg = if dx.is_some() {
-        "-vf format=nv12,hwupload".to_owned()
-    } else if gpu_yuv {
-        if is_vulkan_encoder {
+    let vf_arg = if nv12_mode {
+        // The pipe already carries NV12.  Only the GPU-upload encoders need a
+        // filter; software encoders negotiate NV12 directly.
+        if dx.is_some() || is_vulkan_encoder {
             "-vf hwupload".to_owned()
         } else {
             String::new()
         }
-    } else if is_vulkan_encoder {
-        "-vf format=nv12,vflip,hwupload".to_owned()
+    } else if dx.is_some() || is_vulkan_encoder {
+        "-vf format=nv12,hwupload".to_owned()
     } else if is_hw_encoder {
-        "-vf format=nv12,vflip".to_owned()
+        "-vf format=nv12".to_owned()
     } else {
-        "-vf format=yuv420p,vflip".to_owned()
+        "-vf format=yuv420p".to_owned()
     };
 
     let mut out_extra = vf_arg;
@@ -2021,49 +2188,58 @@ pub async fn main() -> Result<()> {
     }
 
     let async_depth = "-async_depth 4"; // the "4" parallel process 4 frames (vulkan encoder)
-    let args2 = if is_vulkan_encoder {
+    let args2 = if null_sink {
+        "-c:v rawvideo -map 0:v:0 -f null".to_string()
+    } else if vulkan_video {
+        let duration = out_frames as f64 / fps.max(1) as f64;
         format!(
-            "-c:a {} -c:v {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} {} -f {}",
-            audio_codec,
-            ffmpeg_encoder,
-            bitrate_control,
-            params.config.bitrate,
-            strict_flag,
-            out_extra,
-            async_depth,
-            video,
+            "{} -c:v copy -map 0:v:0 -map 1:a:0 -t {duration:.6} -f {}",
+            audio_mux_args, video_mux,
         )
-    } else {
+    } else if is_vulkan_encoder {
         format!(
-            "-c:a {} -c:v {} {} {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} -f {}",
-            audio_codec,
+            "{} -c:v {} {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} {} -f {}",
+            audio_mux_args,
             ffmpeg_encoder,
             bitrate_control,
             params.config.bitrate,
             ffmpeg_preset,
             ffmpeg_preset_name,
-            strict_flag,
             out_extra,
-            video,
+            async_depth,
+            video_mux,
+        )
+    } else {
+        format!(
+            "{} -c:v {} {} {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} -f {}",
+            audio_mux_args,
+            ffmpeg_encoder,
+            bitrate_control,
+            params.config.bitrate,
+            ffmpeg_preset,
+            ffmpeg_preset_name,
+            out_extra,
+            video_mux,
         )
     };
 
     let ffmpeg_frames = std::sync::Arc::new(AtomicU64::new(0));
+    info!("ffmpeg video args: {}", args2);
     let mut proc = {
         let mut cmd = cmd_hidden(&ffmpeg);
         cmd.args(global_args.split_whitespace());
         cmd.args(["-progress", "pipe:2", "-nostats"]);
-        if is_vulkan_encoder {
+        if is_vulkan_encoder && !vulkan_video {
             cmd.arg("-init_hw_device").arg("vulkan=vk")
                .arg("-filter_hw_device").arg("vk");
-        } else if let Some(enc) = &dx {
+        } else if let Some(enc) = dx.as_ref().filter(|_| !vulkan_video) {
             cmd.arg("-init_hw_device")
                 .arg(format!("{}={}", enc.hw, DX_DEVICE))
                 .arg("-filter_hw_device")
                 .arg(DX_DEVICE);
         }
         cmd.args(input_args.split_whitespace())
-            .arg(mixing_output.path())
+            .arg(audio_output_file.path())
             .args(args2.split_whitespace())
             .arg(output_path)
             .arg("-loglevel")
@@ -2075,210 +2251,203 @@ pub async fn main() -> Result<()> {
     };
 
 
-    let video_stderr =
-        drain_stderr_with_progress(proc.stderr.take().unwrap(), ffmpeg_frames.clone());
+    let video_stderr = drain_stderr_with_progress(proc.stderr.take().unwrap(), ffmpeg_frames.clone());
 
-    struct Plane {
-        pbos: Vec<GLuint>,
-        // Persistent-coherent mapping per slot (null => per-frame map/unmap).
-        mapped: Vec<*mut u8>,
-        fbo: GLuint,
-        size: usize,
-        w: i32,
-        h: i32,
-        format: u32,
-    }
+    let frame_size = vw as usize * vh as usize * 4;
 
-    const PBO_COUNT: usize = 6;
-    let n = PBO_COUNT.min(fps as usize).max(2);
+    let mut ffmpeg_stdin = Some(proc.stdin.take().unwrap());
+    let keyframe_interval = (fps.saturating_mul(KEYFRAME_INTERVAL_SECS)).max(1) as u64;
 
-    let plane_specs: Vec<(GLuint, usize, i32, i32, u32)> = if let Some(yuv) = &nv12 {
-        yuv.plane_layout(vw as i32, vh as i32)
-    } else {
-        vec![(
-            internal_id(&mst.output()),
-            vw as usize * vh as usize * 3,
-            vw as i32,
-            vh as i32,
-            GL_RGB,
-        )]
-    };
+    let (mut vulkan_pipe, pipeline, writer, encoder_thread, mut nv12_pipe, nv12_pipeline) =
+        if let Some(context) = video_context.take() {
+            let nv12_raw = (0..context.source_count())
+                .map(|slot| context.nv12_raw(slot))
+                .collect::<Vec<_>>();
 
-    fn get_gl_proc(name: &str) -> Option<*const std::ffi::c_void> {
-        #[cfg(windows)]
-        {
-            let c = match std::ffi::CString::new(name) {
-                Ok(c) => c,
-                Err(_) => return None,
-            };
-            let proc = unsafe {
-                windows::Win32::Graphics::OpenGL::wglGetProcAddress(windows::core::PCSTR(
-                    c.as_ptr() as *const u8,
-                ))
-            };
-            let f = proc?;
-            let addr = f as usize as isize;
-            // Some drivers return 1..=3 / -1 instead of null when missing.
-            if addr == -1 || (0..=3).contains(&addr) {
-                return None;
-            }
-            Some(f as *const () as *const std::ffi::c_void)
-        }
-        #[cfg(not(windows))]
-        {
-            let _ = name;
-            None
-        }
-    }
-    let gl_ext = GlExt {
-        buffer_storage: get_gl_proc("glBufferStorage")
-            .map(|p| unsafe { std::mem::transmute(p) }),
-        memory_barrier: get_gl_proc("glMemoryBarrier").map(|p| unsafe { std::mem::transmute(p) }),
-    };
-    let persistent = gl_ext.buffer_storage.is_some() && gl_ext.memory_barrier.is_some();
+            let slot_count = nv12_raw.len();
+            let (job_tx, job_rx) = mpsc::channel::<(u64, usize)>();
+            let (result_tx, result_rx) = mpsc::channel::<(u64, Option<Vec<u8>>)>();
+            let (free_tx, free_rx) = mpsc::channel::<usize>();
+            let context = SendVideoContext(context);
 
-    let mut planes: Vec<Plane> = Vec::with_capacity(plane_specs.len());
-    unsafe {
-        use miniquad::gl::*;
-        for (fbo, size, w, h, format) in plane_specs {
-            let mut pbos: Vec<GLuint> = vec![0; n];
-            glGenBuffers(n as _, pbos.as_mut_ptr());
-            let mut mapped: Vec<*mut u8> = vec![std::ptr::null_mut(); n];
-            for (i, pbo) in pbos.iter().enumerate() {
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
-                let mut used_storage = false;
-                if persistent {
-                    (gl_ext.buffer_storage.unwrap())(
-                        GL_PIXEL_PACK_BUFFER,
-                        size as _,
-                        std::ptr::null(),
-                        GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT,
-                    );
-                    let p = glMapBufferRange(
-                        GL_PIXEL_PACK_BUFFER,
-                        0,
-                        size as _,
-                        GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT,
-                    );
-                    if !p.is_null() {
-                        mapped[i] = p as *mut u8;
-                        used_storage = true;
+            let encoder_thread = std::thread::Builder::new()
+                .name("vulkan-encode".to_owned())
+                .spawn(move || {
+                    let mut context = context.0;
+                    for (index, slot) in job_rx {
+                        while context.encoded_in_flight() >= 2 {
+                            if let Some((frame_index, data, source_slot)) =
+                                context.collect_encoded()
+                            {
+                                result_tx.send((frame_index, Some(data))).ok();
+                                free_tx.send(source_slot).ok();
+                            } else {
+                                break;
+                            }
+                        }
+                        let force_keyframe = index % keyframe_interval == 0;
+                        if context
+                            .submit_encode_slot(slot, index, force_keyframe)
+                            .is_none()
+                        {
+                            result_tx.send((index, None)).ok();
+                            free_tx.send(slot).ok();
+                        }
                     }
-                }
-                if !used_storage {
-                    glBufferData(GL_PIXEL_PACK_BUFFER, size as _, std::ptr::null(), GL_STREAM_READ);
-                }
-            }
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-            planes.push(Plane {
-                pbos,
-                mapped,
-                fbo,
-                size,
-                w,
-                h,
-                format,
-            });
-        }
-    }
-    let frame_size: usize = planes.iter().map(|p| p.size).sum();
-    //info!(
-    //    "Using {} PBOs per plane, {} plane(s), {} bytes/frame, {} mapping",
-    //    n,
-    //    planes.len(),
-    //    frame_size,
-    //    if persistent {
-    //        "persistent-coherent"
-    //    } else {
-    //        "per-frame map/unmap"
-    //    }
-    //);
+                    while let Some((frame_index, data, source_slot)) = context.collect_encoded()
+                    {
+                        result_tx.send((frame_index, Some(data))).ok();
+                        free_tx.send(source_slot).ok();
+                    }
+                })
+                .context("failed to spawn Vulkan encoder thread")?;
+            let mut stdin = ffmpeg_stdin.take().unwrap();
 
-    let mut pipeline = FramePipeline::new(frame_size);
-    pipeline.finish_init();
-    let pipeline = std::sync::Arc::new(pipeline);
-    let mut ffmpeg_stdin = proc.stdin.take().unwrap();
-    let writer = {
-        let pipeline = std::sync::Arc::clone(&pipeline);
-        std::thread::Builder::new()
-            .name("ffmpeg-writer".to_owned())
-            .spawn(move || -> std::io::Result<u64> {
-                let mut busy: u64 = 0;
-                while let Some(buf) = pipeline.pop_job() {
+            let writer = std::thread::Builder::new()
+                .name("ffmpeg-writer".to_owned())
+                .spawn(move || -> std::io::Result<u64> {
+                    let mut busy: u64 = 0;
+                    let mut next = 0u64;
+                    let mut pending = BTreeMap::new();
+                    while let Ok((index, data)) = result_rx.recv() {
+                        let Some(data) = data else {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::Other,
+                                "Vulkan encoder produced no bitstream",
+                            ));
+                        };
+                        pending.insert(index, data);
+                        while let Some(data) = pending.remove(&next) {
+                            let t = Instant::now();
+                            stdin.write_all(&data)?;
+                            busy += t.elapsed().as_nanos() as u64;
+                            next += 1;
+                        }
+                    }
                     let t = Instant::now();
-                    ffmpeg_stdin.write_all(&pipeline.pool[buf])?;
+                    stdin.flush()?;
                     busy += t.elapsed().as_nanos() as u64;
-                    pipeline.release_buf(buf);
-                }
-                let t = Instant::now();
-                ffmpeg_stdin.flush()?;
-                busy += t.elapsed().as_nanos() as u64;
-                Ok(busy)
-            })
-            .context("failed to spawn ffmpeg writer thread")?
-    };
+                    Ok(busy)
+                })
+                .context("failed to spawn ffmpeg writer thread")?;
+            (
+                Some(VulkanPipe {
+                    job_tx,
+                    nv12_raw,
+                    free: (0..slot_count).collect(),
+                    free_rx,
+                }),
+                None,
+                writer,
+                Some(encoder_thread),
+                None,
+                None,
+            )
+        } else if let Some(readback) = ffmpeg_nv12.take() {
+            let ptrs = readback.writer_ptrs();
+            let frame_bytes = readback.frame_size();
+            let slot_count = readback.slot_count();
+            let mut nv12_pipeline = FramePipeline::new(frame_bytes);
 
-    fn submit_frame(pipeline: &FramePipeline, planes: &[Plane], ext: &GlExt, slot: usize, ) -> Result<(f64, f64)> {
+            nv12_pipeline.finish_init();
+
+            let nv12_pipeline = std::sync::Arc::new(nv12_pipeline);
+            let mut stdin = ffmpeg_stdin.take().unwrap();
+            let shared = std::sync::Arc::clone(&nv12_pipeline);
+
+            let writer = std::thread::Builder::new()
+                .name("ffmpeg-writer".to_owned())
+                .spawn(move || -> std::io::Result<u64> {
+                    let mut busy: u64 = 0;
+                    while let Some(buf) = shared.pop_job() {
+
+                        let t = Instant::now();
+                        stdin.write_all(&shared.pool[buf])?;
+                        let d = t.elapsed().as_nanos() as u64;
+
+                        busy += d;
+
+                        shared.write_ns.fetch_add(d, Ordering::Relaxed);
+                        shared.write_count.fetch_add(1, Ordering::Relaxed);
+                        shared.write_max_ns.fetch_max(d, Ordering::Relaxed);
+                        shared.release_buf(buf);
+
+                    }
+
+                    let t = Instant::now();
+
+                    stdin.flush()?;
+                    busy += t.elapsed().as_nanos() as u64;
+                    Ok(busy)
+
+                })
+                .context("failed to spawn ffmpeg writer thread")?;
+            (
+                None,
+                None,
+                writer,
+                None,
+                Some(Nv12Pipe {
+                    readback,
+                    free: (0..slot_count).collect(),
+                    ptrs,
+                    frame_bytes,
+                    pending: std::array::from_fn(|_| None),
+                    current_read: None,
+                }),
+                Some(nv12_pipeline),
+            )
+        } else {
+            let mut pipeline = FramePipeline::new(frame_size);
+
+            pipeline.finish_init();
+
+            let pipeline = std::sync::Arc::new(pipeline);
+            let mut stdin = ffmpeg_stdin.take().unwrap();
+            let shared = std::sync::Arc::clone(&pipeline);
+
+            let writer = std::thread::Builder::new()
+                .name("ffmpeg-writer".to_owned())
+                .spawn(move || -> std::io::Result<u64> {
+                    let mut busy: u64 = 0;
+                    while let Some(buf) = shared.pop_job() {
+                        let t = Instant::now();
+                        stdin.write_all(&shared.pool[buf])?;
+                        let d = t.elapsed().as_nanos() as u64;
+                        busy += d;
+                        shared.write_ns.fetch_add(d, Ordering::Relaxed);
+                        shared.write_count.fetch_add(1, Ordering::Relaxed);
+                        shared.write_max_ns.fetch_max(d, Ordering::Relaxed);
+                        shared.release_buf(buf);
+                    }
+                    let t = Instant::now();
+                    stdin.flush()?;
+                    busy += t.elapsed().as_nanos() as u64;
+                    Ok(busy)
+                })
+                .context("failed to spawn ffmpeg writer thread")?;
+            (None, Some(pipeline), writer, None, None, None)
+        };
+
+    fn submit_frame(pipeline: &FramePipeline, target: &RenderTarget, frame_size: usize, ) -> Result<(f64, f64)> {
         let acquire_start = Instant::now();
         let buf = pipeline.acquire_buf();
         let pool_wait = acquire_start.elapsed().as_secs_f64();
         let base = pipeline.pool_addrs[buf] as *mut u8;
-        let mut dma_wait = 0.;
-        let mut off: usize = 0;
-        unsafe {
-            use miniquad::gl::*;
-            if planes.iter().any(|p| !p.mapped[slot].is_null()) {
-                if let Some(memory_barrier) = ext.memory_barrier {
-                    memory_barrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
-                }
-            }
-            for plane in planes.iter() {
-                let mapped = plane.mapped[slot];
-                if !mapped.is_null() {
-                    std::ptr::copy_nonoverlapping(mapped, base.add(off), plane.size);
-                } else {
-                    glBindBuffer(GL_PIXEL_PACK_BUFFER, plane.pbos[slot]);
-                    let t = Instant::now();
-                    let src = glMapBufferRange(
-                        GL_PIXEL_PACK_BUFFER,
-                        0,
-                        plane.size as _,
-                        GL_MAP_READ_BIT,
-                    );
-                    if src.is_null() {
-                        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-                        pipeline.release_buf(buf);
-                        return Ok((dma_wait, pool_wait));
-                    }
-                    dma_wait += t.elapsed().as_secs_f64();
-                    std::ptr::copy_nonoverlapping(src as *const u8, base.add(off), plane.size);
-                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-                }
-                off += plane.size;
-            }
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-        }
+
+        let quad_context = miniquad_context();
+        let dma_start = Instant::now();
+        let out = unsafe { std::slice::from_raw_parts_mut(base, frame_size) };
+        target
+            .texture
+            .raw_miniquad_texture_handle()
+            .read_pixels(quad_context, out);
+        let dma_wait = dma_start.elapsed().as_secs_f64();
+
         pipeline.push_job(buf);
         Ok((dma_wait, pool_wait))
     }
 
-    fn fence_ready(fence: miniquad::gl::GLsync) -> bool {
-        let r = unsafe {
-            miniquad::gl::glClientWaitSync(fence, miniquad::gl::GL_SYNC_FLUSH_COMMANDS_BIT, 0)
-        };
-        r == miniquad::gl::GL_ALREADY_SIGNALED || r == miniquad::gl::GL_CONDITION_SATISFIED
-    }
-    fn fence_block(fence: miniquad::gl::GLsync) -> f64 {
-        let t = Instant::now();
-        unsafe { miniquad::gl::glClientWaitSync(fence, miniquad::gl::GL_SYNC_FLUSH_COMMANDS_BIT, 1_000_000_000); }
-        t.elapsed().as_secs_f64()
-    }
-    fn fence_drop(fence: miniquad::gl::GLsync) {
-        unsafe { miniquad::gl::glDeleteSync(fence) }
-    }
-
-    let fps_f64 = params.config.fps as f64;
-    let frame_duration = 1.0 / fps_f64;
     let total_frames = frames;
 
     let frames10 = (out_frames / 10).max(1);
@@ -2299,28 +2468,84 @@ pub async fn main() -> Result<()> {
         );
         *step_time = Instant::now();
     };
-    let mut next_slot: usize = 0;
-    let mut in_flight: VecDeque<usize> = VecDeque::new();
-    let mut fences: Vec<Option<miniquad::gl::GLsync>> = vec![None; n];
+
+    // log
     let mut dma_wait_time: f64 = 0.0;
+    let mut output_index:u64 = 0;
     let mut pool_wait_time: f64 = 0.0;
+    let mut slot_wait_time: f64 = 0.0;
+    let mut fence_wait_time: f64 = 0.0;
+    let mut update_time: f64 = 0.0;
+    let mut scene_render_time: f64 = 0.0;
+    let mut yuv_convert_time: f64 = 0.0;
+    let mut nv12_submit_time: f64 = 0.0;
+    let mut copy_time: f64 = 0.0;
+    let gl = unsafe { get_internal_gl() };
+    let spawn_s = mark!("ffmpeg spawn + threads");
+    let loop_start_time = Instant::now();
 
     for frame in 0..total_frames {
         let current_frame_time = frame as f64 * frame_duration;
         *my_time.borrow_mut() = current_frame_time;
         let keep = frame >= skip;
+        let mut nv12_frame_slot = None;
+
         if keep {
-            let input = mst.input();
-            let render_pass: MQRenderPass = unsafe { std::mem::transmute(input.render_pass) };
-            gl.quad_gl.render_pass(Some(render_pass));
+            let mst_index = if let Some(pipe) = &mut nv12_pipe {
+                let context = miniquad_context().vulkan_context().unwrap();
+                let wait_start = Instant::now();
+                let frame_slot = context.begin_offscreen_frame();
+                fence_wait_time += wait_start.elapsed().as_secs_f64();
+
+                if let Some((_index, read_slot)) = pipe.pending[frame_slot].take() {
+                    let pipeline = nv12_pipeline.as_ref().unwrap();
+                    let acquire_start = Instant::now();
+                    let buf = pipeline.acquire_buf();
+                    pool_wait_time += acquire_start.elapsed().as_secs_f64();
+                    let src = unsafe {
+                        std::slice::from_raw_parts(
+                            pipe.ptrs[read_slot] as *const u8,
+                            pipe.frame_bytes,
+                        )
+                    };
+                    let dst = unsafe {
+                        std::slice::from_raw_parts_mut(
+                            pipeline.pool_addrs[buf] as *mut u8,
+                            pipe.frame_bytes,
+                        )
+                    };
+                    let copy_start = Instant::now();
+                    dst.copy_from_slice(src);
+                    copy_time += copy_start.elapsed().as_secs_f64();
+                    pipe.free.push_back(read_slot);
+                    pipeline.push_job(buf);
+                }
+                let read_slot = pipe.free.pop_front().unwrap();
+                pipe.current_read = Some(read_slot);
+                nv12_frame_slot = Some(frame_slot);
+                frame_slot
+            } else {
+                0
+            };
+            mst_slot.set(mst_index);
+            let input = msts[mst_index].input();
+            gl.quad_gl.render_pass(Some(input.render_pass));
         }
-        main.update()?;
+        // Frame 0 was already updated by the pre-roll above.
+        if frame != 0 {
+            let update_start = Instant::now();
+            main.update()?;
+            update_time += update_start.elapsed().as_secs_f64();
+        }
         if !keep {
             continue;
         }
+        let render_start = Instant::now();
         main.render(&mut painter)?;
-        if current_frame_time <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading { draw_rectangle(0., 0., 0., 0., Color::default()); }
-        mst.blit();
+        scene_render_time += render_start.elapsed().as_secs_f64();
+        if current_frame_time <= LoadingScene::TOTAL_TIME as f64 && !params.config.disable_loading {
+            draw_rectangle(0., 0., 0., 0., Color::default());
+        }
 
         let done = ffmpeg_frames.load(Ordering::Relaxed).min(out_frames);
         if done >= next_mark {
@@ -2329,242 +2554,268 @@ pub async fn main() -> Result<()> {
             next_mark = done + frames10;
         }
 
-        if let Some(nv12) = &nv12 {
-            nv12.convert(&mst.output());
-        }
-
-        let slot = next_slot;
-        next_slot = (next_slot + 1) % n;
-
-        //debug_assert!(fences[slot].is_none(), "PBO slot reused before readback finished");
-        unsafe {
-            use miniquad::gl::*;
-            glPixelStorei(GL_PACK_ALIGNMENT, 1);
-            let mut last_fbo: GLuint = 0;
-            for plane in &planes {
-                if plane.fbo != last_fbo {
-                    glBindFramebuffer(GL_READ_FRAMEBUFFER, plane.fbo);
-                    last_fbo = plane.fbo;
-                }
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, plane.pbos[slot]);
-                glReadPixels(
-                    0,
-                    0,
-                    plane.w,
-                    plane.h,
-                    plane.format,
-                    GL_UNSIGNED_BYTE,
-                    std::ptr::null_mut(),
+        if let Some(pipe) = &mut nv12_pipe {
+            let frame_slot = nv12_frame_slot.unwrap();
+            let read_slot = pipe.current_read.take().unwrap();
+            {
+                let context = miniquad_context().vulkan_context().unwrap();
+                let yuv = &yuvs[frame_slot];
+                let convert_start = Instant::now();
+                yuv.convert(&msts[frame_slot].output());
+                yuv_convert_time += convert_start.elapsed().as_secs_f64();
+                let submit_start = Instant::now();
+                context.record_yuv_copy_to_staging(
+                    yuv.y_index,
+                    yuv.uv_index,
+                    pipe.readback.buffer_raw(read_slot),
+                    vw,
+                    vh,
                 );
+                context.finish_offscreen_frame();
+                nv12_submit_time += submit_start.elapsed().as_secs_f64();
             }
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-            glPixelStorei(GL_PACK_ALIGNMENT, 4);
-        }
-        fences[slot] = unsafe { Some(miniquad::gl::glFenceSync(miniquad::gl::GL_SYNC_GPU_COMMANDS_COMPLETE, 0)) };
-        in_flight.push_back(slot);
-
-        while !in_flight.is_empty() {
-            let oldest = *in_flight.front().expect("no free slots!");
-            let ready = match fences[oldest] {
-                Some(fence) => fence_ready(fence),
-                None => true,
-            };
-            if !ready && in_flight.len() < n - 1 { break; }
-            if !ready {
-                if let Some(fence) = fences[oldest] {
-                    dma_wait_time += fence_block(fence);
+            pipe.pending[frame_slot] = Some((output_index, read_slot));
+            output_index += 1;
+        } else if let Some(pipe) = &mut vulkan_pipe {
+            let wait_start = Instant::now();
+            let slot = pipe
+                .free
+                .pop_front()
+                .or_else(|| pipe.free_rx.recv().ok())
+                .unwrap();
+            slot_wait_time += wait_start.elapsed().as_secs_f64();
+            if let Some(yuv) = yuvs.first() {
+                yuv.convert(&msts[0].output());
+                {
+                    let context = miniquad_context().vulkan_context().unwrap();
+                    context.copy_nv12_from_textures(
+                        yuv.y_index,
+                        yuv.uv_index,
+                        pipe.nv12_raw[slot],
+                    );
                 }
+                pipe.job_tx.send((output_index, slot)).ok();
+                output_index += 1;
             }
-            in_flight.pop_front();
-            if let Some(fence) = fences[oldest].take() { fence_drop(fence); }
-            let (dma, pool) = submit_frame(&pipeline, &planes, &gl_ext, oldest)?;
+        } else {
+            let (dma, pool) =
+                submit_frame(pipeline.as_ref().unwrap(), &msts[0].output(), frame_size)?;
             dma_wait_time += dma;
             pool_wait_time += pool;
         }
         send(IPCEvent::Frame);
     }
 
-    while let Some(old) = in_flight.pop_front() {
-        if let Some(fence) = fences[old].take() {
-            dma_wait_time += fence_block(fence);
-            fence_drop(fence);
-        }
-        let (dma, pool) = submit_frame(&pipeline, &planes, &gl_ext, old)
-            .context("failed to read back the final frames")?;
-        dma_wait_time += dma;
-        pool_wait_time += pool;
+    let loop_wall = loop_start_time.elapsed().as_secs_f64().max(1e-9);
+    mark!("render loop");
+    let backlog_at_end = output_index.saturating_sub(ffmpeg_frames.load(Ordering::Relaxed) as u64);
+    drop(vulkan_pipe);
+    if let Some(thread) = encoder_thread {
+        thread.join().ok();
     }
+    if let Some(pipeline) = &pipeline {
+        pipeline.push_stop();
+    }
+    if let Some(pipe) = &mut nv12_pipe {
+        let context = miniquad_context().vulkan_context().unwrap();
+        context.wait_offscreen_idle();
 
-    pipeline.push_stop();
+        if let Some(pipeline) = &nv12_pipeline {
+            for slot in 0..pipe.pending.len() {
+                if let Some((_index, read_slot)) = pipe.pending[slot].take() {
+                    let buf = pipeline.acquire_buf();
+                    let src = unsafe {
+                        std::slice::from_raw_parts(
+                            pipe.ptrs[read_slot] as *const u8,
+                            pipe.frame_bytes,
+                        )
+                    };
+                    let dst = unsafe {
+                        std::slice::from_raw_parts_mut(
+                            pipeline.pool_addrs[buf] as *mut u8,
+                            pipe.frame_bytes,
+                        )
+                    };
+                    let copy_start = Instant::now();
+
+                    dst.copy_from_slice(src);
+                    copy_time += copy_start.elapsed().as_secs_f64();
+                    pipe.free.push_back(read_slot);
+                    pipeline.push_job(buf);
+                }
+            }
+            pipeline.push_stop();
+        }
+    }
     let writer_busy = match writer.join() {
         Ok(Ok(busy)) => busy as f64 / 1e9,
         Ok(Err(err)) => bail!("failed to write frames to ffmpeg: {err}"),
         Err(_) => bail!("ffmpeg writer thread panicked"),
     };
-    proc.wait()?;
-
-    if let Ok(text) = video_stderr.join() {
-        if !text.trim().is_empty() {
-            warn!("[ffmpeg:video]\n{}", text);
-        }
-    }
-
-
+    let video_status = proc.wait()?;
+    mark!("drain + finalize");
+    let video_stderr = video_stderr.join().unwrap_or_default();
+    if !video_stderr.trim().is_empty() { warn!("[ffmpeg:video]\n{}", video_stderr.trim()); }
+    if !video_status.success() { bail!("ffmpeg muxing failed ({video_status})"); }
     let elapsed = render_start_time.elapsed();
     let wall = elapsed.as_secs_f64().max(1e-9);
     info!("Render Time: {:.2?}", elapsed);
     info!(
-        "Writer thread blocked on pipe+ffmpeg: {:.2}s ({:.1}%)",
+        "Writer thread blocked on video transport+ffmpeg: {:.2}s ({:.1}%)",
         writer_busy,
         writer_busy / wall * 100.
     );
     info!(
-        "Render thread waits: readback DMA wait {:.2}s ({:.1}%) | frame pool exhausted {:.2}s ({:.1}%)",
+        "Render thread waits: readback DMA wait {:.2}s ({:.1}%) | frame pool exhausted {:.2}s ({:.1}%) | vulkan-encoder slot wait {:.2}s ({:.1}%) | offscreen fence wait {:.2}s ({:.1}%)",
         dma_wait_time, dma_wait_time / wall * 100.,
-        pool_wait_time, pool_wait_time / wall * 100.
+        pool_wait_time, pool_wait_time / wall * 100.,
+        slot_wait_time, slot_wait_time / wall * 100.,
+        fence_wait_time, fence_wait_time / wall * 100.
+    );
+    let swap_wait_s = miniquad_context()
+        .vulkan_context()
+        .map(|c| c.frame_wait_ns as f64 / 1e9)
+        .unwrap_or(0.0);
+    if swap_wait_s > 0.0 {
+        info!(
+            "Swapchain frame fence wait: {:.2}s ({:.1}% of scene render) -> CPU-side scene recording {:.2}s",
+            swap_wait_s,
+            swap_wait_s / scene_render_time.max(1e-9) * 100.,
+            (scene_render_time - swap_wait_s).max(0.),
+        );
+    }
+    if let Some(pipeline) = &nv12_pipeline {
+        let frame_bytes = pipeline.pool.first().map(|b| b.len()).unwrap_or(0);
+        let blocks = pipeline.acquire_blocks.load(Ordering::Relaxed);
+        let acquire_ns = pipeline.acquire_wait_ns.load(Ordering::Relaxed);
+        let acquire_max_ns = pipeline.acquire_max_ns.load(Ordering::Relaxed);
+        let queue_max = pipeline.queue_max.load(Ordering::Relaxed);
+        let writes = pipeline.write_count.load(Ordering::Relaxed).max(1);
+        let write_ns = pipeline.write_ns.load(Ordering::Relaxed);
+        let write_max_ns = pipeline.write_max_ns.load(Ordering::Relaxed);
+        info!(
+            "NV12 handoff: pool {} x {:.1} MiB | render thread blocked on a free buffer {}x, {:.2}s (max {:.1}ms) | writer queue max {} frames | staging->pool copy {:.2}s ({:.0} fps) | writer {} writes, {:.2}s inside write_all (max {:.1}ms, {:.0} MiB/s) | backlog when loop ended {} frames",
+            pipeline.pool.len(),
+            frame_bytes as f64 / (1 << 20) as f64,
+            blocks,
+            acquire_ns as f64 / 1e9,
+            acquire_max_ns as f64 / 1e6,
+            queue_max,
+            copy_time,
+            out_frames as f64 / copy_time.max(1e-9),
+            writes,
+            write_ns as f64 / 1e9,
+            write_max_ns as f64 / 1e6,
+            (writes as f64 * frame_bytes as f64) / (write_ns as f64 / 1e9).max(1e-9) / (1 << 20) as f64,
+            backlog_at_end,
+        );
+    }
+    info!(
+        "prpr stage times: update {:.2}s ({:.0} fps) | scene render {:.2}s ({:.0} fps) | YUV convert {:.2}s ({:.0} fps) | NV12 copy/submit {:.2}s ({:.0} fps)",
+        update_time,
+        out_frames as f64 / update_time.max(1e-9),
+        scene_render_time,
+        out_frames as f64 / scene_render_time.max(1e-9),
+        yuv_convert_time,
+        out_frames as f64 / yuv_convert_time.max(1e-9),
+        nv12_submit_time,
+        out_frames as f64 / nv12_submit_time.max(1e-9)
     );
     let written = ffmpeg_frames.load(Ordering::Relaxed);
     if written > 0 {
         show(written.min(out_frames), "Final frame", &mut step_time);
     }
-    let busy = (wall - dma_wait_time - pool_wait_time).max(1e-9);
+    let busy = (loop_wall - dma_wait_time - pool_wait_time - slot_wait_time - fence_wait_time)
+        .max(1e-9);
     info!(
-        "prpr avg fps: {:.0}  (busy {:.2}s of {:.2}s, i.e. render side is idle {:.1}%)",
+        "Render loop Time: {:.2}s | prpr avg fps: {:.0}  (busy {:.2}s of {:.2}s, i.e. render side is idle {:.1}%)",
+        loop_wall,
         out_frames as f64 / busy,
         busy,
-        wall,
-        (1.0 - busy / wall) * 100.0
+        loop_wall,
+        (1.0 - busy / loop_wall) * 100.0
     );
+    let excluded_setup = mixing_s + audio_s + probe_s + spawn_s;
+    let video_wall = (wall - excluded_setup).max(1e-9);
     if written > 0 {
         info!(
-            "End-to-End Avg FPS: {:.0} ({} frames written by ffmpeg)",
-            written as f64 / wall,
-            written
+            "Video Pipeline Avg FPS: {:.0} ({} frames / {:.2}s of video pipeline; {:.2}s setup excluded: audio {:.2}s, encoder probe {:.2}s, ffmpeg spawn {:.2}s)",
+            written as f64 / video_wall,
+            written,
+            video_wall,
+            excluded_setup,
+            mixing_s + audio_s,
+            probe_s,
+            spawn_s,
         );
     } else {
-        info!("End-to-End Avg FPS: n/a (ffmpeg reported no progress)");
+        info!("Video Pipeline Avg FPS: n/a (ffmpeg reported no progress)");
     }
-
-    //clear
-    unsafe {
-        use miniquad::gl::*;
-        for plane in &planes {
-            for (i, pbo) in plane.pbos.iter().enumerate() {
-                if !plane.mapped[i].is_null() {
-                    glBindBuffer(GL_PIXEL_PACK_BUFFER, *pbo);
-                    glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-                }
-            }
-            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-            glDeleteBuffers(n as _, plane.pbos.as_ptr());
-        }
-    }
+    let total_wall = process_start.elapsed().as_secs_f64().max(1e-9);
+    info!(
+        "End-to-End Time: {:.2}s",
+        total_wall,
+    );
 
     send(IPCEvent::Done(render_start_time.elapsed().as_secs_f64()));
     Ok(())
 }
 
-
-// GL 300
 mod yuv_shader {
-    pub const VERTEX: &str = r#"#version 300 es
-in vec3 position;
-in vec2 texcoord;
-in vec4 color0;
+    pub const VERTEX: &str = r#"#version 450 core
+layout(location = 0) in vec3 position;
+layout(location = 1) in vec2 texcoord;
+layout(location = 2) in vec4 color0;
 
-out vec2 uv;
+layout(set = 0, binding = 0) uniform Uniforms {
+    mat4 Projection;
+    mat4 Model;
+    vec4 _Time;
+};
+
+layout(location = 0) out vec2 uv;
 
 void main() {
     gl_Position = vec4(position.xy, 0.0, 1.0);
     uv = vec2(texcoord.x, 1.0 - texcoord.y);
 }"#;
-    fn coeffs(hd: bool) -> [f32; 9] {
-        if hd {
-            [0.2126, 0.7152, 0.0722, -0.114572, -0.385428, 0.5, 0.5, -0.454153, -0.045847]
-        } else {
-            [0.299, 0.587, 0.114, -0.168736, -0.331264, 0.5, 0.5, -0.418688, -0.081312]
-        }
-    }
 
-    pub fn y(hd: bool) -> String {
-        let c = coeffs(hd);
-        format!(
-            r#"#version 300 es
-precision mediump float;
+    pub const Y: &str = r#"#version 450 core
+layout(set = 0, binding = 0) uniform Uniforms {
+    mat4 Projection;
+    mat4 Model;
+    vec4 _Time;
+};
+layout(location = 0) in vec2 uv;
+layout(set = 0, binding = 3) uniform sampler2D tex;
+layout(location = 0) out vec4 FragColor;
 
-in vec2 uv;
-out vec4 FragColor;
-
-uniform sampler2D tex;
-
-void main() {{
-    vec3 c = texture(tex, uv).rgb;
-    float y = (16.0 + 219.0 * ({:.6} * c.r + {:.6} * c.g + {:.6} * c.b)) / 255.0;
+void main() {
+    vec2 size = vec2(textureSize(tex, 0));
+    vec2 st = clamp(uv, vec2(0.5) / size, vec2(1.0) - vec2(0.5) / size);
+    vec3 c = texture(tex, st).rgb;
+    float y = (16.0 + 219.0 * (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b)) / 255.0;
     FragColor = vec4(y, 0.0, 0.0, 1.0);
-}}"#,
-            c[0], c[1], c[2]
-        )
-    }
+}"#;
 
-    pub fn uv(hd: bool) -> String {
-        let c = coeffs(hd);
-        format!(
-            r#"#version 300 es
-precision mediump float;
+    pub const UV: &str = r#"#version 450 core
+layout(set = 0, binding = 0) uniform Uniforms {
+    mat4 Projection;
+    mat4 Model;
+    vec4 _Time;
+};
+layout(location = 0) in vec2 uv;
+layout(set = 0, binding = 3) uniform sampler2D tex;
+layout(location = 0) out vec4 FragColor;
 
-in vec2 uv;
-out vec4 FragColor;
-
-uniform sampler2D tex;
-
-void main() {{
-    vec3 c = texture(tex, uv).rgb;
-    float u = (128.0 + 224.0 * ({:.6} * c.r + {:.6} * c.g + {:.6} * c.b)) / 255.0;
-    float v = (128.0 + 224.0 * ({:.6} * c.r + {:.6} * c.g + {:.6} * c.b)) / 255.0;
+void main() {
+    vec2 size = vec2(textureSize(tex, 0));
+    vec2 st = clamp(uv, vec2(0.5) / size, vec2(1.0) - vec2(0.5) / size);
+    vec3 c = texture(tex, st).rgb;
+    float u = (128.0 + 224.0 * (-0.114572 * c.r - 0.385428 * c.g + 0.5 * c.b)) / 255.0;
+    float v = (128.0 + 224.0 * (0.5 * c.r - 0.454153 * c.g - 0.045847 * c.b)) / 255.0;
     FragColor = vec4(u, v, 0.0, 1.0);
-}}"#,
-            c[3], c[4], c[5], c[6], c[7], c[8]
-        )
-    }
-
-    pub fn u(hd: bool) -> String {
-        let c = coeffs(hd);
-        format!(
-            r#"#version 300 es
-precision mediump float;
-
-in vec2 uv;
-out vec4 FragColor;
-
-uniform sampler2D tex;
-
-void main() {{
-    vec3 c = texture(tex, uv).rgb;
-    float u = (128.0 + 224.0 * ({:.6} * c.r + {:.6} * c.g + {:.6} * c.b)) / 255.0;
-    FragColor = vec4(u, 0.0, 0.0, 1.0);
-}}"#,
-            c[3], c[4], c[5]
-        )
-    }
-
-    pub fn v(hd: bool) -> String {
-        let c = coeffs(hd);
-        format!(
-            r#"#version 300 es
-precision mediump float;
-
-in vec2 uv;
-out vec4 FragColor;
-
-uniform sampler2D tex;
-
-void main() {{
-    vec3 c = texture(tex, uv).rgb;
-    float v = (128.0 + 224.0 * ({:.6} * c.r + {:.6} * c.g + {:.6} * c.b)) / 255.0;
-    FragColor = vec4(v, 0.0, 0.0, 1.0);
-}}"#,
-            c[6], c[7], c[8]
-        )
-    }
+}"#;
 }
+
+

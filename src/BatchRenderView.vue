@@ -199,8 +199,6 @@ const isAddingFiles = ref(false);
 const isAddingFolder = ref(false);
 const searchQuery = ref('');
 
-const defaultConfig = ref<RenderConfig>(loadDefaultConfig());
-
 const holdCoverValue = computed({
   get: () => bulkEditData.value.holdCover === null ? 'keep' : bulkEditData.value.holdCover ? 'on' : 'off',
   set: (v: string) => {
@@ -226,12 +224,79 @@ async function previewChart(id: string) {
   }
 }
 
+/*
+ * The Rust Vulkan encoder is constant-QP and H.264-only.  Batch rendering
+ * reuses the exact same existing controls as ConfigView; these helpers only
+ * normalize the RenderConfig the backend actually consumes (no new fields or
+ * UI options).
+ */
+const VULKAN_CODEC = 'h264';
+
+function parseBitrateBps(raw: string): number | null {
+  const s = raw.trim().toLowerCase().replace(/\s+/g, '');
+  if (!s) return null;
+  let num = s;
+  let mult = 1;
+  if (s.endsWith('kbps')) {
+    num = s.slice(0, -4);
+    mult = 1e3;
+  } else if (s.endsWith('mbps')) {
+    num = s.slice(0, -4);
+    mult = 1e6;
+  } else if (s.endsWith('k')) {
+    num = s.slice(0, -1);
+    mult = 1e3;
+  } else if (s.endsWith('m')) {
+    num = s.slice(0, -1);
+    mult = 1e6;
+  }
+  const n = Number(num);
+  return Number.isFinite(n) && n > 0 ? n * mult : null;
+}
+
+/** Keep in sync with `encoder_qp()` in src-tauri/src/render.rs. */
+function resolveVulkanQp(control: string, bitrate: string, width: number, height: number, fps: number): number {
+  if (control.toUpperCase() === 'CBR') {
+    const bps = parseBitrateBps(bitrate);
+    if (!bps) return 28;
+    const bpp = bps / Math.max(width * height * Math.max(fps, 1), 1);
+    return Math.min(51, Math.max(1, Math.round(28 - 6 * Math.log2(bpp / 0.04))));
+  }
+  const raw = bitrate.trim();
+  const crf = Number(raw);
+  return Math.min(51, Math.max(1, Math.round(raw && Number.isFinite(crf) ? crf : 28)));
+}
+
+/**
+ * Map the existing Encoder / Video Codec / Hardware Acceleration / Bitrate
+ * controls onto the Rust Vulkan encoder's parameters before queueing a task.
+ */
+function normalizeRenderConfig(cfg: RenderConfig): RenderConfig {
+  const videoCodec = cfg.videoCodec || VULKAN_CODEC;
+  // Keep the user's encoder choice: "vulkan" also selects ffmpeg's
+  // hevc_vulkan/av1_vulkan encoders for non-H.264 codecs.  The backend gates
+  // only the Rust (H.264-only) encoder by codec.
+  const encoder = cfg.encoder || 'auto';
+  const bitrateControl = (cfg.bitrateControl || 'CRF').toUpperCase() === 'CBR' ? 'CBR' : 'CRF';
+  const bitrate = (cfg.bitrate || '28').trim();
+  const [width, height] = cfg.resolution?.length === 2 ? cfg.resolution : [1920, 1080];
+  const vulkanEligible =
+    cfg.hardwareAccel !== false && videoCodec === VULKAN_CODEC && (encoder === 'auto' || encoder === 'vulkan');
+  const normalizedBitrate = vulkanEligible && bitrateControl === 'CRF'
+    ? String(resolveVulkanQp(bitrateControl, bitrate, width, height, cfg.fps || 60))
+    : bitrate;
+  return { ...cfg, videoCodec, encoder, bitrateControl, bitrate: normalizedBitrate };
+}
+
 function loadDefaultConfig(): RenderConfig {
   const saved = localStorage.getItem('defaultRenderConfig');
   if (saved) {
-    try { return JSON.parse(saved) as RenderConfig; } catch { /* empty */ }
+    try {
+      const parsed = JSON.parse(saved) as RenderConfig | null;
+      if (parsed) return normalizeRenderConfig(parsed);
+    } catch { /* empty */ }
   }
-  return {
+  return normalizeRenderConfig({
     resolution: [1920, 1080], ffmpegPreset: 'medium', endingLength: -2.0,
     disableLoading: true, chartDebug: false, flidX: false, chartRatio: 1,
     bufferSize: 256, fps: 60, hardwareAccel: true, videoCodec: 'h264',
@@ -240,19 +305,24 @@ function loadDefaultConfig(): RenderConfig {
     aggressive: false, challengeColor: 'golden', challengeRank: 45,
     disableEffect: false, doubleHint: true, fxaa: false, noteScale: 1,
     particle: true, playerAvatar: null, playerName: '', playerRks: 15,
-    sampleCount: 1, resPackPath: null, speed: 1, volumeMusic: 1, volumeSfx: 1,
+    sampleCount: 4, resPackPath: null, speed: 1, volumeMusic: 1, volumeSfx: 1,
     combo: 'AUTOPLAY', watermark: '', handSplit: false, noteSpeedFactor: 1.0,
     ffmpegThread: false, showProgressText: false, showTimeText: false,
     uiLine: true, uiScore: true, uiCombo: true, uiLevel: true, uiName: true,
     uiPb: true, uiPause: true, bar: false, scoreAmin: false
-  };
+  });
 }
 
 function saveDefaultConfig(config: RenderConfig) {
-  defaultConfig.value = config;
-  localStorage.setItem('defaultRenderConfig', JSON.stringify(config));
+  const normalized = normalizeRenderConfig(config);
+  defaultConfig.value = normalized;
+  localStorage.setItem('defaultRenderConfig', JSON.stringify(normalized));
   toast(t('config-saved'), 'success');
 }
+
+// Declared after the helpers it uses so normalizeRenderConfig()'s VULKAN_CODEC
+// is initialized before the saved config is read.
+const defaultConfig = ref<RenderConfig>(loadDefaultConfig());
 
 async function getPresets() {
   try {
@@ -327,7 +397,7 @@ async function buildRenderParams() {
   let cfg = selectedPreset.value === 'default' ? defaultConfig.value : ((await invoke('get_presets')) as any)[selectedPreset.value];
   if (!cfg) cfg = defaultConfig.value;
   if (!cfg.resolution) throw new Error('Resolution missing');
-  return cfg;
+  return normalizeRenderConfig(cfg as RenderConfig);
 }
 
 async function saveConfig() {

@@ -65,9 +65,15 @@ impl Task {
         let mut fs = fs::fs_from_file(&params.path)?;
         let info = fs::load_info(fs.deref_mut()).await?;
         let mut cover = NamedTempFile::new()?;
-        let video = match params.config.video {
-            true => "mov",
-            false => "mp4",
+        let video = match (
+            params.config.video,
+            params.config.audio_format.to_lowercase().as_str(),
+        ) {
+            // FLAC is not a MOV-native codec; the render side muxes it into
+            // MP4, so the output name must match.
+            (_, "flac") => "mp4",
+            (true, _) => "mov",
+            _ => "mp4",
         };
         cover.write_all(&fs.load_file(&info.illustration).await?)?;
 

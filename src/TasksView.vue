@@ -19,6 +19,7 @@ en:
   output: Output
 
   show-output: Show Output
+  show-log: Show Log
   show-in-folder: Open Folder
 
   detail:
@@ -40,7 +41,7 @@ zh-CN:
     loading: 加载中…
     mixing: 混音中…
     rendering: "导出中 { fps } FPS · 预计 { estimate } 结束"
-    done: 已完成，耗时 { duration }
+    done: 已完成，耗时总时间 { duration }
     canceled: 已取消
     failed: 失败
 
@@ -52,6 +53,7 @@ zh-CN:
   output: 输出
 
   show-output: 查看输出
+  show-log: 查看日志
   show-in-folder: 打开文件夹
 
   detail:
@@ -76,6 +78,7 @@ import { getOutputPathArg } from './outputPath';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import moment from 'moment';
 import { toastError } from './common';
+import LogWindow from './components/LogWindow.vue';
 
 const { t } = useI18n();
 
@@ -180,9 +183,8 @@ function statusVars(statusType: string): Record<string, string> {
   return vars;
 }
 
-const errorDialog = ref(false), errorDialogMessage = ref('');
-const outputDialog = ref(false), outputDialogMessage = ref('');
 const detailDialog = ref(false), selectedTask = ref<Task | null>(null);
+const logOpen = ref(false), logTask = ref<Task | null>(null);
 
 async function showInFolder(path: string) {
   try { await invoke('show_in_folder', { path }); } catch (e) { toastError(e); }
@@ -193,10 +195,8 @@ async function showFolder() {
 }
 
 function showOutput(task: Task) {
-  if (task.status.type === 'done') {
-    outputDialogMessage.value = task.status.output;
-    outputDialog.value = true;
-  }
+  logTask.value = task;
+  logOpen.value = true;
 }
 
 const showDetail = (task: Task) => {
@@ -269,9 +269,9 @@ const showDetail = (task: Task) => {
                 </mdui-button>
               </template>
               <template v-else-if="task.status.type === 'failed'">
-                <mdui-button variant="text" @click="errorDialogMessage = task.status.error; errorDialog = true;">
-                  <mdui-icon-error--outlined slot="icon"></mdui-icon-error--outlined>
-                  {{ t('details') }}
+                <mdui-button variant="text" @click="showOutput(task)">
+                  <mdui-icon-description--outlined slot="icon"></mdui-icon-description--outlined>
+                  {{ t('show-log') }}
                 </mdui-button>
               </template>
               <template v-else-if="task.status.type === 'done'">
@@ -293,34 +293,15 @@ const showDetail = (task: Task) => {
             <mdui-icon-info--outlined slot="icon"></mdui-icon-info--outlined>
             {{ t('details') }}
           </mdui-menu-item>
+          <mdui-menu-item
+            v-if="task.status.type === 'done' || task.status.type === 'failed'"
+            @click="showOutput(task)">
+            <mdui-icon-description--outlined slot="icon"></mdui-icon-description--outlined>
+            {{ t('show-log') }}
+          </mdui-menu-item>
         </mdui-menu>
       </mdui-dropdown>
     </div>
-
-    <!-- Error dialog. No `close-on-overlay-click`: a stray click should not throw away a
-         failure message the user has not read yet. -->
-    <mdui-dialog
-      class="log-dialog"
-      close-on-esc
-      :open="errorDialog"
-      @close="errorDialog = false">
-      <mdui-icon-warning slot="icon" class="dialog-error-icon"></mdui-icon-warning>
-      <span slot="headline">{{ t('error') }}</span>
-      <pre class="log-pre log-pre-error">{{ errorDialogMessage }}</pre>
-      <mdui-button slot="action" variant="text" @click="errorDialog = false">{{ t('confirm') }}</mdui-button>
-    </mdui-dialog>
-
-    <!-- Output dialog -->
-    <mdui-dialog
-      class="log-dialog"
-      close-on-esc
-      close-on-overlay-click
-      :open="outputDialog"
-      @close="outputDialog = false">
-      <span slot="headline">{{ t('output') }}</span>
-      <pre class="log-pre">{{ outputDialogMessage }}</pre>
-      <mdui-button slot="action" variant="tonal" @click="outputDialog = false">{{ t('confirm') }}</mdui-button>
-    </mdui-dialog>
 
     <!-- Detail dialog -->
     <mdui-dialog
@@ -344,8 +325,6 @@ const showDetail = (task: Task) => {
           <span class="detail-label">{{ t('detail.progress') }}</span><span>{{ Math.round(selectedTask.status.progress * 100) }}%</span>
         </div>
         <div v-if="selectedTask.status.type === 'rendering'" class="detail-row">
-        </div>
-        <div v-if="selectedTask.status.type === 'rendering'" class="detail-row">
           <span class="detail-label">{{ t('detail.encoder-fps') }}</span><span>{{ selectedTask.status.encoder_fps }} FPS</span>
         </div>
         <div v-if="selectedTask.status.type === 'done' && selectedTask.status.duration" class="detail-row">
@@ -360,6 +339,11 @@ const showDetail = (task: Task) => {
       </div>
       <mdui-button slot="action" variant="tonal" @click="detailDialog = false">{{ t('confirm') }}</mdui-button>
     </mdui-dialog>
+
+    <LogWindow
+      :open="logOpen"
+      :task="logTask"
+      @close="logOpen = false" />
   </div>
 </template>
 
@@ -551,29 +535,6 @@ const showDetail = (task: Task) => {
 .log-dialog::part(panel) {
   min-width: min(25rem, 100%);
   max-width: min(45rem, 100%);
-}
-
-.dialog-error-icon {
-  color: rgb(var(--mdui-color-error));
-}
-
-.log-pre {
-  margin: 0;
-  padding: 12px;
-  border-radius: var(--mdui-shape-corner-medium);
-  background-color: rgb(var(--mdui-color-surface-container-highest));
-  color: rgb(var(--mdui-color-on-surface));
-  font-family: 'Roboto Mono', 'Consolas', monospace;
-  font-size: var(--mdui-typescale-body-small-size);
-  line-height: 1.5;
-  max-height: 60vh;
-  overflow: auto;
-  white-space: pre-wrap;
-}
-
-.log-pre-error {
-  color: rgb(var(--mdui-color-error));
-  background-color: rgb(var(--mdui-color-error-container));
 }
 
 /* ===== Detail list ===== */
