@@ -3,7 +3,7 @@
 
 prpr::tl_file!("main" mtl);
 
-mod cli;
+//mod cli;
 mod common;
 mod gpu_info;
 mod ipc;
