@@ -584,6 +584,25 @@ const coverStyle = computed(() =>
   coverUrl.value ? { '--log-cover': `url("${coverUrl.value}")` } : undefined,
 );
 
+/**
+ * The cover stays one shared image, but each card's slice is nudged by a few
+ * pixels so the artwork is cut at the glued seams. Rows step 20px sideways and
+ * the right column steps 14px down, so every seam is offset; the bleed keeps the
+ * image larger than the visible area, so a shifted slice never exposes the card
+ * background at the dashboard's outer edges.
+ *
+ * DOM order matches `COVER_SHIFTS`: hardware, resolution, config, progress,
+ * stages.
+ */
+const COVER_BLEED = 48;
+const COVER_SHIFTS = [
+  { x: 0, y: 0 },
+  { x: 20, y: 0 },
+  { x: 20, y: 14 },
+  { x: 40, y: 0 },
+  { x: 40, y: 14 },
+];
+
 const content = ref<HTMLElement>();
 let coverObserver: ResizeObserver | null = null;
 let themeObserver: MutationObserver | null = null;
@@ -866,13 +885,21 @@ function applyCoverTones() {
 
   el.dataset.coverTone = sample.tone;
   const contentRect = el.getBoundingClientRect();
-  const scale = Math.max(width / sample.width, height / sample.height);
+  const coverWidth = width + COVER_BLEED * 2;
+  const coverHeight = height + COVER_BLEED * 2;
+  const scale = Math.max(coverWidth / sample.width, coverHeight / sample.height);
 
   for (const node of nodes) {
     const rect = node.getBoundingClientRect();
     if (rect.width < 1 || rect.height < 1) continue;
     const box = localSampleRect(node, rect);
     if (box.width < 1 || box.height < 1) continue;
+
+    const card = node.closest<HTMLElement>('.dash-card');
+    if (!card) continue;
+    const shiftX = Number.parseFloat(card.style.getPropertyValue('--cover-shift-x')) || 0;
+    const shiftY = Number.parseFloat(card.style.getPropertyValue('--cover-shift-y')) || 0;
+
     const cols = Math.max(2, Math.min(10, Math.round(box.width / 12)));
     const rows = Math.max(2, Math.min(6, Math.round(box.height / 10)));
     let r = 0;
@@ -884,8 +911,16 @@ function applyCoverTones() {
         const x = box.left - contentRect.left + ((col + 0.5) / cols) * box.width;
         const y = box.top - contentRect.top + ((row + 0.5) / rows) * box.height;
         if (x < 0 || y < 0 || x >= width || y >= height) continue;
-        const sampleX = Math.min(sample.width - 1, Math.max(0, Math.floor(x / scale)));
-        const sampleY = Math.min(sample.height - 1, Math.max(0, Math.floor(y / scale)));
+        // The shared image starts at the card's origin minus the bleed, then
+        // this card's seam shift moves its slice.
+        const sampleX = Math.min(
+          sample.width - 1,
+          Math.max(0, Math.floor((x + COVER_BLEED - shiftX) / scale)),
+        );
+        const sampleY = Math.min(
+          sample.height - 1,
+          Math.max(0, Math.floor((y + COVER_BLEED - shiftY) / scale)),
+        );
         const i = (sampleY * sample.width + sampleX) * 4;
         const imageAlpha = sample.data[i + 3] / 255;
         const layerAlpha = imageAlpha * (1 - coverWashAlpha(x / width));
@@ -902,9 +937,10 @@ function applyCoverTones() {
 }
 
 /**
- * Pick the average-marker ink from the cover, contrasting it with the bars. The
- * artwork fades into the theme surface, so the halo—not a per-card light/dark
- * surface—keeps the marker readable where it crosses the wash.
+ * Pick the average-marker ink from the progress card's slice of the cover,
+ * contrasting it with the bars. The artwork fades into the theme surface, so the
+ * halo—not a per-card light/dark surface—keeps the marker readable where it
+ * crosses the wash.
  */
 function applyCoverInk() {
   const el = content.value;
@@ -914,32 +950,35 @@ function applyCoverInk() {
   const height = el.offsetHeight;
   if (!width || !height) return;
 
-  const imageAspect = sample.width / sample.height;
-  const boxAspect = width / height;
-  let displayWidth: number;
-  let displayHeight: number;
-  let offsetX = 0;
-  let offsetY = 0;
-  if (imageAspect > boxAspect) {
-    displayHeight = height;
-    displayWidth = height * imageAspect;
-  } else {
-    displayWidth = width;
-    displayHeight = width / imageAspect;
-    offsetY = (height - displayHeight) / 2;
+  const chart = el.querySelector<HTMLElement>('.dash-chart');
+  const card = chart?.closest<HTMLElement>('.dash-card');
+  if (!chart || !card) {
+    el.style.removeProperty('--log-cover-ink');
+    el.style.removeProperty('--log-cover-halo');
+    return;
   }
 
-  // The chart is in the left column; sample where the artwork is strongest and
-  // resolve the accent from the chart itself, so a locally lightened bar colour
-  // also gets a matching high-contrast marker ink.
-  const coverEnd = width * (2 / 3);
-  const chart = el.querySelector<HTMLElement>('.dash-chart');
-  const ink = chart && pickCoverInk(
+  const shiftX = Number.parseFloat(card.style.getPropertyValue('--cover-shift-x')) || 0;
+  const shiftY = Number.parseFloat(card.style.getPropertyValue('--cover-shift-y')) || 0;
+  const coverWidth = width + COVER_BLEED * 2;
+  const coverHeight = height + COVER_BLEED * 2;
+  const scale = Math.max(coverWidth / sample.width, coverHeight / sample.height);
+  const displayWidth = sample.width * scale;
+  const displayHeight = sample.height * scale;
+
+  // Map the chart through the shared cover's bleed and the progress card's seam
+  // shift, then resolve the accent from the chart itself so a locally lightened
+  // bar colour also gets a matching high-contrast marker ink.
+  const contentRect = el.getBoundingClientRect();
+  const chartRect = chart.getBoundingClientRect();
+  const left = chartRect.left - contentRect.left;
+  const top = chartRect.top - contentRect.top;
+  const ink = pickCoverInk(
     sample,
-    clamp01((0 - offsetX) / displayWidth),
-    clamp01((coverEnd - offsetX) / displayWidth),
-    clamp01((0 - offsetY) / displayHeight),
-    clamp01((height - offsetY) / displayHeight),
+    clamp01((left + COVER_BLEED - shiftX) / displayWidth),
+    clamp01((left + chartRect.width + COVER_BLEED - shiftX) / displayWidth),
+    clamp01((top + COVER_BLEED - shiftY) / displayHeight),
+    clamp01((top + chartRect.height + COVER_BLEED - shiftY) / displayHeight),
     chart,
   );
   if (ink) {
@@ -952,9 +991,9 @@ function applyCoverInk() {
 }
 
 /**
- * Each card shows the same content-sized artwork through its own clipped window.
- * Storing the card's offset lets the shared image line up across cards, while the
- * card-sized theme wash fades every card to the current theme surface.
+ * The cover is one shared image, oversized by `COVER_BLEED` on every side so a
+ * card's seam shift cannot expose the card background. The theme wash remains a
+ * single content-wide gradient, aligned through `--cover-left/top`.
  */
 function updateCoverLayout() {
   const el = content.value;
@@ -966,10 +1005,15 @@ function updateCoverLayout() {
     return;
   }
   // Layout offsets instead of rects: the opening animation scales the window, and
-  // rects would capture that transient 0.98 scale and leave the artwork misaligned.
-  el.style.setProperty('--cover-width', `${el.offsetWidth}px`);
-  el.style.setProperty('--cover-height', `${el.offsetHeight}px`);
-  for (const card of cards) {
+  // rects would capture that transient 0.98 scale and leave the wash misaligned.
+  const coverWidth = el.offsetWidth;
+  const coverHeight = el.offsetHeight;
+  el.style.setProperty('--cover-width', `${coverWidth}px`);
+  el.style.setProperty('--cover-bleed', `${COVER_BLEED}px`);
+  el.style.setProperty('--cover-extended-width', `${coverWidth + COVER_BLEED * 2}px`);
+  el.style.setProperty('--cover-extended-height', `${coverHeight + COVER_BLEED * 2}px`);
+  cards.forEach((card, index) => {
+    const shift = COVER_SHIFTS[index] ?? { x: 0, y: 0 };
     card.style.setProperty(
       '--cover-left',
       `${-card.offsetLeft - card.clientLeft}px`,
@@ -978,7 +1022,9 @@ function updateCoverLayout() {
       '--cover-top',
       `${-card.offsetTop - card.clientTop}px`,
     );
-  }
+    card.style.setProperty('--cover-shift-x', `${shift.x}px`);
+    card.style.setProperty('--cover-shift-y', `${shift.y}px`);
+  });
   // A new task can arrive before its cover has been sampled. Drop the previous
   // task's ink rather than briefly painting it over the new content.
   if (!coverSample || coverSample.url !== coverUrl.value) {
@@ -2048,18 +2094,18 @@ onUnmounted(() => {
   isolation: isolate;
 }
 
-/* The artwork is one shared, content-sized layer: every card reveals its slice
-   of the same image, and a single window-wide gradient fades it into the theme
-   surface from left to right. Because the gradient lives on the shared layer,
-   the fade continues across the card grid instead of restarting per card. */
+/* The cover is one shared image, oversized by --cover-bleed so each card's small
+   seam shift can cut the artwork without exposing the card background. The
+   gradient stays one content-wide layer, aligned through --cover-bleed, so the
+   fade into the theme surface still runs across the whole grid. */
 .log-simple-content.has-cover .dash-card::before {
   content: '';
   position: absolute;
-  top: var(--cover-top, 0);
-  left: var(--cover-left, 0);
+  top: calc(var(--cover-top, 0px) - var(--cover-bleed, 0px));
+  left: calc(var(--cover-left, 0px) - var(--cover-bleed, 0px));
   z-index: -1;
-  width: var(--cover-width, 100%);
-  height: var(--cover-height, 100%);
+  width: var(--cover-extended-width, 100%);
+  height: var(--cover-extended-height, 100%);
   background-image:
     linear-gradient(
       to right,
@@ -2070,9 +2116,11 @@ onUnmounted(() => {
       rgb(var(--mdui-color-surface-container-high)) 100%
     ),
     var(--log-cover);
-  background-position: left top, left top;
+  background-position:
+    var(--cover-bleed, 0px) top,
+    var(--cover-shift-x, 0px) var(--cover-shift-y, 0px);
   background-repeat: no-repeat;
-  background-size: 100% 100%, cover;
+  background-size: var(--cover-width, 100%) 100%, cover;
   pointer-events: none;
 }
 
@@ -2178,31 +2226,41 @@ onUnmounted(() => {
   opacity: 0.85;
 }
 
+/* The dashboard reads as one grouped surface: the 1px padding and grid gaps
+   expose this background as the outer hairline and the dividers, while the
+   rounded wrapper clips the square cards into rounded outer corners. */
 .dashboard {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 1px;
+  padding: 1px;
+  overflow: hidden;
+  border-radius: var(--mdui-shape-corner-large);
+  background-color: color-mix(
+    in srgb,
+    rgb(var(--mdui-color-outline-variant)) 62%,
+    rgb(var(--mdui-color-surface-container-high))
+  );
 }
 
 .dashboard-top,
 .dashboard-bottom {
   display: grid;
   grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  gap: 16px;
+  gap: 1px;
 }
 
 .dashboard-stack {
   display: grid;
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: 1px;
   min-width: 0;
 }
 
 .dash-card {
   min-width: 0;
   padding: 16px 18px;
-  border: 1px solid rgba(var(--mdui-color-outline-variant), 0.62);
-  border-radius: var(--mdui-shape-corner-large);
+  border-radius: 0;
   background-color: rgb(var(--mdui-color-surface-container-high));
 }
 
