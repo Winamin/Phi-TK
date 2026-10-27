@@ -51,6 +51,9 @@
 
     tip: Tip
     tip-placeholder: Leave empty to choose randomly
+    loading-preview: Loading screen preview
+    edit-hint: Enter to save · Esc to cancel
+    illustration-failed: Failed to load the illustration
 
     preview: Preview
     render: Render
@@ -116,6 +119,9 @@
 
     tip: Tip
     tip-placeholder: 留空则随机选择
+    loading-preview: 加载界面预览
+    edit-hint: Enter 保存 · Esc 取消
+    illustration-failed: 曲绘加载失败
 
     preview: 演示
     render: 渲染
@@ -213,7 +219,9 @@ async function loadChart(file: string) {
     parsingChart.value = true;
     chartPath = file;
     renderCover.value = null;
+    clearChartIllustration();
     chartInfo.value = (await invoke('parse_chart', { path: file })) as ChartInfo;
+    loadChartIllustration(file, chartInfo.value.illustration);
     rememberChart(chartInfo.value, file);
     aspectWidth.value = String(chartInfo.value.aspectRatio);
     aspectHeight.value = '1.0';
@@ -278,16 +286,9 @@ async function buildParams() {
   };
 }
 
-watch([aspectWidth, aspectHeight], ([newWidth, newHeight]) => {
-  try {
-    const width = parseFloat(newWidth);
-    const height = parseFloat(newHeight);
-    if (!isNaN(width) && !isNaN(height) && chartInfo.value) {
-      chartInfo.value.aspectRatio = width / height;
-    }
-  } catch (e) {
-    console.error('Failed to update aspect ratio:', e);
-  }
+watch([aspectWidth, aspectHeight], () => {
+  const aspect = tryParseAspect();
+  if (aspect !== undefined && chartInfo.value) chartInfo.value.aspectRatio = aspect;
 });
 
 async function postRender() {
@@ -395,8 +396,14 @@ onUnmounted(() => stopCoverPolling());
 
 async function moveNext() {
   if (step.value === 'config') {
-    // Native constraint validation over the mdui fields, replacing `<v-form>.validate()`.
-    if (validateFields(form.value)) {
+    const missing = (['name', 'level', 'charter'] as const).find((key) => !chartInfo.value?.[key].trim());
+    if (missing) {
+      const source = previewSvg.value?.querySelector<SVGGraphicsElement>(`[data-preview-key="${missing}"]`);
+      if (source) editPreview(missing, source);
+      toast(t('has-error'), 'error');
+      return;
+    }
+    if (tryParseAspect() !== undefined && validateFields(form.value)) {
       stepIndex.value++;
     } else {
       toast(t('has-error'), 'error');
@@ -456,6 +463,17 @@ function closeSurfaces() {
 const showShortcuts = ref(false);
 
 function onKeydown(e: KeyboardEvent) {
+  if (editingField.value) {
+    if (e.isComposing) return;
+    if (e.key === 'Enter' || e.key === 'Escape') {
+      e.preventDefault();
+      finishPreviewEdit(e.key === 'Enter');
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      previewInput.value?.focus();
+    }
+    return;
+  }
   const target = e.target as HTMLElement | null;
   // Never hijack keys while the user is typing into a field.
   const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
@@ -497,22 +515,213 @@ if (isString(chartInQuery)) {
 }
 
 function tryParseAspect(): number | undefined {
+  const width = Number(aspectWidth.value),
+    height = Number(aspectHeight.value);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return undefined;
+  const aspect = width / height;
+  return Number.isFinite(aspect) && aspect > 0 ? aspect : undefined;
+}
+
+type PreviewKey = 'name' | 'composer' | 'level' | 'charter' | 'illustrator' | 'tip';
+type PreviewField = {
+  id: string;
+  key: PreviewKey;
+  label: string;
+  text: string;
+  x: number;
+  y: number;
+  size: number;
+  width: number;
+  anchor?: 'middle';
+  dark?: boolean;
+};
+
+const chartIllustration = ref(''),
+  illustrationLoading = ref(false),
+  previewSvg = ref<SVGSVGElement>(),
+  previewBounds = ref<Record<string, { x: number; y: number; width: number; height: number; size: number }>>({});
+let illustrationRequest = 0;
+
+function clearChartIllustration() {
+  illustrationRequest++;
+  if (chartIllustration.value) URL.revokeObjectURL(chartIllustration.value);
+  chartIllustration.value = '';
+  illustrationLoading.value = false;
+}
+
+async function loadChartIllustration(path: string, illustration?: string) {
+  if (!illustration) return;
+  const request = illustrationRequest;
+  illustrationLoading.value = true;
   try {
-    let width = parseFloat(aspectWidth.value);
-    let height = parseFloat(aspectHeight.value);
-    if (isNaN(width) || isNaN(height)) return undefined;
-    return width / height;
+    const data = await invoke<ArrayBuffer | number[]>('load_chart_illustration', { path, illustration });
+    if (disposed || request !== illustrationRequest) return;
+    chartIllustration.value = URL.createObjectURL(new Blob([new Uint8Array(data)]));
   } catch (e) {
-    return undefined;
+    if (!disposed && request === illustrationRequest) {
+      console.error('Failed to load chart illustration:', e);
+      toast(t('illustration-failed'), 'error');
+    }
+  } finally {
+    if (request === illustrationRequest) illustrationLoading.value = false;
   }
 }
+
+const previewHeight = computed(() => 1280 / (tryParseAspect() ?? chartInfo.value?.aspectRatio ?? 16 / 9));
+const previewCardY = computed(() => previewHeight.value * 0.4 - 340.48 / 3.55 / 2);
+const previewBrightness = computed(() => Math.min(1, (0.77 * (1 - (chartInfo.value?.backgroundDim ?? 0.1))) / 0.9));
+const previewFields = computed<PreviewField[]>(() => {
+  if (!chartInfo.value) return [];
+  const info = chartInfo.value,
+    height = previewHeight.value,
+    y = previewCardY.value,
+    cardHeight = 340.48 / 3.55,
+    level = info.level.trim().split(/\s+/);
+  return [
+    { id: 'name', key: 'name', label: 'chart-name', text: info.name, x: 124.98, y: y + cardHeight * 0.35, size: 38, width: 294.91 },
+    { id: 'composer', key: 'composer', label: 'composer', text: info.composer, x: 127.44, y: y + cardHeight * 0.74, size: 19, width: 256 },
+    {
+      id: 'level-number',
+      key: 'level',
+      label: 'level',
+      text: level[level.length - 1]?.match(/[0-9?][0-9?.]*/)?.[0] ?? '?',
+      x: 502,
+      y: y + cardHeight * 0.4,
+      size: 47,
+      width: 88.47,
+      anchor: 'middle',
+      dark: true,
+    },
+    { id: 'level-name', key: 'level', label: 'level', text: level[0] || '?', x: 502, y: y + cardHeight * 0.74, size: 16, width: 78.64, anchor: 'middle', dark: true },
+    { id: 'charter', key: 'charter', label: 'charter', text: info.charter, x: 163.78, y: y + cardHeight * 1.32 + height / 44 + 22, size: 22, width: 371.2 },
+    { id: 'illustrator', key: 'illustrator', label: 'illustrator', text: info.illustrator, x: 142.66, y: y + cardHeight * 1.32 + 56.52 + height / 44 + 22, size: 22, width: 371.2 },
+    { id: 'tip', key: 'tip', label: 'tip', text: info.tip || 'Tip: 彩~虹~课~题~模~式~', x: 67.2, y: height * 0.94 - 14, size: 25, width: 960 },
+  ];
+});
+
+function measurePreviewFields() {
+  const bounds: typeof previewBounds.value = {};
+  for (const field of previewFields.value) {
+    const text = previewSvg.value?.querySelector<SVGTextElement>(`[data-preview-text="${field.id}"]`);
+    if (!text) continue;
+    text.setAttribute('font-size', String(field.size));
+    const width = text.getComputedTextLength();
+    const size = width > field.width ? (field.size * field.width) / width : field.size;
+    text.setAttribute('font-size', String(size));
+    const box = text.getBBox();
+    const padding = field.id === 'name' ? 5 : 4;
+    bounds[field.id] = { x: box.x - padding, y: box.y - padding, width: Math.max(box.width, 24) + padding * 2, height: box.height + padding * 2, size };
+  }
+  previewBounds.value = bounds;
+}
+
+watch([previewFields, step], async () => {
+  await nextTick();
+  measurePreviewFields();
+});
+onMounted(() => document.fonts.ready.then(() => !disposed && measurePreviewFields()));
+onUnmounted(clearChartIllustration);
+
+const editingField = ref<PreviewKey | null>(null),
+  editorValue = ref(''),
+  editorFocused = ref(false),
+  previewEditor = ref<HTMLDivElement>(),
+  previewInput = ref<HTMLInputElement>();
+let editorOriginal: string | null = null,
+  editorSource: SVGGraphicsElement | null = null,
+  editorClosing = false,
+  editorMotion: gsap.core.Tween | undefined;
+const previewLabels: Record<PreviewKey, string> = { name: 'chart-name', composer: 'composer', level: 'level', charter: 'charter', illustrator: 'illustrator', tip: 'tip' };
+const editorRequired = computed(() => editingField.value !== null && ['name', 'level', 'charter'].includes(editingField.value));
+const editorDuration = () => (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 0.4);
+
+watch(editorValue, (value) => {
+  if (editingField.value && chartInfo.value && !editorClosing) updatePreviewField(editingField.value, value);
+  previewInput.value?.setCustomValidity('');
+});
+
+function updatePreviewField(key: PreviewKey, value: string | null) {
+  if (!chartInfo.value) return;
+  if (key === 'tip') chartInfo.value.tip = value || null;
+  else chartInfo.value[key] = value ?? '';
+}
+
+function previewSourceRect(source: SVGGraphicsElement) {
+  const rect = source.getBoundingClientRect();
+  const text = source.querySelector('text');
+  const scale = (previewSvg.value?.getBoundingClientRect().width ?? 1280) / 1280;
+  return { left: rect.left, top: rect.top, width: Math.max(rect.width, 24), height: rect.height, fontSize: Number(text?.getAttribute('font-size') ?? 22) * scale };
+}
+
+async function editPreview(key: PreviewKey, source: SVGGraphicsElement) {
+  if (editingField.value || !chartInfo.value) return;
+  editorSource = source;
+  editorOriginal = chartInfo.value[key];
+  editorValue.value = chartInfo.value[key] ?? '';
+  editingField.value = key;
+  editorClosing = false;
+  const rect = previewSourceRect(source);
+  await nextTick();
+  if (!previewEditor.value || !previewInput.value) return;
+  gsap.set(previewEditor.value, { ...rect, borderRadius: 0 });
+  previewInput.value.focus({ preventScroll: true });
+  previewInput.value.select();
+  editorFocused.value = true;
+  const width = Math.min(560, window.innerWidth - 48);
+  editorMotion = gsap.to(previewEditor.value, {
+    left: (window.innerWidth - width) / 2,
+    top: (window.innerHeight - 64) / 2,
+    width,
+    height: 64,
+    fontSize: 24,
+    borderRadius: 12,
+    duration: editorDuration(),
+    ease: 'power3.inOut',
+  });
+}
+
+async function finishPreviewEdit(save: boolean) {
+  if (!editingField.value || !chartInfo.value || editorClosing) return;
+  if (save && editorRequired.value && !editorValue.value.trim()) {
+    previewInput.value?.setCustomValidity(t('rules.non-empty'));
+    previewInput.value?.reportValidity();
+    return;
+  }
+  editorClosing = true;
+  const key = editingField.value;
+  updatePreviewField(key, save ? editorValue.value : editorOriginal);
+  editorValue.value = chartInfo.value[key] ?? '';
+  editorFocused.value = false;
+  previewInput.value?.blur();
+  await nextTick();
+  measurePreviewFields();
+  await nextTick();
+  editorMotion?.kill();
+  editorMotion = gsap.to(previewEditor.value!, {
+    ...(editorSource ? previewSourceRect(editorSource) : { opacity: 0 }),
+    borderRadius: 0,
+    duration: editorDuration(),
+    ease: 'power3.inOut',
+    onComplete: () => {
+      editingField.value = null;
+      editorClosing = false;
+      nextTick(() => editorSource?.focus({ preventScroll: true }));
+    },
+  });
+}
+
+watch(step, () => {
+  editorMotion?.kill();
+  editingField.value = null;
+  editorFocused.value = false;
+  editorClosing = false;
+});
+onUnmounted(() => editorMotion?.kill());
 
 /** The dim slider stores 0–1 but reads better as a percentage on the handle label. */
 const dimLabel = (value: number) => `${Math.round(value * 100)}%`;
 
-const durationText = computed(() =>
-  renderDuration.value === undefined ? '' : moment.duration(renderDuration.value, 'seconds').humanize(),
-);
+const durationText = computed(() => (renderDuration.value === undefined ? '' : moment.duration(renderDuration.value, 'seconds').humanize()));
 
 const fileHovering = ref(false);
 track(listen('tauri://drag-over', () => (fileHovering.value = step.value === 'choose')));
@@ -533,6 +742,7 @@ function resetAndGoChoose() {
   chartInfo.value = undefined;
   chartPath = '';
   renderCover.value = null;
+  clearChartIllustration();
 }
 
 /* ============================================================================
@@ -695,7 +905,7 @@ function aspectText(width: string, height: string) {
          maintain — each step owns the whole content area.
          ================================================================== -->
     <Transition name="page">
-      <section v-if="onStepPage" :key="step" class="step-page" :class="'is-' + step">
+      <section v-if="onStepPage" :key="step" class="step-page" :class="'is-' + step" :inert="editingField !== null">
         <!-- ---------- Page app bar ---------- -->
         <header class="page-bar">
           <mdui-button-icon @click="goBack">
@@ -744,40 +954,100 @@ function aspectText(width: string, height: string) {
           <!-- Step 1: configure the parsed chart -->
           <div v-if="step === 'config'" class="config-body" ref="flipCardRef">
             <form v-if="chartInfo" ref="form" class="config-form" @submit.prevent>
-              <div class="config-grid">
-                <div class="config-col">
-                  <h3 class="col-title">{{ t('chart-file') }}</h3>
-                  <MdTextField v-model="chartInfo.name" variant="outlined" required :label="t('chart-name') + ' *'" />
-                  <MdTextField v-model="chartInfo.level" variant="outlined" required :label="t('level') + ' *'" />
-                  <MdTextField v-model="chartInfo.charter" variant="outlined" required :label="t('charter') + ' *'" />
-                  <MdTextField v-model="chartInfo.composer" variant="outlined" :label="t('composer')" />
-                  <MdTextField v-model="chartInfo.illustrator" variant="outlined" :label="t('illustrator')" />
+              <div class="config-controls">
+                <div class="field-group">
+                  <span class="field-label">{{ t('aspect') }}</span>
+                  <div class="aspect-row">
+                    <MdTextField v-model="aspectWidth" variant="outlined" inputmode="decimal" required :label="t('aspect') + ' W'" class="aspect-field" />
+                    <span class="aspect-sep">:</span>
+                    <MdTextField v-model="aspectHeight" variant="outlined" inputmode="decimal" required :label="t('aspect') + ' H'" class="aspect-field" />
+                  </div>
                 </div>
-                <div class="config-col">
-                  <h3 class="col-title">{{ t('aspect') }}</h3>
-                  <div class="field-group">
-                    <span class="field-label">{{ t('aspect') }}</span>
-                    <div class="aspect-row">
-                      <!-- Deliberately not `type="number"`: an input with no usable `step`
-                           reports a stepMismatch for ratios like 16/9 = 1.777…, which
-                           `validateFields()` would then treat as a blocking error. -->
-                      <MdTextField v-model="aspectWidth" variant="outlined" inputmode="decimal" class="aspect-field" />
-                      <span class="aspect-sep">:</span>
-                      <MdTextField v-model="aspectHeight" variant="outlined" inputmode="decimal" class="aspect-field" />
-                    </div>
-                  </div>
-                  <div class="field-group">
-                    <span class="field-label">{{ t('dim') }} — {{ Math.round(chartInfo.backgroundDim * 100) }}%</span>
-                    <!-- Numeric bindings, not literals: Vue assigns these as DOM properties
-                         (`'min' in el`), and Lit's number converter only runs attribute →
-                         property, so `min="0"` would leave the string "0" on the element. -->
-                    <MdSlider v-model="chartInfo.backgroundDim" :min="0" :max="1" :step="0.01" :labelFormatter="dimLabel" />
-                  </div>
-                  <div class="field-group field-toggle">
-                    <span class="field-label">{{ t('hold_cover') }}</span>
-                    <MdSwitch v-model="chartInfo.HoldPartialCover" />
-                  </div>
-                  <MdTextField v-model="chartInfo.tip" variant="outlined" :label="t('tip')" :placeholder="t('tip-placeholder')" />
+                <div class="field-group">
+                  <span class="field-label">{{ t('dim') }} — {{ Math.round(chartInfo.backgroundDim * 100) }}%</span>
+                  <MdSlider v-model="chartInfo.backgroundDim" :min="0" :max="1" :step="0.01" :labelFormatter="dimLabel" />
+                </div>
+                <div class="field-group field-toggle">
+                  <span class="field-label">{{ t('hold_cover') }}</span>
+                  <MdSwitch v-model="chartInfo.HoldPartialCover" />
+                </div>
+              </div>
+              <div class="loading-preview-area">
+                <div class="loading-preview" :style="{ aspectRatio: 1280 / previewHeight, '--preview-aspect': 1280 / previewHeight }">
+                  <svg ref="previewSvg" :viewBox="`0 0 1280 ${previewHeight}`" :aria-label="t('loading-preview')">
+                    <defs>
+                      <filter id="loading-background" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+                        <feGaussianBlur stdDeviation="50" />
+                        <feComponentTransfer>
+                          <feFuncR type="linear" :slope="previewBrightness" />
+                          <feFuncG type="linear" :slope="previewBrightness" />
+                          <feFuncB type="linear" :slope="previewBrightness" />
+                        </feComponentTransfer>
+                      </filter>
+                      <clipPath id="loading-illustration">
+                        <polygon
+                          :points="`646.69,${previewHeight * (0.5 - 1 / 17) - 170.24} 1208.84,${previewHeight * (0.5 - 1 / 17) - 170.24} 1119.7,${previewHeight * (0.5 - 1 / 17) + 170.24} 557.55,${previewHeight * (0.5 - 1 / 17) + 170.24}`" />
+                      </clipPath>
+                    </defs>
+                    <rect width="1280" :height="previewHeight" fill="black" />
+                    <image
+                      v-if="chartIllustration"
+                      :href="chartIllustration"
+                      x="-80"
+                      y="-80"
+                      width="1440"
+                      :height="previewHeight + 160"
+                      preserveAspectRatio="xMidYMid slice"
+                      filter="url(#loading-background)" />
+                    <image
+                      v-if="chartIllustration"
+                      :href="chartIllustration"
+                      x="557.55"
+                      :y="previewHeight * (0.5 - 1 / 17) - 170.24"
+                      width="651.29"
+                      height="340.48"
+                      preserveAspectRatio="xMidYMid slice"
+                      clip-path="url(#loading-illustration)" />
+                    <polygon
+                      :points="`108.31,${previewCardY} 574.72,${previewCardY} 549.61,${previewCardY + 95.91} 83.2,${previewCardY + 95.91}`"
+                      fill="black"
+                      fill-opacity="0.6" />
+                    <polygon :points="`466.19,${previewCardY - 3.84} 561.91,${previewCardY - 3.84} 534.79,${previewCardY + 99.75} 439.07,${previewCardY + 99.75}`" fill="white" />
+                    <text x="163.78" :y="previewCardY + 95.91 * 1.32 + 12" class="preview-credit-label">Chart</text>
+                    <text x="143.94" :y="previewCardY + 95.91 * 1.32 + 68.52" class="preview-credit-label">Illustration</text>
+                    <g
+                      v-for="field in previewFields"
+                      :key="field.id"
+                      class="preview-field"
+                      :class="{ 'is-dark': field.dark, 'is-editing': editingField === field.key }"
+                      :data-preview-key="field.key"
+                      role="button"
+                      tabindex="0"
+                      :aria-label="`${t(field.label)}: ${chartInfo[field.key] || (field.key === 'tip' ? t('tip-placeholder') : '')}`"
+                      @click="editPreview(field.key, $event.currentTarget as SVGGraphicsElement)"
+                      @keydown.enter.prevent.stop="editPreview(field.key, $event.currentTarget as SVGGraphicsElement)"
+                      @keydown.space.prevent.stop="editPreview(field.key, $event.currentTarget as SVGGraphicsElement)">
+                      <title>{{ t(field.label) }}{{ field.key === 'tip' ? ' · ' + t('tip-placeholder') : '' }}</title>
+                      <rect
+                        v-if="previewBounds[field.id]"
+                        :x="previewBounds[field.id].x"
+                        :y="previewBounds[field.id].y"
+                        :width="previewBounds[field.id].width"
+                        :height="previewBounds[field.id].height"
+                        :stroke-width="field.id === 'name' ? 3 : 1" />
+                      <text
+                        :data-preview-text="field.id"
+                        :x="field.x"
+                        :y="field.y"
+                        :font-size="previewBounds[field.id]?.size ?? field.size"
+                        :text-anchor="field.anchor ?? 'start'"
+                        dominant-baseline="middle">
+                        {{ field.text || t(field.label) }}
+                      </text>
+                    </g>
+                    <text x="1193.6" :y="previewHeight * 0.9325" text-anchor="end" font-size="22" fill="white">Loading...</text>
+                  </svg>
+                  <mdui-circular-progress v-if="illustrationLoading" class="illustration-spinner"></mdui-circular-progress>
                 </div>
               </div>
             </form>
@@ -853,6 +1123,24 @@ function aspectText(width: string, height: string) {
 
     <!-- Deliberately not an `<mdui-dialog>`: this is a transient hover affordance,
          and a modal would trap focus and animate on every drag event. -->
+    <Teleport to="body">
+      <div v-if="editingField" class="preview-edit-layer" :class="{ 'is-focused': editorFocused }" role="dialog" aria-modal="true" :aria-label="t(previewLabels[editingField])">
+        <div class="preview-edit-backdrop" @click="finishPreviewEdit(true)"></div>
+        <div ref="previewEditor" class="preview-editor" :class="{ 'is-dark': editingField === 'level' }">
+          <label for="loading-preview-input" class="preview-editor-label">{{ t(previewLabels[editingField]) }}</label>
+          <input
+            id="loading-preview-input"
+            ref="previewInput"
+            v-model="editorValue"
+            :required="editorRequired"
+            :aria-label="t(previewLabels[editingField])"
+            :placeholder="editingField === 'tip' ? t('tip-placeholder') : ''"
+            autocomplete="off" />
+          <span class="preview-editor-hint">{{ t('edit-hint') }}</span>
+        </div>
+      </div>
+    </Teleport>
+
     <Transition name="fade">
       <div v-if="fileHovering" class="overlay">
         <div class="overlay-card drop-zone">
@@ -914,6 +1202,12 @@ function aspectText(width: string, height: string) {
 @use './styles/breakpoints' as bp;
 @use './styles/states' as st;
 @use './styles/motion' as mo;
+
+@font-face {
+  font-family: 'Ubuntu';
+  src: url('./assets/Ubuntu-Regular.ttf') format('truetype');
+  font-display: swap;
+}
 
 /* ============================================================
    RenderView — MD3 page architecture
@@ -1101,8 +1395,8 @@ function aspectText(width: string, height: string) {
   transform: scale(1);
   transition-property: transform, box-shadow;
   transition-duration: var(--app-motion-duration-bouncy), var(--app-motion-duration-spatial-default);
-  transition-timing-function: var(--app-motion-spring-bouncy, var(--mdui-motion-easing-emphasized-decelerate)),
-    var(--app-motion-spring-spatial-default, var(--mdui-motion-easing-emphasized-decelerate));
+  transition-timing-function:
+    var(--app-motion-spring-bouncy, var(--mdui-motion-easing-emphasized-decelerate)), var(--app-motion-spring-spatial-default, var(--mdui-motion-easing-emphasized-decelerate));
 }
 
 /* The lift is the tile's own hover feedback; the state layer adds the MD3
@@ -1331,36 +1625,172 @@ function aspectText(width: string, height: string) {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 24px;
+  padding: 20px 24px 24px;
 }
 
 .config-form {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  min-height: 100%;
 }
 
-.config-grid {
+.config-controls {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(200px, 1fr) minmax(200px, 1.25fr) minmax(160px, 0.75fr);
+  align-items: center;
   gap: 32px;
+  flex-shrink: 0;
 }
 
-.config-col {
+.loading-preview-area {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
   min-width: 0;
+  min-height: 0;
 }
 
-.col-title {
-  margin: 0 0 4px;
-  font-size: var(--mdui-typescale-title-small-size);
-  font-weight: var(--mdui-typescale-title-small-weight);
-  line-height: var(--mdui-typescale-title-small-line-height);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgb(var(--mdui-color-primary));
+.loading-preview {
+  position: relative;
+  width: 100%;
+  max-width: calc((100vh - 232px) * var(--preview-aspect));
+  overflow: hidden;
+  background-color: #000;
+  border-radius: var(--mdui-shape-corner-small);
+}
+
+.loading-preview svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  font-family: 'Ubuntu', system-ui, sans-serif;
+}
+
+.preview-credit-label {
+  fill: white;
+  font-size: 14px;
+}
+
+.preview-field {
+  color: white;
+  cursor: text;
+  outline: none;
+  @include mo.effects(opacity, fast);
+}
+
+.preview-field.is-dark {
+  color: black;
+}
+
+.preview-field.is-editing {
+  opacity: 0;
+}
+
+.preview-field text {
+  fill: currentColor;
+}
+
+.preview-field rect {
+  fill: transparent;
+  stroke: currentColor;
+  @include mo.effects(fill, fast);
+}
+
+.preview-field:hover rect,
+.preview-field:focus-visible rect {
+  fill: rgba(255, 255, 255, 0.2);
+  stroke-width: 3;
+}
+
+.preview-field.is-dark:hover rect,
+.preview-field.is-dark:focus-visible rect {
+  fill: rgba(0, 0, 0, 0.12);
+}
+
+.illustration-spinner {
+  position: absolute;
+  top: 50%;
+  left: 69%;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, -50%);
+}
+
+.preview-edit-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.preview-edit-backdrop {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(var(--mdui-color-scrim), 0);
+  backdrop-filter: blur(0);
+  @include mo.effects((background-color, backdrop-filter), fast);
+}
+
+.is-focused .preview-edit-backdrop {
+  background-color: rgba(var(--mdui-color-scrim), 0.35);
+  backdrop-filter: blur(12px);
+}
+
+.preview-editor {
+  position: fixed;
+  color: #fff;
+  border: 1px solid currentColor;
+  background-color: rgba(0, 0, 0, 0.6);
+  font-family: 'Ubuntu', system-ui, sans-serif;
+}
+
+.preview-editor.is-dark {
+  color: #000;
+  background-color: #fff;
+}
+
+.preview-editor input {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0 8px;
+  border: 0;
+  border-radius: inherit;
+  outline: none;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.preview-editor input::placeholder {
+  color: inherit;
+  opacity: 0.55;
+}
+
+.preview-editor-label,
+.preview-editor-hint {
+  position: absolute;
+  left: 0;
+  color: #fff;
+  font-family: 'Roboto', system-ui, sans-serif;
+  font-size: var(--mdui-typescale-body-medium-size);
+  white-space: nowrap;
+  opacity: 0;
+  @include mo.effects(opacity, fast);
+}
+
+.preview-editor-label {
+  bottom: calc(100% + 12px);
+}
+
+.preview-editor-hint {
+  top: calc(100% + 12px);
+}
+
+.is-focused .preview-editor-label,
+.is-focused .preview-editor-hint {
+  opacity: 1;
 }
 
 .field-group {
@@ -1750,9 +2180,12 @@ function aspectText(width: string, height: string) {
   .page-actions mdui-button::part(label) {
     display: none;
   }
-  .config-grid {
+  .config-controls {
     grid-template-columns: 1fr;
-    gap: 20px;
+    gap: 16px;
+  }
+  .loading-preview {
+    max-width: none;
   }
   .render-hero {
     flex-direction: column;
@@ -1770,6 +2203,16 @@ function aspectText(width: string, height: string) {
 
 /* Medium (600–839px): two columns. */
 @include bp.medium {
+  .config-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 24px;
+  }
+  .config-controls .field-toggle {
+    grid-column: 1 / -1;
+  }
+  .loading-preview {
+    max-width: calc((100vh - 288px) * var(--preview-aspect));
+  }
   .bento {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
