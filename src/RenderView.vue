@@ -958,9 +958,9 @@ function aspectText(width: string, height: string) {
                 <div class="field-group">
                   <span class="field-label">{{ t('aspect') }}</span>
                   <div class="aspect-row">
-                    <MdTextField v-model="aspectWidth" variant="outlined" inputmode="decimal" required :label="t('aspect') + ' W'" class="aspect-field" />
+                    <MdTextField v-model="aspectWidth" variant="outlined" inputmode="decimal" required :label="'W'" class="aspect-field" />
                     <span class="aspect-sep">:</span>
-                    <MdTextField v-model="aspectHeight" variant="outlined" inputmode="decimal" required :label="t('aspect') + ' H'" class="aspect-field" />
+                    <MdTextField v-model="aspectHeight" variant="outlined" inputmode="decimal" required :label="'H'" class="aspect-field" />
                   </div>
                 </div>
                 <div class="field-group">
