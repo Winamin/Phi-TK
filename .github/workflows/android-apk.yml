@@ -98,6 +98,7 @@ jobs:
           NDK_HOME="${SDK_ROOT}/ndk/${NDK_VERSION}"
           NDK_BIN="${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin"
           SHADERC_DIR="${GITHUB_WORKSPACE}/vendor/shaderc-android/lib"
+          BUILD_LOG="${RUNNER_TEMP}/android-build.log"
 
           export ANDROID_HOME="${SDK_ROOT}"
           export ANDROID_SDK_ROOT="${SDK_ROOT}"
@@ -116,7 +117,27 @@ jobs:
           test -f "${SHADERC_DIR}/libshaderc_combined.a"
           printf 'sdk.dir=%s\n' "${SDK_ROOT}" > src-tauri/gen/android/local.properties
           chmod +x src-tauri/gen/android/gradlew
-          pnpm run android:build
+
+          set +e
+          pnpm run android:build 2>&1 | tee "${BUILD_LOG}"
+          BUILD_STATUS=${PIPESTATUS[0]}
+          set -e
+
+          if (( BUILD_STATUS != 0 )); then
+            {
+              printf '### Android build failure\n\n```text\n'
+              tail -n 100 "${BUILD_LOG}"
+              printf '\n```\n'
+            } >> "${GITHUB_STEP_SUMMARY}"
+
+            ERROR_LOG="$(tail -n 80 "${BUILD_LOG}" | sed -E 's/\x1B\[[0-9;]*[mK]//g')"
+            ERROR_LOG="${ERROR_LOG//'%'/'%25'}"
+            ERROR_LOG="${ERROR_LOG//$'\r'/'%0D'}"
+            ERROR_LOG="${ERROR_LOG//$'\n'/'%0A'}"
+            printf '::error title=Android build failed::%s\n' "${ERROR_LOG}"
+          fi
+
+          exit "${BUILD_STATUS}"
 
       - name: Sign APK with CI debug key
         shell: bash
