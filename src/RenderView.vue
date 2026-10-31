@@ -536,16 +536,13 @@ type PreviewField = {
   dark?: boolean;
 };
 
-const chartIllustration = ref(''),
-  illustrationLoading = ref(false),
+const illustrationLoading = ref(false),
   previewSvg = ref<SVGSVGElement>(),
   previewBounds = ref<Record<string, { x: number; y: number; width: number; height: number; size: number }>>({});
 let illustrationRequest = 0;
 
 function clearChartIllustration() {
   illustrationRequest++;
-  if (chartIllustration.value) URL.revokeObjectURL(chartIllustration.value);
-  chartIllustration.value = '';
   illustrationLoading.value = false;
 }
 
@@ -554,9 +551,9 @@ async function loadChartIllustration(path: string, illustration?: string) {
   const request = illustrationRequest;
   illustrationLoading.value = true;
   try {
-    const data = await invoke<ArrayBuffer | number[]>('load_chart_illustration', { path, illustration });
+    const cover = await invoke<string>('load_chart_illustration', { path, illustration });
     if (disposed || request !== illustrationRequest) return;
-    chartIllustration.value = URL.createObjectURL(new Blob([new Uint8Array(data)]));
+    renderCover.value = cover;
   } catch (e) {
     if (!disposed && request === illustrationRequest) {
       console.error('Failed to load chart illustration:', e);
@@ -991,8 +988,8 @@ function aspectText(width: string, height: string) {
                     </defs>
                     <rect width="1280" :height="previewHeight" fill="black" />
                     <image
-                      v-if="chartIllustration"
-                      :href="chartIllustration"
+                      v-if="renderCover"
+                      :href="convertFileSrc(renderCover)"
                       x="-80"
                       y="-80"
                       width="1440"
@@ -1000,8 +997,8 @@ function aspectText(width: string, height: string) {
                       preserveAspectRatio="xMidYMid slice"
                       filter="url(#loading-background)" />
                     <image
-                      v-if="chartIllustration"
-                      :href="chartIllustration"
+                      v-if="renderCover"
+                      :href="convertFileSrc(renderCover)"
                       x="557.55"
                       :y="previewHeight * (0.5 - 1 / 17) - 170.24"
                       width="651.29"
