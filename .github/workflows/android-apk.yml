@@ -130,7 +130,7 @@ jobs:
               printf '\n```\n'
             } >> "${GITHUB_STEP_SUMMARY}"
 
-            ERROR_LOG="$(tail -n 80 "${BUILD_LOG}" | sed -E 's/\x1B\[[0-9;]*[mK]//g')"
+            ERROR_LOG="$(tail -c 3500 "${BUILD_LOG}" | sed -E 's/\x1B\[[0-9;]*[mK]//g')"
             ERROR_LOG="${ERROR_LOG//'%'/'%25'}"
             ERROR_LOG="${ERROR_LOG//$'\r'/'%0D'}"
             ERROR_LOG="${ERROR_LOG//$'\n'/'%0A'}"
