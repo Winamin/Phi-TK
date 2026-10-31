@@ -54,16 +54,13 @@ jobs:
           targets: aarch64-linux-android
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android build components
-        shell: bash
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager \
-            "platforms;android-${ANDROID_PLATFORM}" \
-            "build-tools;${ANDROID_BUILD_TOOLS}" \
-            "ndk;${NDK_VERSION}"
+        uses: android-actions/setup-android@v4
+        with:
+          packages: >-
+            platform-tools
+            platforms;android-${{ env.ANDROID_PLATFORM }}
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+            ndk;${{ env.NDK_VERSION }}
 
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
