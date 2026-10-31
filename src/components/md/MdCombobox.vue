@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref, useAttrs } from 'vue';
+
+defineOptions({ inheritAttrs: false });
 
 /**
  * Stand-in for Vuetify's `<v-combobox>`: a free-text field with a dropdown of presets.
@@ -26,6 +28,8 @@ const emit = defineEmits<{
 }>();
 
 const open = ref(false);
+const attrs = useAttrs();
+const fieldAttrs = computed(() => Object.fromEntries(Object.entries(attrs).filter(([key]) => key !== 'class' && key !== 'style')));
 
 function onInput(e: Event) {
   emit('update:modelValue', (e.target as HTMLInputElement).value);
@@ -38,9 +42,9 @@ function pick(item: string) {
 </script>
 
 <template>
-  <mdui-dropdown :open="open" placement="bottom-end" trigger="manual" class="md-combobox" @closed="open = false">
-    <mdui-text-field slot="trigger" :variant="variant" :value="modelValue ?? ''" :label="label" @input="onInput">
-      <mdui-button-icon slot="end-icon" tabindex="-1" @click="open = !open">
+  <mdui-dropdown :open="open" placement="bottom-end" trigger="manual" class="md-combobox" :class="attrs.class" :style="attrs.style" @closed="open = false">
+    <mdui-text-field v-bind="fieldAttrs" slot="trigger" :variant="variant" :value="modelValue ?? ''" :label="label" @input="onInput">
+      <mdui-button-icon slot="end-icon" :aria-label="label" :aria-expanded="open" aria-haspopup="menu" @click="open = !open">
         <mdui-icon-arrow-drop-down></mdui-icon-arrow-drop-down>
       </mdui-button-icon>
     </mdui-text-field>
@@ -54,5 +58,25 @@ function pick(item: string) {
 .md-combobox {
   display: block;
   width: 100%;
+  min-width: 0;
+}
+
+mdui-text-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+mdui-text-field::part(container) {
+  min-height: 56px;
+}
+
+mdui-button-icon,
+mdui-menu-item {
+  min-height: var(--app-touch-target, 48px);
+}
+
+mdui-button-icon {
+  width: var(--app-touch-target, 48px);
 }
 </style>

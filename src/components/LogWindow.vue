@@ -45,12 +45,8 @@ en:
       config: Render configuration
       codec: Codec
       quality: Quality
-      constant-qp: Constant QP {qp}
-      quality-hint: 'Vulkan Video is constant-QP: CRF is passed through as QP, and CBR is converted from the target bitrate.'
-      preset: Preset
       builtin: Built-in
       frames: Total frames
-      ffmpeg: FFmpeg
       progress: Render progress
       per-thousand: Per 1,000 frames
       average: Average
@@ -73,7 +69,6 @@ en:
         probe: Encoder probe
         readback: Readback setup
         scene: Scene load
-        ffmpeg: FFmpeg startup
         finalize: Finalize
         update: Update
         render: Scene render
@@ -126,12 +121,8 @@ zh-CN:
       config: 渲染配置
       codec: 编码格式
       quality: 画质
-      constant-qp: 恒定 QP {qp}
-      quality-hint: 'Vulkan Video 使用恒定 QP：CRF 数值直接作为 QP，CBR 由目标码率换算。'
-      preset: 速度预设
       builtin: 内置
       frames: 总帧数
-      ffmpeg: FFmpeg
       progress: 渲染进度
       per-thousand: 每千帧
       average: 平均
@@ -154,7 +145,6 @@ zh-CN:
         probe: 编码器探测
         readback: 回读设置
         scene: 场景加载
-        ffmpeg: FFmpeg 启动
         finalize: 收尾
         update: 更新
         render: 场景渲染
@@ -200,14 +190,13 @@ interface ProgressSample {
   percent: number;
   frames: number;
   total: number;
-  /** Seconds spent on this progress interval. */
+
   interval: number;
-  /** Normalised interval cost: seconds per 1,000 frames. */
+
   perThousand: number;
 }
 
 interface StageTime {
-  /** Known stage id, or null for an unrecognised log label. */
   key: string | null;
   label: string;
   seconds: number;
@@ -224,9 +213,6 @@ interface LogInsights {
   aspect: string | null;
   codec: string | null;
   quality: string | null;
-  preset: string | null;
-  presetBuiltin: boolean;
-  ffmpegPath: string | null;
   totalFrames: number | null;
   averageFps: number | null;
   endToEnd: number | null;
@@ -236,12 +222,9 @@ interface LogInsights {
   stages: StageTime[];
 }
 
-const ANSI = /\x1b\[[0-9;]*m/g;
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
 
 function classifyLevel(text: string): LogLevel {
-  // The old ffmpeg message is actionable but not fatal, so it stays a warning even
-  // though it contains "Failed".
-  if (/^Failed to find global ffmpeg/.test(text)) return 'warn';
   if (/\b(error|failed|failure|exception|panic|fatal|abnormally)\b/i.test(text) || /错误|失败|异常/.test(text)) {
     return 'error';
   }
@@ -254,7 +237,7 @@ function classifyStage(text: string): LogStage {
   if (/^(Render Time|Render loop Time|prpr stage times|Writer thread|Render thread|End-to-End)/.test(text)) {
     return 'summary';
   }
-  if (/^(Failed to find global ffmpeg|Failed to initialize|No Vulkan)/.test(text)) return 'env';
+  if (/^(Failed to initialize|No Vulkan)/.test(text)) return 'env';
   return 'plain';
 }
 
@@ -263,7 +246,7 @@ function parseLog(raw: string, failed: boolean): LogLine[] {
   let stream: 'stdout' | 'stderr' = failed ? 'stderr' : 'stdout';
   let no = 0;
   for (const original of raw.replace(ANSI, '').split(/\r?\n/)) {
-    const text = original.replace(/\s+$/, '');
+    const text = original.replace(/^\[(?:INFO|WARN|ERROR|DEBUG|TRACE)\]\s*/, '').replace(/\s+$/, '');
     if (text === '[STDOUT]') {
       stream = 'stdout';
       continue;
@@ -277,13 +260,11 @@ function parseLog(raw: string, failed: boolean): LogLine[] {
     lines.push({
       no,
       stream,
-      level: classifyLevel(text),
+      level: original.startsWith('[WARN]') ? 'warn' : original.startsWith('[ERROR]') ? 'error' : classifyLevel(text),
       stage: classifyStage(text),
       text,
     });
   }
-  // A failed task's message is not necessarily worded with "error"; make sure the
-  // first line still reads as the failure instead of an ordinary info line.
   if (failed && lines.length && !lines.some((line) => line.level === 'error')) {
     lines[0].level = 'error';
   }
@@ -298,9 +279,8 @@ const root = ref<HTMLElement>();
 const body = ref<HTMLElement>();
 
 interface LogSelection {
-  /** First clicked row, kept while the range grows or shrinks. */
   anchor: number;
-  /** Most recently clicked row. */
+
   end: number;
 }
 const logSelection = ref<LogSelection | null>(null);
@@ -324,11 +304,7 @@ const counts = computed(() => {
 
 const filteredLines = computed(() => {
   const keyword = query.value.trim().toLowerCase();
-  return allLines.value.filter(
-    (line) =>
-      (level.value === 'all' || line.level === level.value) &&
-      (!keyword || line.text.toLowerCase().includes(keyword)),
-  );
+  return allLines.value.filter((line) => (level.value === 'all' || line.level === level.value) && (!keyword || line.text.toLowerCase().includes(keyword)));
 });
 
 const selectedLines = computed(() => {
@@ -342,11 +318,7 @@ const selectedLineCount = computed(() => selectedLines.value?.length ?? 0);
 
 const fullLogText = computed(() => allLines.value.map((line) => line.text).join('\n'));
 
-const detailCopyText = computed(() =>
-  selectedLines.value?.length
-    ? selectedLines.value.map((line) => line.text).join('\n')
-    : fullLogText.value,
-);
+const detailCopyText = computed(() => (selectedLines.value?.length ? selectedLines.value.map((line) => line.text).join('\n') : fullLogText.value));
 
 const lineCountLabel = computed(() =>
   t('log.lines', {
@@ -362,28 +334,17 @@ const levelStats = computed(() => [
   { value: 'error' as const, label: t('log.error'), count: counts.value.error },
 ]);
 
-const issueLine = computed(
-  () => allLines.value.find((line) => line.level === 'error') ??
-    allLines.value.find((line) => line.level === 'warn') ??
-    null,
-);
+const issueLine = computed(() => allLines.value.find((line) => line.level === 'error') ?? allLines.value.find((line) => line.level === 'warn') ?? null);
 
-/**
- * Pull the human-facing essentials out of the render process' plain-text log.
- * These messages are emitted by the Rust side and are not localised, so matching
- * on stable English prefixes is intentional — the log viewer translates what it
- * extracts instead of trying to translate the raw log.
- */
 const STAGE_KEYS: Record<string, string> = {
   'chart + audio load': 'load',
-  'mixing': 'mixing',
+  mixing: 'mixing',
   'audio encode + resample': 'audio',
   'encoder probe': 'probe',
   'offscreen/readback setup': 'readback',
   'player + scene load': 'scene',
-  'ffmpeg spawn + threads': 'ffmpeg',
   'drain + finalize': 'finalize',
-  'update': 'update',
+  update: 'update',
   'scene render': 'render',
   'YUV convert': 'yuv',
   'NV12 copy/submit': 'nv12',
@@ -407,7 +368,6 @@ function normaliseCodec(codec: string | null): string | null {
   const lower = codec.toLowerCase();
   if (lower === 'h264' || lower === 'h.264') return 'H.264';
   if (lower === 'hevc' || lower === 'h265' || lower === 'h.265') return 'HEVC';
-  if (lower === 'av1') return 'AV1';
   return codec.toUpperCase();
 }
 
@@ -421,26 +381,8 @@ function aspectOf(resolution: string | null): string | null {
 }
 
 function buildInsights(lines: LogLine[]): LogInsights {
-  const vulkanEnabled = lines.some((line) => /Vulkan Video H\.264:\s*enabled/i.test(line.text));
-  const hardwareOff = lines.some((line) => /hardware acceleration is off/i.test(line.text));
-  const cpuPreference = lines.some((line) => /cpu preference/i.test(line.text));
-  const selected = firstMatch(lines, /Selected encoder:\s*(.+)$/)?.[1]?.trim() ?? null;
-
-  let encoder = selected;
-  if (vulkanEnabled) encoder = 'Vulkan Video';
-  if (!encoder) {
-    const enabled = firstMatch(lines, /^\s*(h264|hevc|av1)_(?:nvenc|qsv|amf|vulkan):\s*true\s*$/i);
-    if (enabled) encoder = enabled[0].replace(/:\s*true\s*$/i, '').trim();
-  }
-
-  let hardwareKind: HardwareKind = null;
-  if (hardwareOff || cpuPreference) {
-    hardwareKind = 'disabled';
-  } else if (encoder) {
-    hardwareKind = vulkanEnabled || /(nvenc|qsv|amf|vulkan|d3d12|dx12|cuvid)/i.test(encoder)
-      ? 'hardware'
-      : 'software';
-  }
+  const encoder = firstMatch(lines, /Selected encoder:\s*(.+)$/)?.[1]?.trim() ?? null;
+  const hardwareKind: HardwareKind = encoder ? (/^(c2\.android|OMX\.google)/i.test(encoder) ? 'software' : 'hardware') : null;
 
   const scaled = firstMatch(lines, /(\d{2,5})x(\d{2,5})\s*->\s*(\d{2,5})x(\d{2,5})/);
   let sourceResolution: string | null = null;
@@ -449,50 +391,23 @@ function buildInsights(lines: LogLine[]): LogInsights {
     sourceResolution = `${Number(scaled[1])}×${Number(scaled[2])}`;
     resolution = `${Number(scaled[3])}×${Number(scaled[4])}`;
   } else {
-    const size = firstMatch(lines, /Vulkan Video H\.264:.*?\([^)]*?(\d{2,5})x(\d{2,5})/i) ??
-      firstMatch(lines, /initialized\s+(?:h\.?264|hevc|av1)\s+encoder\s+(\d{2,5})x(\d{2,5})/i);
+    const size = firstMatch(lines, /video encoder:.*?(\d{2,5})x(\d{2,5})/i) ?? firstMatch(lines, /initialized\s+(?:h\.?264|hevc)\s+encoder\s+(\d{2,5})x(\d{2,5})/i);
     if (size) resolution = `${Number(size[1])}×${Number(size[2])}`;
   }
 
   const rawCodec = firstMatch(lines, /Video codec:\s*([a-z0-9.]+)/i)?.[1] ?? null;
-  let codec = normaliseCodec(rawCodec);
-  if (!codec && vulkanEnabled) codec = 'H.264';
-  if (!codec && encoder) {
-    const inferred = encoder.match(/^(h264|hevc|av1)_/i)?.[1];
-    if (inferred) codec = normaliseCodec(inferred);
-  }
-
-  const qualityMatch = firstMatch(lines, /Vulkan encoder quality:\s*(.+?)\s*->\s*qp=(\d+)/i);
-  const cbrMatch = firstMatch(lines, /CBR target '([^']+)' mapped to qp=(\d+)/i);
-  const qp = firstMatch(lines, /\bqp=(\d+)/i)?.[1] ?? null;
-  // The Rust Vulkan encoder is constant-QP only: CRF is passed through as the QP
-  // (and CBR is mapped to a QP). Say so instead of implying a quality conversion.
-  const quality = qualityMatch
-    ? `${qualityMatch[1].trim()} · ${t('log.dash.constant-qp', { qp: qualityMatch[2] })}`
-    : cbrMatch
-      ? `CBR ${cbrMatch[1]} · ${t('log.dash.constant-qp', { qp: cbrMatch[2] })}`
-      : qp
-        ? `QP ${qp}`
-        : null;
-
-  const presetRaw = firstMatch(lines, /Speed preset:\s*(.+)$/i)?.[1]?.trim() ?? null;
-  const preset = presetRaw && !presetRaw.startsWith('(')
-    ? presetRaw.replace(/^-\S+\s+/, '')
-    : null;
-  const presetBuiltin = !preset && (vulkanEnabled || Boolean(presetRaw?.includes('built-in')));
+  const codec = normaliseCodec(rawCodec);
+  const bitrate = firstMatch(lines, /Bitrate:\s*CBR\s*(\d+)\s*bps/i)?.[1];
+  const quality = bitrate ? `CBR ${(Number(bitrate) / 1e6).toFixed(2)} Mbps` : null;
 
   const avgFpsMatch =
-    firstMatch(lines, /Video Pipeline Avg FPS:\s*([\d.]+)/i) ??
-    firstMatch(lines, /prpr avg fps:\s*([\d.]+)/i) ??
-    firstMatch(lines, /End-to-End Avg FPS:\s*([\d.]+)/i);
+    firstMatch(lines, /Video Pipeline Avg FPS:\s*([\d.]+)/i) ?? firstMatch(lines, /prpr avg fps:\s*([\d.]+)/i) ?? firstMatch(lines, /End-to-End Avg FPS:\s*([\d.]+)/i);
   const averageFps = avgFpsMatch ? Number(avgFpsMatch[1]) : null;
 
   const progress: ProgressSample[] = [];
   let previousFrames = 0;
   for (const line of lines) {
-    const match = line.text.match(
-      /^Rendering:.*?(\d+)%.*?Time:\s*([\d.]+)s.*?Frames:\s*(\d+)\/(\d+)/,
-    );
+    const match = line.text.match(/^Rendering:.*?(\d+)%.*?Time:\s*([\d.]+)s.*?Frames:\s*(\d+)\/(\d+)/);
     if (!match) continue;
     const frames = Number(match[3]);
     const total = Number(match[4]);
@@ -520,8 +435,6 @@ function buildInsights(lines: LogLine[]): LogInsights {
     const setup = line.text.match(/^setup ([^:]+):\s*([\d.]+)s/);
     if (setup) {
       const label = setup[1].trim();
-      // "render loop" is the whole rendering phase, not one of its stages; showing
-      // it beside the per-stage breakdown would dwarf every other bar.
       if (label === 'render loop') continue;
       stages.push({
         key: STAGE_KEYS[label] ?? null,
@@ -555,9 +468,6 @@ function buildInsights(lines: LogLine[]): LogInsights {
     aspect: aspectOf(resolution),
     codec,
     quality,
-    preset,
-    presetBuiltin,
-    ffmpegPath: firstMatch(lines, /^Using ffmpeg:\s*(.+)$/)?.[1]?.trim() ?? null,
     totalFrames,
     averageFps,
     endToEnd: readSeconds(lines, /^End-to-End Time:\s*([\d.]+)s/),
@@ -580,20 +490,8 @@ const coverUrl = computed(() => {
   }
 });
 
-const coverStyle = computed(() =>
-  coverUrl.value ? { '--log-cover': `url("${coverUrl.value}")` } : undefined,
-);
+const coverStyle = computed(() => (coverUrl.value ? { '--log-cover': `url("${coverUrl.value}")` } : undefined));
 
-/**
- * The cover stays one shared image, but each card's slice is nudged by a few
- * pixels so the artwork is cut at the glued seams. Rows step 20px sideways and
- * the right column steps 14px down, so every seam is offset; the bleed keeps the
- * image larger than the visible area, so a shifted slice never exposes the card
- * background at the dashboard's outer edges.
- *
- * DOM order matches `COVER_SHIFTS`: hardware, resolution, config, progress,
- * stages.
- */
 const COVER_BLEED = 48;
 const COVER_SHIFTS = [
   { x: 0, y: 0 },
@@ -614,7 +512,7 @@ interface CoverSample {
   width: number;
   height: number;
   data: Uint8ClampedArray;
-  /** Dominant tone of the artwork, used as the fallback for text colours. */
+
   tone: CoverTone;
 }
 
@@ -631,18 +529,13 @@ function channelLuminance(value: number) {
 }
 
 function relativeLuminance(rgb: [number, number, number]): number {
-  return (
-    0.2126 * channelLuminance(rgb[0]) +
-    0.7152 * channelLuminance(rgb[1]) +
-    0.0722 * channelLuminance(rgb[2])
-  );
+  return 0.2126 * channelLuminance(rgb[0]) + 0.7152 * channelLuminance(rgb[1]) + 0.0722 * channelLuminance(rgb[2]);
 }
 
 function contrastRatio(a: number, b: number): number {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
-/** Average WCAG luminance of the opaque pixels in the cover sample. */
 function averageCoverLuminance(data: Uint8ClampedArray): number {
   let sum = 0;
   let count = 0;
@@ -654,7 +547,6 @@ function averageCoverLuminance(data: Uint8ClampedArray): number {
   return count ? sum / count : 0.5;
 }
 
-/** Alpha of the theme wash at a horizontal position (matches the CSS stops). */
 function coverWashAlpha(position: number): number {
   const p = clamp01(position);
   if (p <= 0.4) return 0;
@@ -663,11 +555,6 @@ function coverWashAlpha(position: number): number {
   return 0.72 + 0.28 * ((p - 0.78) / 0.22);
 }
 
-/**
- * Pick the text tone with the stronger contrast against a sampled background.
- * A small difference falls back to the artwork's dominant tone so adjacent
- * blocks do not flicker between light and dark for an ambiguous mid-tone.
- */
 function coverToneForLuminance(luminance: number, fallback: CoverTone): CoverTone {
   const lightText = contrastRatio(1, luminance);
   const darkText = contrastRatio(0.012, luminance);
@@ -675,11 +562,9 @@ function coverToneForLuminance(luminance: number, fallback: CoverTone): CoverTon
   return lightText > darkText ? 'dark' : 'light';
 }
 
-/** Resolve a theme surface token to an RGB triplet through a hidden probe. */
 function resolveThemeSurface(host: HTMLElement): [number, number, number] | null {
   const probe = document.createElement('span');
-  probe.style.cssText =
-    'position:absolute;left:-9999px;top:0;color:rgb(var(--mdui-color-surface-container-high))';
+  probe.style.cssText = 'position:absolute;left:-9999px;top:0;color:rgb(var(--mdui-color-surface-container-high))';
   host.appendChild(probe);
   const color = getComputedStyle(probe).color;
   probe.remove();
@@ -696,7 +581,6 @@ function parseCssColor(value: string): [number, number, number] | null {
   return null;
 }
 
-/** Resolve the chart's accent through a probe, since it is built with color-mix(). */
 function resolveBarColor(card: HTMLElement): [number, number, number] | null {
   const probe = document.createElement('span');
   probe.style.cssText = 'position:absolute;left:-9999px;top:0;color:var(--log-accent)';
@@ -706,19 +590,7 @@ function resolveBarColor(card: HTMLElement): [number, number, number] | null {
   return parseCssColor(color);
 }
 
-/**
- * The average marker has to read on top of the dark bars, so pick the colour
- * from the cover's visible palette that is furthest from the bar accent in
- * contrast terms. The skin and highlights of an illustration win naturally.
- */
-function pickCoverInk(
-  sample: CoverSample,
-  x0: number,
-  x1: number,
-  y0: number,
-  y1: number,
-  card: HTMLElement,
-): { color: string; halo: string } | null {
+function pickCoverInk(sample: CoverSample, x0: number, x1: number, y0: number, y1: number, card: HTMLElement): { color: string; halo: string } | null {
   const bar = resolveBarColor(card);
   if (!bar) return null;
   const barLuminance = relativeLuminance(bar);
@@ -727,9 +599,6 @@ function pickCoverInk(
   const right = Math.max(left + 1, Math.min(sample.width, Math.ceil(x1 * sample.width)));
   const top = Math.max(0, Math.min(sample.height - 1, Math.floor(y0 * sample.height)));
   const bottom = Math.max(top + 1, Math.min(sample.height, Math.ceil(y1 * sample.height)));
-
-  // Coarse 5-bit RGB buckets keep the palette representative without turning
-  // every anti-aliased pixel into a candidate.
   const buckets = new Map<number, { r: number; g: number; b: number; count: number }>();
   let total = 0;
   for (let y = top; y < bottom; y += 1) {
@@ -778,7 +647,6 @@ function pickCoverInk(
 
 let textMeasureContext: CanvasRenderingContext2D | null = null;
 
-/** Approximate the painted width of an element's text, not its full block box. */
 function measureTextWidth(el: HTMLElement): number {
   const text = (el.textContent ?? '').trim();
   if (!text) return 0;
@@ -787,15 +655,10 @@ function measureTextWidth(el: HTMLElement): number {
     textMeasureContext = document.createElement('canvas').getContext('2d');
   }
   if (!textMeasureContext) return 0;
-  textMeasureContext.font =
-    `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  textMeasureContext.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
   return textMeasureContext.measureText(text).width;
 }
 
-/**
- * The text blocks that sit directly on the artwork. Tiles and the average-marker
- * label are deliberately excluded: they have their own surfaces / sampled ink.
- */
 const COVER_TEXT_SELECTORS = [
   '.dash-card-title',
   '.dash-card-sub',
@@ -810,11 +673,6 @@ const COVER_TEXT_SELECTORS = [
   '.dash-empty',
 ].join(',');
 
-/**
- * Sample the artwork plus the theme wash behind one text block. Using the
- * painted text width (rather than the block's full card-wide box) is important:
- * a short title on the left must not inherit the light wash from the far right.
- */
 function localSampleRect(el: HTMLElement, rect: DOMRect): DOMRect {
   const pad = 4;
   let rangeRect: DOMRect | null = null;
@@ -833,38 +691,22 @@ function localSampleRect(el: HTMLElement, rect: DOMRect): DOMRect {
         }
       }
     } catch {
-      // A range can fail for disconnected nodes; fall back to measuring.
+      rangeRect = null;
     }
   }
   if (rangeRect && rangeRect.width < rect.width * 0.92) {
-    return new DOMRect(
-      rangeRect.left - pad,
-      rangeRect.top - pad,
-      rangeRect.width + pad * 2,
-      rangeRect.height + pad * 2,
-    );
+    return new DOMRect(rangeRect.left - pad, rangeRect.top - pad, rangeRect.width + pad * 2, rangeRect.height + pad * 2);
   }
 
   const measured = Math.min(rect.width, Math.max(24, measureTextWidth(el) + pad * 2));
   const width = el.classList.contains('dash-chart') ? rect.width : measured;
-  const left =
-    el.classList.contains('dash-chart') || el.classList.contains('dash-empty')
-      ? rect.left + (rect.width - width) / 2
-      : rect.left;
+  const left = el.classList.contains('dash-chart') || el.classList.contains('dash-empty') ? rect.left + (rect.width - width) / 2 : rect.left;
   return new DOMRect(left, rect.top, width, rect.height);
 }
 
-/**
- * Text on artwork follows the local background, not the theme: dark artwork
- * gets light text, a washed-out/light area keeps dark text. The theme still
- * controls the tiles, icon chips and window chrome.
- */
 function applyCoverTones() {
   const el = content.value;
   if (!el) return;
-  // Clear every old marker, not only the current selector matches, so nodes
-  // that have just been excluded (such as the frosted FFmpeg path) drop stale
-  // tones after a live edit or mode change.
   el.querySelectorAll<HTMLElement>('[data-log-tone]').forEach((node) => {
     node.removeAttribute('data-log-tone');
   });
@@ -911,16 +753,8 @@ function applyCoverTones() {
         const x = box.left - contentRect.left + ((col + 0.5) / cols) * box.width;
         const y = box.top - contentRect.top + ((row + 0.5) / rows) * box.height;
         if (x < 0 || y < 0 || x >= width || y >= height) continue;
-        // The shared image starts at the card's origin minus the bleed, then
-        // this card's seam shift moves its slice.
-        const sampleX = Math.min(
-          sample.width - 1,
-          Math.max(0, Math.floor((x + COVER_BLEED - shiftX) / scale)),
-        );
-        const sampleY = Math.min(
-          sample.height - 1,
-          Math.max(0, Math.floor((y + COVER_BLEED - shiftY) / scale)),
-        );
+        const sampleX = Math.min(sample.width - 1, Math.max(0, Math.floor((x + COVER_BLEED - shiftX) / scale)));
+        const sampleY = Math.min(sample.height - 1, Math.max(0, Math.floor((y + COVER_BLEED - shiftY) / scale)));
         const i = (sampleY * sample.width + sampleX) * 4;
         const imageAlpha = sample.data[i + 3] / 255;
         const layerAlpha = imageAlpha * (1 - coverWashAlpha(x / width));
@@ -936,12 +770,6 @@ function applyCoverTones() {
   }
 }
 
-/**
- * Pick the average-marker ink from the progress card's slice of the cover,
- * contrasting it with the bars. The artwork fades into the theme surface, so the
- * halo—not a per-card light/dark surface—keeps the marker readable where it
- * crosses the wash.
- */
 function applyCoverInk() {
   const el = content.value;
   const sample = coverSample;
@@ -965,10 +793,6 @@ function applyCoverInk() {
   const scale = Math.max(coverWidth / sample.width, coverHeight / sample.height);
   const displayWidth = sample.width * scale;
   const displayHeight = sample.height * scale;
-
-  // Map the chart through the shared cover's bleed and the progress card's seam
-  // shift, then resolve the accent from the chart itself so a locally lightened
-  // bar colour also gets a matching high-contrast marker ink.
   const contentRect = el.getBoundingClientRect();
   const chartRect = chart.getBoundingClientRect();
   const left = chartRect.left - contentRect.left;
@@ -990,11 +814,6 @@ function applyCoverInk() {
   }
 }
 
-/**
- * The cover is one shared image, oversized by `COVER_BLEED` on every side so a
- * card's seam shift cannot expose the card background. The theme wash remains a
- * single content-wide gradient, aligned through `--cover-left/top`.
- */
 function updateCoverLayout() {
   const el = content.value;
   const cards = el ? [...el.querySelectorAll<HTMLElement>('.dash-card')] : [];
@@ -1004,8 +823,6 @@ function updateCoverLayout() {
     applyCoverTones();
     return;
   }
-  // Layout offsets instead of rects: the opening animation scales the window, and
-  // rects would capture that transient 0.98 scale and leave the wash misaligned.
   const coverWidth = el.offsetWidth;
   const coverHeight = el.offsetHeight;
   el.style.setProperty('--cover-width', `${coverWidth}px`);
@@ -1014,19 +831,11 @@ function updateCoverLayout() {
   el.style.setProperty('--cover-extended-height', `${coverHeight + COVER_BLEED * 2}px`);
   cards.forEach((card, index) => {
     const shift = COVER_SHIFTS[index] ?? { x: 0, y: 0 };
-    card.style.setProperty(
-      '--cover-left',
-      `${-card.offsetLeft - card.clientLeft}px`,
-    );
-    card.style.setProperty(
-      '--cover-top',
-      `${-card.offsetTop - card.clientTop}px`,
-    );
+    card.style.setProperty('--cover-left', `${-card.offsetLeft - card.clientLeft}px`);
+    card.style.setProperty('--cover-top', `${-card.offsetTop - card.clientTop}px`);
     card.style.setProperty('--cover-shift-x', `${shift.x}px`);
     card.style.setProperty('--cover-shift-y', `${shift.y}px`);
   });
-  // A new task can arrive before its cover has been sampled. Drop the previous
-  // task's ink rather than briefly painting it over the new content.
   if (!coverSample || coverSample.url !== coverUrl.value) {
     el.style.removeProperty('--log-cover-ink');
     el.style.removeProperty('--log-cover-halo');
@@ -1116,40 +925,7 @@ async function loadCoverSample(url: string) {
   updateCoverLayout();
 }
 
-const ENCODER_NAMES: Record<string, string> = {
-  h264_nvenc: 'NVIDIA NVENC',
-  hevc_nvenc: 'NVIDIA NVENC',
-  av1_nvenc: 'NVIDIA NVENC',
-  h264_qsv: 'Intel Quick Sync',
-  hevc_qsv: 'Intel Quick Sync',
-  av1_qsv: 'Intel Quick Sync',
-  h264_amf: 'AMD AMF',
-  hevc_amf: 'AMD AMF',
-  av1_amf: 'AMD AMF',
-  h264_vulkan: 'Vulkan Video',
-  hevc_vulkan: 'Vulkan Video',
-  av1_vulkan: 'Vulkan Video',
-  h264_d3d12va: 'Direct3D 12',
-  hevc_d3d12va: 'Direct3D 12',
-  av1_d3d12va: 'Direct3D 12',
-  libx264: 'x264',
-  libx265: 'x265',
-  libsvtav1: 'SVT-AV1',
-  libaom_av1: 'libaom AV1',
-  librav1e: 'rav1e',
-};
-
-const encoderName = computed(() => {
-  const raw = insights.value.encoder;
-  if (!raw) return null;
-  if (/vulkan video/i.test(raw)) return 'Vulkan Video';
-  const name = raw.match(/\b(h264|hevc|av1)_(?:nvenc|qsv|amf|vulkan|d3d12va)\b/i)?.[0];
-  return name ? ENCODER_NAMES[name.toLowerCase()] ?? name : raw;
-});
-
-const qualityHint = computed(() =>
-  /vulkan/i.test(insights.value.encoder ?? '') ? t('log.dash.quality-hint') : '',
-);
+const encoderName = computed(() => insights.value.encoder);
 
 const acceleratorLabel = computed(() => {
   const kind = insights.value.hardwareKind;
@@ -1163,9 +939,7 @@ const lastProgress = computed(() => {
 });
 const progressPercent = computed(() => lastProgress.value?.percent ?? 0);
 
-const perThousandMax = computed(() =>
-  Math.max(0.001, ...insights.value.progress.map((sample) => sample.perThousand)),
-);
+const perThousandMax = computed(() => Math.max(0.001, ...insights.value.progress.map((sample) => sample.perThousand)));
 const perThousandAverage = computed(() => {
   const samples = insights.value.progress;
   if (!samples.length) return 0;
@@ -1177,9 +951,7 @@ const perThousandMin = computed(() => {
   const samples = insights.value.progress;
   return samples.length ? Math.min(...samples.map((sample) => sample.perThousand)) : 0;
 });
-const averageLine = computed(() =>
-  Math.min(100, (perThousandAverage.value / perThousandMax.value) * 100),
-);
+const averageLine = computed(() => Math.min(100, (perThousandAverage.value / perThousandMax.value) * 100));
 
 function barHeight(sample: ProgressSample): string {
   return `${Math.max(8, (sample.perThousand / perThousandMax.value) * 100)}%`;
@@ -1190,7 +962,6 @@ function stageLabel(stage: StageTime): string {
   return key && te(key) ? t(key) : stage.label;
 }
 
-/** Tint each stage legend dot a little differently down the render group. */
 function stageColor(index: number, group: string): string {
   if (group === 'render') return 'var(--log-accent)';
   const mix = [0, 25, 50, 75, 100][index % 5];
@@ -1210,9 +981,6 @@ interface ChartTipState {
   top: number;
   below: boolean;
 }
-
-// The hover readout lives outside the cards so their overflow clipping (used by
-// the shared cover artwork) cannot cut it off at the card edge.
 const chartTip = ref<ChartTipState | null>(null);
 const chartTipEl = ref<HTMLElement | null>(null);
 
@@ -1235,10 +1003,7 @@ async function showChartTip(event: MouseEvent, sample: ProgressSample) {
   const tipRect = chartTipEl.value.getBoundingClientRect();
   const margin = 10;
   const halfWidth = tipRect.width / 2;
-  const left = Math.min(
-    Math.max(rect.left + rect.width / 2, margin + halfWidth),
-    window.innerWidth - margin - halfWidth,
-  );
+  const left = Math.min(Math.max(rect.left + rect.width / 2, margin + halfWidth), window.innerWidth - margin - halfWidth);
   let below = false;
   let top = rect.top - 8;
   if (top - tipRect.height < margin) {
@@ -1284,27 +1049,16 @@ function highlightParts(text: string): Array<{ text: string; hit: boolean }> {
   return parts;
 }
 
-function onLevelChange(e: Event) {
-  const value = (e.target as HTMLElement & { value?: string }).value;
-  if (value === 'all' || value === 'info' || value === 'warn' || value === 'error') {
-    level.value = value;
-  }
-}
-
 function onModeChange(e: Event) {
   const target = e.target as HTMLElement & { value?: string };
   if (target.value === 'simple' || target.value === 'detail') {
     mode.value = target.value;
     return;
   }
-  // Fallback if the group is cleared by something other than a segment click.
   target.value = mode.value;
 }
 
 function onModeSegmentClick(event: MouseEvent, value: ViewMode) {
-  // mdui toggles the active segment off when it is clicked a second time. A
-  // segmented control must always have one active option, so swallow that click
-  // before it reaches the group's selection handler.
   if (mode.value === value) event.stopPropagation();
 }
 
@@ -1319,18 +1073,13 @@ function clearSearch() {
 
 function selectLogLine(index: number) {
   const selection = logSelection.value;
-  logSelection.value = selection
-    ? { anchor: selection.anchor, end: index }
-    : { anchor: index, end: index };
+  logSelection.value = selection ? { anchor: selection.anchor, end: index } : { anchor: index, end: index };
 }
 
 function isLogLineSelected(index: number) {
   const selection = logSelection.value;
   if (!selection) return false;
-  return (
-    index >= Math.min(selection.anchor, selection.end) &&
-    index <= Math.max(selection.anchor, selection.end)
-  );
+  return index >= Math.min(selection.anchor, selection.end) && index <= Math.max(selection.anchor, selection.end);
 }
 
 function clearLogSelection(event?: MouseEvent) {
@@ -1343,11 +1092,6 @@ function logFileName() {
   return (props.task?.name || 'output').replace(/[\\/:*?"<>|]/g, '_');
 }
 
-/**
- * A screenshot is rendered from the live dashboard, including the shared cover
- * layer. The cover is temporarily embedded as a data URL because pseudo-element
- * background images are not inlined by html-to-image.
- */
 async function imageAsDataUrl(url: string): Promise<string> {
   const image = new Image();
   image.crossOrigin = 'anonymous';
@@ -1389,13 +1133,10 @@ async function captureSimpleDashboard(): Promise<Blob> {
   const previousCover = el.style.getPropertyValue('--log-cover');
   if (coverData) el.style.setProperty('--log-cover', `url("${coverData}")`);
 
-  const background = el.parentElement
-    ? getComputedStyle(el.parentElement).backgroundColor
-    : getComputedStyle(document.body).backgroundColor;
+  const background = el.parentElement ? getComputedStyle(el.parentElement).backgroundColor : getComputedStyle(document.body).backgroundColor;
   try {
     const blob = await toBlob(el, {
-      backgroundColor:
-        background && background !== 'rgba(0, 0, 0, 0)' ? background : '#ffffff',
+      backgroundColor: background && background !== 'rgba(0, 0, 0, 0)' ? background : '#ffffff',
       pixelRatio: Math.max(1, Math.min(2, window.devicePixelRatio || 1)),
     });
     if (!blob) throw new Error('The dashboard image could not be encoded');
@@ -1426,10 +1167,7 @@ async function copyLog() {
     }
   } catch (e) {
     console.error(e);
-    toast(
-      t(mode.value === 'simple' ? 'log.image-copy-failed' : 'log.copy-failed'),
-      'warning',
-    );
+    toast(t(mode.value === 'simple' ? 'log.image-copy-failed' : 'log.copy-failed'), 'warning');
   } finally {
     exporting.value = false;
   }
@@ -1464,10 +1202,7 @@ async function saveLog() {
     toast(t('log.saved'), 'success');
   } catch (e) {
     console.error(e);
-    toast(
-      t(mode.value === 'simple' ? 'log.image-save-failed' : 'log.save-failed'),
-      'warning',
-    );
+    toast(t(mode.value === 'simple' ? 'log.image-save-failed' : 'log.save-failed'), 'warning');
   } finally {
     exporting.value = false;
   }
@@ -1487,7 +1222,6 @@ watch(
     level.value = 'all';
     query.value = '';
     logSelection.value = null;
-    // A failed run usually has no dashboard data, so the raw error is the useful view.
     mode.value = props.task?.status.type === 'failed' ? 'detail' : 'simple';
     await nextTick();
     if (body.value) body.value.scrollTop = 0;
@@ -1505,16 +1239,13 @@ watch([() => props.open, mode, level, query], () => {
   logSelection.value = null;
 });
 
-watch(
-  [() => props.open, mode, coverUrl],
-  async () => {
-    await nextTick();
-    updateCoverLayout();
-    if (props.open && mode.value === 'simple' && coverUrl.value) {
-      void loadCoverSample(coverUrl.value);
-    }
-  },
-);
+watch([() => props.open, mode, coverUrl], async () => {
+  await nextTick();
+  updateCoverLayout();
+  if (props.open && mode.value === 'simple' && coverUrl.value) {
+    void loadCoverSample(coverUrl.value);
+  }
+});
 
 watch(content, (el, previous) => {
   if (previous) coverObserver?.unobserve(previous);
@@ -1530,8 +1261,6 @@ onMounted(() => {
   window.addEventListener('keydown', onKeydown);
   window.addEventListener('resize', hideChartTip);
   coverObserver = new ResizeObserver(() => updateCoverLayout());
-  // MD3 promotes the active colour tokens onto <html>; re-sample the local text
-  // tones when the theme (and therefore the wash colour) changes.
   themeObserver = new MutationObserver(() => updateCoverLayout());
   themeObserver.observe(document.documentElement, {
     attributes: true,
@@ -1556,51 +1285,28 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <div v-if="open" class="log-backdrop" @click.self="emit('close')">
-      <section
-        ref="root"
-        class="log-window"
-        tabindex="-1"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t('log.title')">
+      <section ref="root" class="log-window" tabindex="-1" role="dialog" aria-modal="true" :aria-label="t('log.title')">
         <header class="log-header">
           <h2 class="log-title" :title="task?.name">{{ task?.name }}</h2>
-          <mdui-button-icon class="log-close" :title="t('log.close')" @click="emit('close')">
+          <mdui-button-icon class="log-close" :aria-label="t('log.close')" @click="emit('close')">
             <mdui-icon-close></mdui-icon-close>
           </mdui-button-icon>
         </header>
 
         <div class="log-toolbar">
-          <mdui-segmented-button-group
-            class="log-mode"
-            selects="single"
-            :value="mode"
-            @change="onModeChange">
-            <mdui-segmented-button
-              value="simple"
-              @click="onModeSegmentClick($event, 'simple')">
+          <mdui-segmented-button-group class="log-mode" :aria-label="t('log.title')" selects="single" :value="mode" @change="onModeChange">
+            <mdui-segmented-button value="simple" @click="onModeSegmentClick($event, 'simple')">
               {{ t('log.simple') }}
             </mdui-segmented-button>
-            <mdui-segmented-button
-              value="detail"
-              @click="onModeSegmentClick($event, 'detail')">
+            <mdui-segmented-button value="detail" @click="onModeSegmentClick($event, 'detail')">
               {{ t('log.detail') }}
             </mdui-segmented-button>
           </mdui-segmented-button-group>
 
           <label v-if="mode === 'detail'" class="log-search">
             <mdui-icon-search class="log-search-icon"></mdui-icon-search>
-            <input
-              v-model="query"
-              type="search"
-              :placeholder="t('log.search')"
-              :aria-label="t('log.search')" />
-            <button
-              v-if="query"
-              type="button"
-              class="log-search-clear"
-              :aria-label="t('log.clear-search')"
-              @click="clearSearch">
+            <input v-model="query" type="search" :placeholder="t('log.search')" :aria-label="t('log.search')" />
+            <button v-if="query" type="button" class="log-search-clear" :aria-label="t('log.clear-search')" @click="clearSearch">
               <mdui-icon-close></mdui-icon-close>
             </button>
           </label>
@@ -1612,13 +1318,8 @@ onUnmounted(() => {
         </div>
 
         <template v-else>
-          <!-- Simplified: a graphical summary instead of a wall of monospaced lines. -->
           <div v-if="mode === 'simple'" class="log-simple" @scroll="hideChartTip">
-            <div
-              ref="content"
-              class="log-simple-content"
-              :class="{ 'has-cover': Boolean(coverStyle) }"
-              :style="coverStyle">
+            <div ref="content" class="log-simple-content" :class="{ 'has-cover': Boolean(coverStyle) }" :style="coverStyle">
               <div v-if="issueLine" class="log-issue" :class="`is-${issueLine.level}`">
                 <mdui-icon-error v-if="issueLine.level === 'error'" class="log-issue-icon"></mdui-icon-error>
                 <mdui-icon-warning v-else class="log-issue-icon"></mdui-icon-warning>
@@ -1673,17 +1374,7 @@ onUnmounted(() => {
                       </div>
                       <div>
                         <dt>{{ t('log.dash.quality') }}</dt>
-                        <dd :title="qualityHint || undefined">{{ insights.quality ?? t('log.dash.not-recorded') }}</dd>
-                      </div>
-                      <div>
-                        <dt>{{ t('log.dash.preset') }}</dt>
-                        <dd>{{ insights.preset ?? (insights.presetBuiltin ? t('log.dash.builtin') : t('log.dash.not-recorded')) }}</dd>
-                      </div>
-                      <div class="is-wide">
-                        <dt>{{ t('log.dash.ffmpeg') }}</dt>
-                        <dd class="dash-path" :title="insights.ffmpegPath ?? ''">
-                          {{ insights.ffmpegPath ?? t('log.dash.not-recorded') }}
-                        </dd>
+                        <dd>{{ insights.quality ?? t('log.dash.not-recorded') }}</dd>
                       </div>
                     </dl>
                   </section>
@@ -1705,10 +1396,7 @@ onUnmounted(() => {
                       <div class="dash-chart-wrap">
                         <div class="dash-chart">
                           <div class="dash-chart-plot" aria-hidden="true">
-                            <div
-                              class="dash-chart-average"
-                              :style="{ bottom: `${averageLine}%` }"
-                              :data-label="t('log.dash.average')"></div>
+                            <div class="dash-chart-average" :style="{ bottom: `${averageLine}%` }" :data-label="t('log.dash.average')"></div>
                           </div>
                           <div
                             v-for="(sample, index) in insights.progress"
@@ -1771,14 +1459,8 @@ onUnmounted(() => {
                       </div>
 
                       <div class="stage-legend">
-                        <div
-                          v-for="(stage, index) in insights.stages"
-                          :key="`${stage.group}-${stage.label}-${index}`"
-                          class="stage-legend-item">
-                          <span
-                            class="stage-dot"
-                            :class="stage.group"
-                            :style="{ backgroundColor: stageColor(index, stage.group) }"></span>
+                        <div v-for="(stage, index) in insights.stages" :key="`${stage.group}-${stage.label}-${index}`" class="stage-legend-item">
+                          <span class="stage-dot" :class="stage.group" :style="{ backgroundColor: stageColor(index, stage.group) }"></span>
                           <span class="stage-name" :title="stageLabel(stage)">{{ stageLabel(stage) }}</span>
                           <span class="stage-time">{{ formatSeconds(stage.seconds) }}</span>
                         </div>
@@ -1795,7 +1477,6 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Detailed: the complete raw log, with colour-coded levels and stages. -->
           <div v-else ref="body" class="log-body" @contextmenu="clearLogSelection">
             <div v-if="!filteredLines.length" class="log-empty is-inline">
               <mdui-icon-search class="log-empty-icon"></mdui-icon-search>
@@ -1806,6 +1487,11 @@ onUnmounted(() => {
               :key="line.no"
               class="log-line"
               :class="[`is-${line.level}`, { 'is-selected': isLogLineSelected(index) }]"
+              role="button"
+              tabindex="0"
+              :aria-pressed="isLogLineSelected(index)"
+              @keydown.enter.prevent="selectLogLine(index)"
+              @keydown.space.prevent="selectLogLine(index)"
               @click="selectLogLine(index)">
               <span class="log-no">{{ line.no }}</span>
               <span class="log-level" :class="`is-${line.level}`">{{ levelLabel(line.level) }}</span>
@@ -1822,13 +1508,7 @@ onUnmounted(() => {
 
         <footer class="log-footer" :class="{ 'is-simple': mode === 'simple' }">
           <div v-if="mode === 'detail'" class="log-footer-stats">
-            <button
-              v-for="item in levelStats"
-              :key="item.value"
-              type="button"
-              class="log-stat"
-              :class="{ active: level === item.value }"
-              @click="selectLevel(item.value)">
+            <button v-for="item in levelStats" :key="item.value" type="button" class="log-stat" :class="{ active: level === item.value }" @click="selectLevel(item.value)">
               <span class="log-dot" :class="`is-${item.value}`"></span>
               <span>{{ item.label }}</span>
               <strong>{{ item.count }}</strong>
@@ -1846,15 +1526,7 @@ onUnmounted(() => {
           <div class="log-footer-actions">
             <mdui-button variant="tonal" :disabled="exporting" @click="copyLog">
               <mdui-icon-content-copy slot="icon"></mdui-icon-content-copy>
-              {{
-                t(
-                  mode === 'simple'
-                    ? 'log.copy-image'
-                    : selectedLineCount
-                      ? 'log.copy-selection'
-                      : 'log.copy-log',
-                )
-              }}
+              {{ t(mode === 'simple' ? 'log.copy-image' : selectedLineCount ? 'log.copy-selection' : 'log.copy-log') }}
             </mdui-button>
             <mdui-button variant="tonal" :disabled="exporting" @click="saveLog">
               <mdui-icon-save--outlined slot="icon"></mdui-icon-save--outlined>
@@ -1864,41 +1536,36 @@ onUnmounted(() => {
         </footer>
       </section>
 
-      <div
-        v-if="chartTip"
-        ref="chartTipEl"
-        class="chart-tooltip"
-        :class="{ 'is-below': chartTip.below }"
-        :style="{ left: `${chartTip.left}px`, top: `${chartTip.top}px` }">{{ chartTip.text }}</div>
+      <div v-if="chartTip" ref="chartTipEl" class="chart-tooltip" :class="{ 'is-below': chartTip.below }" :style="{ left: `${chartTip.left}px`, top: `${chartTip.top}px` }">
+        {{ chartTip.text }}
+      </div>
     </div>
   </Teleport>
 </template>
 
 <style scoped lang="scss">
-@use '../styles/breakpoints' as bp;
-
 .log-backdrop {
   position: fixed;
   inset: 0;
-  /* mdui's navigation rail sits at 2000; the log surface is modal and must clear it. */
   z-index: 3000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4vh 4vw;
-  background-color: rgba(0, 0, 0, 0.45);
+  background-color: rgba(var(--mdui-color-scrim), 0.32);
 }
 
 .log-window {
   display: flex;
   flex-direction: column;
-  width: min(1160px, 100%);
-  height: min(820px, 100%);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
-  border-radius: var(--mdui-shape-corner-extra-large);
-  background-color: rgb(var(--mdui-color-surface-container-high));
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  background-color: rgb(var(--mdui-color-surface));
   color: rgb(var(--mdui-color-on-surface));
-  box-shadow: var(--mdui-elevation-level4);
   outline: none;
   animation: log-window-in var(--app-motion-duration-spatial-default, 220ms) var(--mdui-motion-easing-emphasized-decelerate);
 }
@@ -1914,13 +1581,13 @@ onUnmounted(() => {
   }
 }
 
-/* ===== Header ===== */
 .log-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 16px 16px 20px;
-  border-bottom: 1px solid rgba(var(--mdui-color-outline-variant), 0.5);
+  flex-shrink: 0;
+  min-height: 64px;
+  padding: 8px 8px 8px 16px;
 }
 
 .log-title {
@@ -1937,23 +1604,24 @@ onUnmounted(() => {
 
 .log-close {
   flex-shrink: 0;
+  width: var(--app-touch-target, 48px);
+  height: var(--app-touch-target, 48px);
 }
 
-/* ===== Toolbar ===== */
 .log-toolbar {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 20px;
-  border-bottom: 1px solid rgba(var(--mdui-color-outline-variant), 0.5);
+  align-items: stretch;
+  flex-direction: column;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 8px 16px 16px;
 }
 
 .log-mode {
-  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
 }
 
-/* The selected check mark makes the compact two-option switch look busy; the
-   tinted segment already communicates the active mode. */
 .log-mode mdui-segmented-button::part(selected-icon) {
   display: none;
 }
@@ -1966,17 +1634,14 @@ onUnmounted(() => {
 .log-search {
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: min(280px, 100%);
-  height: 38px;
-  margin-left: auto;
-  padding: 0 8px 0 12px;
-  border: 1px solid rgb(var(--mdui-color-outline-variant));
-  border-radius: var(--mdui-shape-corner-full);
-  background-color: rgb(var(--mdui-color-surface-container-highest));
-  transition-property: border-color, box-shadow;
-  transition-duration: var(--app-motion-duration-effects-fast, 120ms);
-  transition-timing-function: var(--mdui-motion-easing-standard);
+  gap: 8px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 4px 0 16px;
+  border: 1px solid rgb(var(--mdui-color-outline));
+  border-radius: var(--mdui-shape-corner-extra-small, 4px);
+  background-color: rgb(var(--mdui-color-surface-container-low));
+  transition: border-color var(--app-motion-duration-effects-fast, 150ms) var(--mdui-motion-easing-standard);
 }
 
 .log-search:focus-within {
@@ -1993,12 +1658,13 @@ onUnmounted(() => {
 .log-search input {
   flex: 1;
   min-width: 0;
+  min-height: 48px;
   border: none;
   outline: none;
   background: transparent;
   color: rgb(var(--mdui-color-on-surface));
   font-family: inherit;
-  font-size: var(--mdui-typescale-body-small-size);
+  font-size: var(--mdui-typescale-body-large-size);
 }
 
 .log-search input::placeholder {
@@ -2012,8 +1678,8 @@ onUnmounted(() => {
 .log-search-clear {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: var(--app-touch-target, 48px);
+  height: var(--app-touch-target, 48px);
   flex-shrink: 0;
   padding: 0;
   border: none;
@@ -2031,7 +1697,6 @@ onUnmounted(() => {
   font-size: 16px;
 }
 
-/* ===== Empty state ===== */
 .log-empty {
   display: flex;
   flex: 1;
@@ -2058,26 +1723,23 @@ onUnmounted(() => {
   font-size: var(--mdui-typescale-body-medium-size);
 }
 
-/* ===== Simplified dashboard ===== */
 .log-simple {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  background-color: rgb(var(--mdui-color-surface-container));
+  background-color: rgb(var(--mdui-color-surface));
 }
 
 .log-simple-content {
   position: relative;
-  padding: 20px;
+  padding: var(--app-page-padding, 16px);
 
-  /* Defaults match the current MD3 theme. A card that sits on artwork overrides
-     these with a palette derived from its own slice of the illustration. */
   --log-fg: rgb(var(--mdui-color-on-surface));
   --log-muted: rgb(var(--mdui-color-on-surface-variant));
   --log-faint: rgb(var(--mdui-color-outline));
   --log-accent: rgb(var(--mdui-color-primary));
   --log-accent-2: rgb(var(--mdui-color-tertiary));
-  --log-tile-bg: rgb(var(--mdui-color-surface-container));
+  --log-tile-bg: rgb(var(--mdui-color-surface-container-low));
   --log-tile-fg: rgb(var(--mdui-color-on-surface));
   --log-tile-muted: rgb(var(--mdui-color-on-surface-variant));
   --log-tile-line: rgba(var(--mdui-color-outline-variant), 0.55);
@@ -2088,96 +1750,10 @@ onUnmounted(() => {
   --log-text-shadow: none;
 }
 
-.log-simple-content.has-cover .dash-card {
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-}
-
-/* The cover is one shared image, oversized by --cover-bleed so each card's small
-   seam shift can cut the artwork without exposing the card background. The
-   gradient stays one content-wide layer, aligned through --cover-bleed, so the
-   fade into the theme surface still runs across the whole grid. */
-.log-simple-content.has-cover .dash-card::before {
-  content: '';
-  position: absolute;
-  top: calc(var(--cover-top, 0px) - var(--cover-bleed, 0px));
-  left: calc(var(--cover-left, 0px) - var(--cover-bleed, 0px));
-  z-index: -1;
-  width: var(--cover-extended-width, 100%);
-  height: var(--cover-extended-height, 100%);
-  background-image:
-    linear-gradient(
-      to right,
-      rgba(var(--mdui-color-surface-container-high), 0) 0%,
-      rgba(var(--mdui-color-surface-container-high), 0) 40%,
-      rgba(var(--mdui-color-surface-container-high), 0.35) 58%,
-      rgba(var(--mdui-color-surface-container-high), 0.72) 78%,
-      rgb(var(--mdui-color-surface-container-high)) 100%
-    ),
-    var(--log-cover);
-  background-position:
-    var(--cover-bleed, 0px) top,
-    var(--cover-shift-x, 0px) var(--cover-shift-y, 0px);
-  background-repeat: no-repeat;
-  background-size: var(--cover-width, 100%) 100%, cover;
-  pointer-events: none;
-}
-
-/* Text sitting directly on the artwork follows the artwork, not the theme:
-   dark covers get light type and light covers get dark type. The whole-cover
-   tone is the fallback; applyCoverTones() refines blocks that cross the wash. */
-.log-simple-content.has-cover[data-cover-tone='dark'],
-.log-simple-content.has-cover .dash-card [data-log-tone='dark'] {
-  --log-fg: #fff;
-  --log-muted: rgba(255, 255, 255, 0.8);
-  --log-faint: rgba(255, 255, 255, 0.62);
-  --log-grid: rgba(255, 255, 255, 0.22);
-  --log-line: rgba(255, 255, 255, 0.36);
-  --log-accent: color-mix(in srgb, rgb(var(--mdui-color-primary)) 68%, white);
-  --log-accent-2: color-mix(in srgb, rgb(var(--mdui-color-tertiary)) 68%, white);
-  --log-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.62), 0 0 7px rgba(0, 0, 0, 0.36);
-}
-
-.log-simple-content.has-cover[data-cover-tone='light'],
-.log-simple-content.has-cover .dash-card [data-log-tone='light'] {
-  --log-fg: #17161b;
-  --log-muted: rgba(23, 22, 27, 0.78);
-  --log-faint: rgba(23, 22, 27, 0.6);
-  --log-grid: rgba(23, 22, 27, 0.16);
-  --log-line: rgba(23, 22, 27, 0.28);
-  --log-accent: color-mix(in srgb, rgb(var(--mdui-color-primary)) 78%, black);
-  --log-accent-2: color-mix(in srgb, rgb(var(--mdui-color-tertiary)) 78%, black);
-  --log-text-shadow: 0 1px 2px rgba(255, 255, 255, 0.55);
-}
-
-.log-simple-content.has-cover .dash-card :is(
-    .dash-card-title,
-    .dash-card-sub,
-    .dash-metric,
-    .dash-meta,
-    .dash-config-grid dt,
-    .dash-config-grid dd:not(.dash-path),
-    .dash-progress-meta,
-    .dash-chart-axis,
-    .stage-name,
-    .stage-time,
-    .dash-empty
-  ),
-.log-simple-content.has-cover .dash-card [data-log-tone] {
-  text-shadow: var(--log-text-shadow, none);
-}
-
-/* These labels carry their tone per span, because the left and right ends of
-   the same row can sit on opposite sides of the wash. */
-.log-simple-content.has-cover .dash-card .dash-progress-meta > span,
-.log-simple-content.has-cover .dash-card .dash-chart-axis > span {
-  color: var(--log-muted);
-}
-
 .log-issue {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 16px;
   padding: 12px 16px;
@@ -2221,47 +1797,36 @@ onUnmounted(() => {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   font-family: 'Roboto Mono', 'Consolas', monospace;
-  font-size: 11.5px;
+  font-size: var(--mdui-typescale-body-small-size);
   line-height: 1.5;
   opacity: 0.85;
 }
 
-/* The dashboard reads as one grouped surface: the 1px padding and grid gaps
-   expose this background as the outer hairline and the dividers, while the
-   rounded wrapper clips the square cards into rounded outer corners. */
 .dashboard {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: 1px;
-  overflow: hidden;
-  border-radius: var(--mdui-shape-corner-large);
-  background-color: color-mix(
-    in srgb,
-    rgb(var(--mdui-color-outline-variant)) 62%,
-    rgb(var(--mdui-color-surface-container-high))
-  );
+  gap: 16px;
 }
 
 .dashboard-top,
 .dashboard-bottom {
   display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  gap: 1px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
 }
 
 .dashboard-stack {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1px;
+  grid-template-rows: auto auto;
+  gap: 16px;
   min-width: 0;
 }
 
 .dash-card {
   min-width: 0;
-  padding: 16px 18px;
-  border-radius: 0;
-  background-color: rgb(var(--mdui-color-surface-container-high));
+  padding: var(--app-card-padding, 16px);
+  border-radius: var(--mdui-shape-corner-medium, 12px);
+  background-color: rgb(var(--mdui-color-surface-container-low));
 }
 
 .dash-card-compact {
@@ -2325,8 +1890,8 @@ onUnmounted(() => {
 
 .dash-card-sub {
   margin: 1px 0 0;
-  font-size: var(--mdui-typescale-label-small-size);
-  line-height: var(--mdui-typescale-label-small-line-height);
+  font-size: var(--mdui-typescale-body-small-size);
+  line-height: var(--mdui-typescale-body-small-line-height);
   color: var(--log-muted);
 }
 
@@ -2356,8 +1921,8 @@ onUnmounted(() => {
 
 .dash-config-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 24px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
   margin: 0;
 }
 
@@ -2366,13 +1931,13 @@ onUnmounted(() => {
 }
 
 .dash-config-grid .is-wide {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 
 .dash-config-grid dt {
   margin-bottom: 2px;
-  font-size: var(--mdui-typescale-label-small-size);
-  line-height: var(--mdui-typescale-label-small-line-height);
+  font-size: var(--mdui-typescale-body-small-size);
+  line-height: var(--mdui-typescale-body-small-line-height);
   color: var(--log-muted);
 }
 
@@ -2388,23 +1953,19 @@ onUnmounted(() => {
 }
 
 .dash-config-grid .dash-path {
-  /* The path runs across both the artwork and the theme wash, so it gets the
-     same frosted surface as the tiles instead of a single cover tone. */
   display: inline-block;
   max-width: 100%;
   padding: 3px 7px;
   border: 1px solid var(--log-tile-line);
   border-radius: var(--mdui-shape-corner-extra-small);
   background-color: color-mix(in srgb, var(--log-tile-bg) 76%, transparent);
-  -webkit-backdrop-filter: blur(10px) saturate(1.3);
-  backdrop-filter: blur(10px) saturate(1.3);
+
   font-family: 'Roboto Mono', 'Consolas', monospace;
-  font-size: 11.5px;
+  font-size: var(--mdui-typescale-body-small-size);
   font-weight: 400;
   color: var(--log-tile-muted);
 }
 
-/* ===== Progress card ===== */
 .dash-progress-meta {
   display: flex;
   align-items: center;
@@ -2434,18 +1995,10 @@ onUnmounted(() => {
   border-radius: var(--mdui-shape-corner-small) var(--mdui-shape-corner-small) 0 0;
   background:
     linear-gradient(to top, color-mix(in srgb, var(--log-accent) 9%, transparent), transparent 72%),
-    repeating-linear-gradient(
-      to top,
-      transparent 0,
-      transparent calc(25% - 1px),
-      var(--log-grid) calc(25% - 1px),
-      var(--log-grid) 25%
-    );
+    repeating-linear-gradient(to top, transparent 0, transparent calc(25% - 1px), var(--log-grid) calc(25% - 1px), var(--log-grid) 25%);
   border-bottom: 1px solid var(--log-line);
 }
 
-/* Overlays the exact area the bars are scaled against, so a percentage along
-   either axis means the same thing for the bars and the average marker. */
 .dash-chart-plot {
   position: absolute;
   inset: var(--chart-pad-top) 0 0;
@@ -2466,11 +2019,7 @@ onUnmounted(() => {
   width: 100%;
   min-height: 5px;
   border-radius: 1px 1px 0 0;
-  background: linear-gradient(
-    to top,
-    var(--log-accent),
-    color-mix(in srgb, var(--log-accent) 82%, transparent)
-  );
+  background: linear-gradient(to top, var(--log-accent), color-mix(in srgb, var(--log-accent) 82%, transparent));
   transition-property: filter, transform;
   transition-duration: var(--app-motion-duration-effects-fast, 120ms);
   transition-timing-function: var(--mdui-motion-easing-standard);
@@ -2480,8 +2029,6 @@ onUnmounted(() => {
   filter: brightness(1.12);
 }
 
-/* The marker and its label take the cover colour that contrasts most with the
-   chart bars; the halo flips to the opposite ink for the lighter background. */
 .dash-chart-average {
   position: absolute;
   right: 0;
@@ -2508,8 +2055,6 @@ onUnmounted(() => {
     0 0 5px var(--log-cover-halo);
 }
 
-/* Floating hover readout. It is fixed (and painted above the cards) so a card's
-   overflow clip cannot cut it off, with the same frosted treatment as the tiles. */
 .chart-tooltip {
   position: fixed;
   z-index: 3100;
@@ -2524,8 +2069,6 @@ onUnmounted(() => {
   box-shadow: var(--mdui-elevation-level2);
   pointer-events: none;
   transform: translate(-50%, -100%);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  backdrop-filter: blur(14px) saturate(1.4);
 }
 
 .chart-tooltip.is-below {
@@ -2537,8 +2080,8 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 12px;
   margin-top: 6px;
-  font-size: var(--mdui-typescale-label-small-size);
-  line-height: var(--mdui-typescale-label-small-line-height);
+  font-size: var(--mdui-typescale-body-small-size);
+  line-height: var(--mdui-typescale-body-small-line-height);
   color: var(--log-muted);
 }
 
@@ -2549,8 +2092,6 @@ onUnmounted(() => {
   margin-top: 16px;
 }
 
-/* Stat tiles are frosted glass: the cover artwork stays visible underneath,
-   softened by a blur so the numbers keep a quiet backdrop. */
 .dash-stats > div {
   display: flex;
   flex-direction: column;
@@ -2559,13 +2100,11 @@ onUnmounted(() => {
   border: 1px solid var(--log-tile-line);
   border-radius: var(--mdui-shape-corner-small);
   background-color: color-mix(in srgb, var(--log-tile-bg) 82%, transparent);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  backdrop-filter: blur(14px) saturate(1.4);
 }
 
 .dash-stats span {
-  font-size: var(--mdui-typescale-label-small-size);
-  line-height: var(--mdui-typescale-label-small-line-height);
+  font-size: var(--mdui-typescale-body-small-size);
+  line-height: var(--mdui-typescale-body-small-line-height);
   color: var(--log-tile-muted);
 }
 
@@ -2577,7 +2116,6 @@ onUnmounted(() => {
   color: var(--log-tile-fg);
 }
 
-/* ===== Stage card ===== */
 .dash-totals {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2590,14 +2128,12 @@ onUnmounted(() => {
   border: 1px solid var(--log-tile-line);
   border-radius: var(--mdui-shape-corner-small);
   background-color: color-mix(in srgb, var(--log-tile-bg) 82%, transparent);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  backdrop-filter: blur(14px) saturate(1.4);
 }
 
 .dash-totals span {
   display: block;
-  font-size: var(--mdui-typescale-label-small-size);
-  line-height: var(--mdui-typescale-label-small-line-height);
+  font-size: var(--mdui-typescale-body-small-size);
+  line-height: var(--mdui-typescale-body-small-line-height);
   color: var(--log-tile-muted);
 }
 
@@ -2613,7 +2149,7 @@ onUnmounted(() => {
 
 .stage-legend {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 5px 18px;
 }
 
@@ -2675,7 +2211,6 @@ onUnmounted(() => {
   color: var(--log-faint);
 }
 
-/* ===== Detailed log ===== */
 .log-body {
   flex: 1;
   min-height: 0;
@@ -2683,16 +2218,17 @@ onUnmounted(() => {
   padding: 8px 0;
   background-color: rgb(var(--mdui-color-surface-container-lowest));
   font-family: 'Roboto Mono', 'Consolas', monospace;
-  font-size: 12.5px;
+  font-size: var(--mdui-typescale-body-medium-size);
   line-height: 1.55;
 }
 
 .log-line {
   display: grid;
-  grid-template-columns: 42px 52px 62px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 8px;
   align-items: start;
-  padding: 2px 20px 2px 14px;
+  min-height: var(--app-touch-target, 48px);
+  padding: 8px 16px 8px 8px;
   border-left: 2px solid transparent;
   cursor: pointer;
 }
@@ -2729,22 +2265,16 @@ onUnmounted(() => {
 
 .log-level,
 .log-stage {
-  display: inline-flex;
+  display: none;
   align-items: center;
   justify-content: center;
-  height: 20px;
-  margin-top: 1px;
+  min-height: 24px;
+  padding: 0 6px;
   border-radius: var(--mdui-shape-corner-full);
-  font-family: 'Roboto Mono', 'Consolas', monospace;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1;
+  font-size: var(--mdui-typescale-label-medium-size);
+  font-weight: 500;
+  line-height: var(--mdui-typescale-label-medium-line-height);
   white-space: nowrap;
-}
-
-.log-level {
-  padding: 0 7px;
 }
 
 .log-level.is-info {
@@ -2760,11 +2290,6 @@ onUnmounted(() => {
 .log-level.is-error {
   background-color: rgb(var(--mdui-color-error-container));
   color: rgb(var(--mdui-color-on-error-container));
-}
-
-.log-stage {
-  padding: 0 6px;
-  font-weight: 500;
 }
 
 .log-stage.is-progress {
@@ -2805,15 +2330,15 @@ onUnmounted(() => {
   color: rgb(var(--mdui-color-on-warning-container));
 }
 
-/* ===== Footer ===== */
 .log-footer {
   display: flex;
   align-items: center;
-  gap: 12px;
   flex-wrap: wrap;
-  padding: 9px 16px;
-  border-top: 1px solid rgba(var(--mdui-color-outline-variant), 0.5);
-  background-color: rgb(var(--mdui-color-surface-container-high));
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgb(var(--mdui-color-outline-variant));
+  background-color: rgb(var(--mdui-color-surface));
 }
 
 .log-footer-stats {
@@ -2827,18 +2352,16 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-height: var(--app-touch-target, 48px);
   padding: 4px 8px;
   border: none;
   border-radius: var(--mdui-shape-corner-full);
   background: transparent;
   color: rgb(var(--mdui-color-on-surface-variant));
   font-family: inherit;
-  font-size: var(--mdui-typescale-label-small-size);
-  line-height: var(--mdui-typescale-label-small-line-height);
+  font-size: var(--mdui-typescale-label-large-size);
+  line-height: var(--mdui-typescale-label-large-line-height);
   cursor: pointer;
-  transition-property: background-color, color;
-  transition-duration: var(--app-motion-duration-effects-fast, 120ms);
-  transition-timing-function: var(--mdui-motion-easing-standard);
 }
 
 .log-stat:hover {
@@ -2876,11 +2399,11 @@ onUnmounted(() => {
 }
 
 .log-line-count {
-  margin-left: auto;
+  order: 3;
+  width: 100%;
   color: rgb(var(--mdui-color-on-surface-variant));
-  font-size: var(--mdui-typescale-label-small-size);
-  line-height: var(--mdui-typescale-label-small-line-height);
-  white-space: nowrap;
+  font-size: var(--mdui-typescale-body-small-size);
+  line-height: var(--mdui-typescale-body-small-line-height);
 }
 
 .log-line-count.is-selected {
@@ -2891,117 +2414,61 @@ onUnmounted(() => {
 .log-footer-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  flex-shrink: 0;
-}
-
-/* Tonal buttons use the secondary container, which can collapse to white in
-   some themes. Paint a primary tint directly so they still read as buttons. */
-.log-footer-actions mdui-button:not([disabled]) {
-  color: rgb(var(--mdui-color-primary));
-  background-color: color-mix(
-    in srgb,
-    rgb(var(--mdui-color-primary)) 12%,
-    rgb(var(--mdui-color-surface-container-high))
-  );
+  margin-left: auto;
+  min-width: 0;
 }
 
 .log-footer.is-simple .log-footer-actions {
   margin-left: auto;
 }
 
-/* ===== Responsive ===== */
-@include bp.below-expanded {
-  .dashboard-top,
-  .dashboard-bottom {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .dashboard-stack {
-    grid-template-rows: auto auto;
-  }
+.log-mode mdui-segmented-button {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--app-touch-target, 48px);
 }
-
-@include bp.compact {
+.log-search-clear:focus-visible,
+.log-stat:focus-visible,
+.log-line:focus-visible {
+  outline: 2px solid rgb(var(--mdui-color-primary));
+  outline-offset: 2px;
+}
+@media (min-width: 600px) {
   .log-backdrop {
-    padding: 0;
+    padding: 24px;
   }
-
   .log-window {
-    width: 100%;
-    height: 100%;
-    border-radius: 0;
+    width: min(840px, 100%);
+    height: min(820px, 100%);
+    border-radius: var(--mdui-shape-corner-extra-large);
+    box-shadow: var(--mdui-elevation-level3);
   }
-
-  .log-header {
-    padding: 12px;
-  }
-
-  .log-title {
-    font-size: var(--mdui-typescale-title-medium-size);
-  }
-
   .log-toolbar {
-    flex-wrap: wrap;
-    padding: 10px 12px;
+    flex-direction: row;
+    align-items: center;
   }
-
   .log-mode {
-    width: 100%;
+    width: auto;
+    flex-shrink: 0;
   }
-
   .log-search {
-    width: 100%;
-    margin-left: 0;
+    flex: 1;
+    min-width: 0;
   }
-
-  .log-simple-content {
-    padding: 12px;
-  }
-
-  .log-issue {
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .dash-card {
-    padding: 14px;
-  }
-
   .dash-config-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
   .dash-config-grid .is-wide {
-    grid-column: auto;
+    grid-column: 1 / -1;
   }
-
-  .dash-stats {
-    gap: 6px;
-  }
-
   .log-line {
-    grid-template-columns: 34px 48px minmax(0, 1fr);
-    gap: 7px;
-    padding: 2px 12px 2px 10px;
+    grid-template-columns: 34px 52px 62px minmax(0, 1fr);
   }
-
+  .log-level,
   .log-stage {
-    display: none;
-  }
-
-  .log-footer {
-    padding: 8px 12px;
-  }
-
-  .log-line-count {
-    order: 3;
-    width: 100%;
-    margin-left: 0;
-  }
-
-  .log-footer-actions {
-    margin-left: auto;
+    display: inline-flex;
   }
 }
 </style>

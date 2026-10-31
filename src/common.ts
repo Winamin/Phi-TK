@@ -52,6 +52,7 @@ export function changeLocale(locale: string) {
   if (locale.startsWith('en')) locale = 'en';
   if (!SUPPORTED_LOCALES.includes(locale)) locale = 'en';
   i18n.global.locale.value = (locale === 'zh-TW' ? 'zh-CN' : locale) as typeof i18n.global.locale.value;
+  document.documentElement.lang = locale;
   localStorage.setItem('locale', locale);
   // Keep mdui's own built-in strings in step with the UI language.
   setLocale(mduiLocaleFor(locale)).catch((e) => console.error('failed to set mdui locale', e));
@@ -67,8 +68,8 @@ export function changeLocale(locale: string) {
 export function toast(message: string, kind?: 'success' | 'info' | 'warning' | 'error') {
   const bar = snackbar({
     message,
-    placement: 'top',
-    autoCloseDelay: 2000,
+    placement: 'bottom',
+    autoCloseDelay: 4000,
     closeOnOutsideClick: true,
   });
   if (kind) bar.classList.add(`toast-${kind}`);

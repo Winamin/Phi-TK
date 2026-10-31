@@ -1,37 +1,20 @@
-# Logs
-logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
+node_modules/
 .DS_Store
-dist
-dist-ssr
-coverage
+dist/
 *.local
 
-/cypress/videos/
-/cypress/screenshots/
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+.vscode/
+.idea/
+.vs/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-/deploy.sh
-
-/static-lib
-/.cargo
-
 target/
-/.phitk-test
-/target-release-test
+Phi-TK-android-arm64.apk
+Phi-TK-android-arm64.apk.sha256

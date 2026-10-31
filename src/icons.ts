@@ -119,3 +119,6 @@ import '@mdui/icons/dark-mode.js';
 import '@mdui/icons/brightness-auto.js';
 
 import './components/md/IconGithub';
+
+import '@mdui/icons/menu.js';
+import '@mdui/icons/more-vert.js';

@@ -36,8 +36,30 @@ function onInput(e: Event) {
 </script>
 
 <template>
-  <mdui-text-field :value="modelValue ?? ''" @input="onInput">
+  <mdui-text-field class="md-text-field" :value="modelValue ?? ''" @input="onInput">
     <!-- `<mdui-text-field>` has no unnamed slot, so only `slot="…"` children render. -->
     <slot></slot>
   </mdui-text-field>
 </template>
+
+<style scoped>
+.md-text-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.md-text-field::part(container) {
+  min-height: 56px;
+}
+
+.md-text-field::part(input) {
+  min-width: 0;
+}
+
+.md-text-field::part(clear-button),
+.md-text-field::part(toggle-password-button) {
+  width: var(--app-touch-target, 48px);
+  height: var(--app-touch-target, 48px);
+}
+</style>

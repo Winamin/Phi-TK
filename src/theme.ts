@@ -21,7 +21,7 @@ const CUSTOM_COLORS = [
 
 export function getThemeMode(): ThemeMode {
   const stored = localStorage.getItem(THEME_MODE_KEY);
-  return stored === 'light' || stored === 'dark' || stored === 'auto' ? stored : 'dark';
+  return stored === 'light' || stored === 'dark' || stored === 'auto' ? stored : 'auto';
 }
 
 let mediaQuery: MediaQueryList | null = null;
@@ -58,7 +58,6 @@ export function applyThemeMode(mode: ThemeMode) {
   reapplyCurrentScheme();
 }
 
-
 export function isWallpaperColorEnabled(): boolean {
   return localStorage.getItem(WALLPAPER_COLOR_KEY) === '1';
 }
@@ -91,14 +90,18 @@ function promoteSchemeToInline() {
     return;
   }
   const suffix = prefersDark() ? '-dark' : '-light';
-  const tokenRe = new RegExp(
-    '--mdui-color-([a-z0-9-]+)' + suffix + '\\s*:\\s*([0-9]+\\s*,\\s*[0-9]+\\s*,\\s*[0-9]+)',
-    'g',
-  );
+  const tokenRe = new RegExp('--mdui-color-([a-z0-9-]+)' + suffix + '\\s*:\\s*([0-9]+\\s*,\\s*[0-9]+\\s*,\\s*[0-9]+)', 'g');
   let n = 0;
   for (const m of el.textContent.matchAll(tokenRe)) {
     root.style.setProperty('--mdui-color-' + m[1], m[2]);
     n++;
+  }
+  // MDUI's legacy Scheme.surface shares tone 10 with low containers in dark mode.
+  // MD3's current surface uses tone 6 (dark) / 98 (light), so grouped cards remain visible.
+  const surface = root.style.getPropertyValue(prefersDark() ? '--mdui-color-surface-dim' : '--mdui-color-surface-bright');
+  if (surface) {
+    root.style.setProperty('--mdui-color-surface', surface);
+    root.style.setProperty('--mdui-color-background', surface);
   }
   if (n === 0) console.warn('[theme] no MD3 tokens promoted for seed', currentSeed);
   const bg = root.style.getPropertyValue('--mdui-color-background');
@@ -136,11 +139,20 @@ export function colorSchemeDiagnostics(): string {
   const styles = document.querySelectorAll('style[id^="mdui-custom-color-scheme"]').length;
   const inline = document.documentElement.style.getPropertyValue('--mdui-color-primary').trim() || '(none)';
   return (
-    'class=' + schemeClass + ' | injectedStyle=' + styles + ' | inlinePrimary=' + inline +
-    ' | primary=' + readAppliedPrimary() + ' | derived=' + (getDerivedColor() ?? '(none)') + ' | html=' + cls
+    'class=' +
+    schemeClass +
+    ' | injectedStyle=' +
+    styles +
+    ' | inlinePrimary=' +
+    inline +
+    ' | primary=' +
+    readAppliedPrimary() +
+    ' | derived=' +
+    (getDerivedColor() ?? '(none)') +
+    ' | html=' +
+    cls
   );
 }
-
 
 export async function deriveColorFromWallpaper(path: string): Promise<string | null> {
   try {

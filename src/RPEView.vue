@@ -1,6 +1,7 @@
 <i18n>
 en:
-  not-binded: You have not binded RPE yet
+  not-binded: RPE is not connected
+  empty: No charts found in this RPE folder
   bind: Bind RPE
   binded: Binded successfully
   unbind: Unbind RPE
@@ -10,6 +11,7 @@ en:
 
 zh-CN:
   not-binded: 你还没有绑定 RPE
+  empty: 此 RPE 文件夹中还没有谱面
   bind: 绑定 RPE
   binded: 绑定成功
   unbind: 解绑 RPE
@@ -71,11 +73,10 @@ onMounted(() => {
 
 <template>
   <div class="rpe-container">
-    <!-- Unbinded state -->
     <template v-if="!charts">
       <div class="empty-state">
         <mdui-icon-link-off class="empty-icon"></mdui-icon-link-off>
-        <h2 class="empty-title md3-headline">{{ t('not-binded') }}</h2>
+        <h2 class="empty-title md3-title-large">{{ t('not-binded') }}</h2>
         <mdui-button variant="filled" @click="bindRPE">
           <mdui-icon-link slot="icon"></mdui-icon-link>
           {{ t('bind') }}
@@ -83,7 +84,6 @@ onMounted(() => {
       </div>
     </template>
 
-    <!-- Binded state -->
     <template v-else>
       <div class="rpe-header">
         <mdui-button variant="text" class="unbind-btn" @click="unbindRPE">
@@ -93,19 +93,16 @@ onMounted(() => {
       </div>
 
       <div class="chart-list">
+        <p v-if="!charts.length" class="md3-body">{{ t('empty') }}</p>
         <mdui-card v-for="chart in charts" :key="chart.id" variant="filled" class="chart-card">
           <div class="chart-cover">
-            <div
-              class="cover-image"
-              :style="{ backgroundImage: 'url(' + convertFileSrc(chart.illustration) + ')' }"></div>
+            <div class="cover-image" :style="{ backgroundImage: 'url(' + convertFileSrc(chart.illustration) + ')' }"></div>
           </div>
           <div class="chart-content">
-            <h3 class="chart-name md3-title-large">{{ chart.name }}</h3>
+            <h3 class="chart-name md3-title-medium">{{ chart.name }}</h3>
             <p class="chart-id">{{ chart.id }}</p>
             <div class="chart-action">
-              <mdui-button
-                variant="filled"
-                @click="router.push({ name: 'render', query: { chart: chart.path } })">
+              <mdui-button variant="tonal" @click="router.push({ name: 'render', query: { chart: chart.path } })">
                 <mdui-icon-play-circle--outlined slot="icon"></mdui-icon-play-circle--outlined>
                 {{ t('render') }}
               </mdui-button>
@@ -118,137 +115,96 @@ onMounted(() => {
 </template>
 
 <style scoped lang="scss">
-@use './styles/breakpoints' as bp;
-@use './styles/motion' as mo;
-
 .rpe-container {
-  padding: 24px;
-  width: 100%;
-  height: 100vh;
-  max-width: 1100px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  width: 100%;
+  max-width: var(--app-content-max-width, 840px);
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  padding: var(--app-page-padding, 16px);
 }
-
-/* ===== Empty State ===== */
 .empty-state {
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1;
   gap: 24px;
 }
-
 .empty-icon {
-  font-size: 4rem;
-  color: rgb(var(--mdui-color-outline));
-}
-
-.empty-title {
+  font-size: 48px;
   color: rgb(var(--mdui-color-on-surface-variant));
+}
+.empty-title {
   margin: 0;
+  color: rgb(var(--mdui-color-on-surface));
   text-align: center;
 }
-
-/* ===== Header ===== */
 .rpe-header {
   display: flex;
   justify-content: flex-end;
   flex-shrink: 0;
 }
-
-/* Unbinding is destructive, so the action carries the error colour. */
 .unbind-btn {
   --mdui-color-primary: var(--mdui-color-error);
 }
-
-/* ===== Chart List ===== */
 .chart-list {
   display: flex;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
-  flex: 1;
-  padding: 2px;
+  overscroll-behavior-y: contain;
 }
-
-/* `<mdui-card>` is `display: inline-block` in its shadow root; a document-level rule
-   outranks `:host`, so this makes it a row. */
 .chart-card {
   display: flex;
   flex-direction: row;
-  /* Same trap as the tasks list: a column flex container squeezes its items before it
-     scrolls, and `mdui-card` clips, so a compressed card cuts through its own text.
-     The card keeps its natural height and `.chart-list` scrolls instead. */
+  align-items: flex-start;
   flex-shrink: 0;
-  @include mo.spatial(box-shadow);
-
-  @include mo.enter-rise(14px);
-  @include mo.stagger(10, 45ms, 40ms);
-}
-
-.chart-card:hover {
-  box-shadow: var(--mdui-elevation-level2);
-}
-
-.chart-cover {
-  width: 35%;
-  min-height: 180px;
+  gap: 16px;
+  padding: var(--app-card-padding, 16px);
+  border-radius: var(--mdui-shape-corner-medium, 12px);
   background-color: rgb(var(--mdui-color-surface-container-low));
 }
-
+.chart-cover {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--mdui-shape-corner-small, 8px);
+  background-color: rgb(var(--mdui-color-surface-container-highest));
+}
 .cover-image {
   width: 100%;
   height: 100%;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
+  background: center / cover no-repeat;
 }
-
 .chart-content {
-  width: 65%;
-  padding: 20px;
   display: flex;
+  flex: 1;
+  min-width: 0;
   flex-direction: column;
   gap: 8px;
 }
-
 .chart-name {
+  margin: 0;
   color: rgb(var(--mdui-color-on-surface));
-  margin: 0;
+  overflow-wrap: anywhere;
 }
-
 .chart-id {
-  font-size: var(--mdui-typescale-body-small-size);
-  line-height: var(--mdui-typescale-body-small-line-height);
-  color: rgb(var(--mdui-color-on-surface-variant));
   margin: 0;
-  font-family: 'Roboto Mono', 'Consolas', monospace;
+  font-size: var(--mdui-typescale-body-medium-size);
+  line-height: var(--mdui-typescale-body-medium-line-height);
+  color: rgb(var(--mdui-color-on-surface-variant));
+  overflow-wrap: anywhere;
 }
-
 .chart-action {
-  margin-top: auto;
   display: flex;
   justify-content: flex-end;
-}
-
-/* ===== Responsive ===== */
-@include bp.compact {
-  .rpe-container {
-    padding: 16px;
-  }
-  .chart-card {
-    flex-direction: column;
-  }
-  .chart-cover {
-    width: 100%;
-    min-height: 160px;
-  }
-  .chart-content {
-    width: 100%;
-  }
+  margin-top: 4px;
 }
 </style>

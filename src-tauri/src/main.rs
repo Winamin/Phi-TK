@@ -12,8 +12,12 @@ pub fn build_conf() -> macroquad::window::Conf {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 #[macroquad::main(build_conf)]
 async fn main() -> Result<(), anyhow::Error> {
     app_lib::run().await?;
     Ok(())
 }
+
+#[cfg(target_os = "android")]
+fn main() {}

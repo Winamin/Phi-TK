@@ -19,5 +19,15 @@ function onChange(e: Event) {
 </script>
 
 <template>
-  <mdui-switch :checked="modelValue" @change="onChange"></mdui-switch>
+  <mdui-switch class="md-switch" :checked="modelValue" @change="onChange"></mdui-switch>
 </template>
+
+<style scoped>
+.md-switch {
+  flex-shrink: 0;
+  width: 52px;
+  height: var(--app-touch-target, 48px);
+  vertical-align: middle;
+  touch-action: manipulation;
+}
+</style>

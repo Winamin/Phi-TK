@@ -1,6 +1,5 @@
 <i18n>
   en:
-    already-running: Phi TK is already running
 
     prev-step: Previous
     next-step: Next
@@ -26,6 +25,7 @@
       open: Open a chart
       open-desc: Archive or an unpacked folder
     recent:
+      unavailable: This chart is no longer available. Please select it again.
       title: Recent charts
       empty: Charts you open will show up here
       clear: Clear
@@ -46,6 +46,8 @@
     illustrator: Illustrator
     level: Level
     aspect: Aspect ratio
+    aspect-width: Aspect width
+    aspect-height: Aspect height
     dim: Background dim
     hold_cover: Hold Head Partial Cover
 
@@ -58,6 +60,7 @@
     preview: Preview
     render: Render
     play: Play
+    actions: Chart actions
 
     render-started: Rendering has started!
     see-tasks: See tasks
@@ -65,10 +68,7 @@
     duration: Elapsed
     render-status: 'Progress: {progress}% | FPS: {fps} | ETA: {estimate}'
 
-    ffmpeg-not-found: You haven't installed ffmpeg yet. Please download FFmpeg.exe and put it in the specific folder.
-
   zh-CN:
-    already-running: Phi TK 已经在运行
 
     prev-step: 上一步
     next-step: 下一步
@@ -94,6 +94,7 @@
       open: 打开谱面
       open-desc: 压缩包或已解压的文件夹
     recent:
+      unavailable: 谱面文件已失效，请重新选择。失效记录已移除。
       title: 最近打开
       empty: 打开过的谱面会出现在这里
       clear: 清空
@@ -114,6 +115,8 @@
     illustrator: 画师
     level: 难度
     aspect: 宽高比
+    aspect-width: 比例宽度
+    aspect-height: 比例高度
     dim: 背景昏暗程度
     hold_cover: Hold 头部遮罩
 
@@ -123,17 +126,16 @@
     edit-hint: Enter 保存 · Esc 取消
     illustration-failed: 曲绘加载失败
 
-    preview: 演示
+    preview: 预览
     render: 渲染
     play: 游玩
+    actions: 谱面操作
 
     render-started: 视频开始渲染了！
     see-tasks: 查看任务列表
     next-chart: 渲染下一个谱面
     duration: 耗时
     render-status: '进度：{progress}% | FPS: {fps} | 预计：{estimate}'
-
-    ffmpeg-not-found: 笨蛋怎么没安装 FFmpeg。请下载 FFmpeg.exe 并放置在指定文件夹内。
 
   </i18n>
 
@@ -143,23 +145,18 @@ import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { getOutputPathArg } from './outputPath';
+import { importChart, pickChartFiles } from './chart-files';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { toastError, toast, anyFilter, isString, validateFields } from './common';
+import { toastError, toast, isString, validateFields } from './common';
 import type { ChartInfo, FileDropEvent, Task } from './model';
 import ConfigView from './components/ConfigView.vue';
 import MdTextField from './components/md/MdTextField.vue';
 import MdSlider from './components/md/MdSlider.vue';
 import MdSwitch from './components/md/MdSwitch.vue';
 import moment from 'moment';
-import * as dialog from '@tauri-apps/plugin-dialog';
-import * as shell from '@tauri-apps/plugin-shell';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import gsap from 'gsap';
 const { t } = useI18n();
-
-// Tauri's `listen` resolves asynchronously, so a component unmounted before it settles
-// must still release the handle — hence the `disposed` guard.
 let disposed = false;
 const unlistenFns: UnlistenFn[] = [];
 
@@ -172,11 +169,6 @@ onUnmounted(() => {
   unlistenFns.forEach((unlisten) => unlisten());
   unlistenFns.length = 0;
 });
-
-if (!(await invoke('is_the_only_instance'))) {
-  await dialog.message(t('already-running'));
-  await invoke('exit_program');
-}
 
 const router = useRouter();
 
@@ -193,36 +185,30 @@ const choosingChart = ref(false),
 const flipCardRef = ref<HTMLElement>();
 
 async function chooseChart(folder?: boolean) {
-  if (choosingChart.value) return;
+  if (choosingChart.value || parsingChart.value) return;
   choosingChart.value = true;
   try {
-    let file = folder
-      ? await dialog.open({ directory: true })
-      : await dialog.open({
-          filters: [
-            {
-              name: t('choose.filter-name'),
-              extensions: ['zip', 'pez'],
-            },
-            anyFilter(),
-          ],
-        });
-    if (!file) return;
-    await loadChart(file as string);
+    const [file] = await pickChartFiles(!!folder);
+    if (file) await loadChart(file);
+  } catch (error) {
+    toastError(error);
   } finally {
     choosingChart.value = false;
   }
 }
 
-async function loadChart(file: string) {
+async function loadChart(file: string, recent = false) {
+  if (parsingChart.value) return;
   try {
     parsingChart.value = true;
-    chartPath = file;
+    const imported = await importChart(file);
+    chartPath = imported.path;
+    chartInfo.value = imported.info;
     renderCover.value = null;
     clearChartIllustration();
-    chartInfo.value = (await invoke('parse_chart', { path: file })) as ChartInfo;
-    loadChartIllustration(file, chartInfo.value.illustration);
-    rememberChart(chartInfo.value, file);
+    loadChartIllustration(imported.path, chartInfo.value.illustration);
+    if (recent) recentCharts.value = recentCharts.value.filter((entry) => entry.path !== file);
+    rememberChart(chartInfo.value, imported.path);
     aspectWidth.value = String(chartInfo.value.aspectRatio);
     aspectHeight.value = '1.0';
     for (let asp of [
@@ -241,7 +227,11 @@ async function loadChart(file: string) {
     await nextTick();
     performFlip();
   } catch (e) {
-    toastError(e);
+    if (recent) {
+      recentCharts.value = recentCharts.value.filter((item) => item.path !== file);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recentCharts.value));
+      toast(t('recent.unavailable'), 'warning');
+    } else toastError(e);
   } finally {
     parsingChart.value = false;
   }
@@ -273,6 +263,11 @@ const form = ref<HTMLFormElement>();
 
 const configView = ref<typeof ConfigView>();
 async function buildParams() {
+  if (!chartInfo.value || !configView.value) return null;
+  if (!validateFields(form.value)) {
+    toast(t('has-error'), 'error');
+    return null;
+  }
   let config = await configView.value!.buildConfig();
   if (!config) return null;
   const aspect = tryParseAspect();
@@ -293,16 +288,9 @@ watch([aspectWidth, aspectHeight], () => {
 
 async function postRender() {
   try {
-    if (!(await invoke('test_ffmpeg'))) {
-      await dialog.message(t('ffmpeg-not-found'));
-      await invoke('open_app_folder');
-      await shell.open('https://github.com/BtbN/FFmpeg-Builds/releases');
-      return false;
-    }
     let params = await buildParams();
     if (!params) return false;
-    const outputPath = getOutputPathArg();
-    await invoke('post_render', { params, outputPath });
+    await invoke('post_render', { params });
     return true;
   } catch (e) {
     toastError(e);
@@ -336,6 +324,28 @@ async function playChart() {
   }
 }
 
+const actionsOpen = ref(false);
+const actionBusy = ref(false);
+
+async function runAction(action: 'render' | 'preview' | 'play') {
+  if (actionBusy.value) return;
+  actionsOpen.value = false;
+  actionBusy.value = true;
+  try {
+    if (action === 'render') {
+      if (await postRender()) stepIndex.value = 4;
+    } else if (action === 'preview') {
+      await previewChart();
+    } else {
+      await playChart();
+    }
+  } finally {
+    actionBusy.value = false;
+  }
+}
+
+watch(step, () => (actionsOpen.value = false));
+
 const renderMsg = ref(''),
   renderProgress = ref<number>(),
   renderDuration = ref<number>();
@@ -353,9 +363,6 @@ track(
     renderProgress.value = payload.progress * 100;
   }),
 );
-// Deliberately does *not* advance `stepIndex`: 'render' is the last step, so incrementing
-// left `step` undefined and blanked the whole view once the render finished. The elapsed
-// time now lands on the render surface instead.
 track(listen('render-done', (msg) => (renderDuration.value = Math.round(msg.payload as number))));
 
 async function fetchRenderCover() {
@@ -365,7 +372,6 @@ async function fetchRenderCover() {
       const task = tasks.find((t) => t.path === chartPath);
       if (task?.cover) {
         renderCover.value = task.cover;
-        // The cover never changes once resolved — no reason to keep hitting the backend.
         stopCoverPolling();
       }
     }
@@ -428,30 +434,13 @@ function goBack() {
   }
 }
 
-/* ============================================================================
-   Step chrome.
-
-   Steps above `choose` are plain full-area pages, so `onStepPage` gates which
-   of the two top-level branches renders — the launcher or a step page.
-   ============================================================================ */
-
-/** Whether a step page is showing (i.e. the launcher is unmounted). */
 const onStepPage = computed(() => step.value !== 'choose');
-
-/**
- * The config and render-options steps are dense forms that want the full window,
- * so the app rail folds away for them. The render-result step is read-only, and
- * the user is likely to head for "tasks" next — the rail comes back there.
- */
-const wantsFullWidth = computed(() => step.value === 'config' || step.value === 'options');
 
 function emitRail(hidden: boolean) {
   window.dispatchEvent(new CustomEvent('rail-hidden', { detail: hidden }));
 }
 
-watch(wantsFullWidth, emitRail, { immediate: true });
-// A step flow can end by navigation rather than by the user stepping back, so the
-// rail must be restored on the way out or it would stay hidden for the whole app.
+watch(onStepPage, emitRail, { immediate: true });
 onUnmounted(() => emitRail(false));
 
 const surfaceTitle = computed(() => t(`steps.${step.value}`));
@@ -475,10 +464,13 @@ function onKeydown(e: KeyboardEvent) {
     return;
   }
   const target = e.target as HTMLElement | null;
-  // Never hijack keys while the user is typing into a field.
   const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
 
   if (e.key === 'Escape') {
+    if (actionsOpen.value) {
+      actionsOpen.value = false;
+      return;
+    }
     if (showShortcuts.value) {
       showShortcuts.value = false;
       return;
@@ -498,8 +490,6 @@ function onKeydown(e: KeyboardEvent) {
     chooseChart(e.shiftKey);
     return;
   }
-
-  // Arrow-driven stepping mirrors a modal wizard: only active on floating layers.
   if (onStepPage.value && !typing) {
     if (e.key === 'ArrowRight' && step.value === 'config') moveNext();
     if (e.key === 'ArrowLeft') goBack();
@@ -730,8 +720,6 @@ track(
   listen('tauri://drag-drop', async (payload) => {
     const files = (payload.payload as FileDropEvent).paths;
     fileHovering.value = false;
-    // A drop anywhere returns to the launcher and loads the new chart, so the
-    // wizard never keeps stale options from the previous chart on screen.
     stepIndex.value = 1;
     await loadChart(files[0]);
   }),
@@ -745,14 +733,6 @@ function resetAndGoChoose() {
   clearChartIllustration();
 }
 
-/* ============================================================================
-   Start screen — data sources.
-
-   Everything here is read-only chrome around the two "open" actions, so each
-   accessor is defensive: a missing `localStorage` key or a corrupt stored blob
-   must degrade to a placeholder rather than break the landing surface.
-   ============================================================================ */
-
 type RecentChart = {
   path: string;
   name: string;
@@ -764,7 +744,7 @@ type RecentChart = {
 const RECENT_KEY = 'recentCharts';
 const RECENT_LIMIT = 5;
 
-const recentCharts = ref<RecentChart[]>([]);
+const recentCharts = ref<RecentChart[]>(readRecent());
 
 function readRecent(): RecentChart[] {
   try {
@@ -772,7 +752,7 @@ function readRecent(): RecentChart[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((x): x is RecentChart => !!x && typeof (x as RecentChart).path === 'string');
+    return parsed.filter((x): x is RecentChart => !!x && typeof x.path === 'string' && typeof x.name === 'string').slice(0, RECENT_LIMIT);
   } catch {
     return [];
   }
@@ -786,8 +766,6 @@ function rememberChart(info: ChartInfo | undefined, path: string) {
     charter: info?.charter,
     at: Date.now(),
   };
-  // De-duplicate by path so re-opening the same chart moves it to the top
-  // instead of filling the list with copies.
   const next = [entry, ...recentCharts.value.filter((x) => x.path !== path)].slice(0, RECENT_LIMIT);
   recentCharts.value = next;
   try {
@@ -797,14 +775,17 @@ function rememberChart(info: ChartInfo | undefined, path: string) {
   }
 }
 
+function loadRecent(path: string) {
+  return loadChart(path, true);
+}
+
 function clearRecent() {
   recentCharts.value = [];
   localStorage.removeItem(RECENT_KEY);
 }
 
-onMounted(() => (recentCharts.value = readRecent()));
 
-/** `WxH` → a compact "16:9"-style label; used on the render page. */
+
 function aspectText(width: string, height: string) {
   const w = parseFloat(width);
   const h = parseFloat(height);
@@ -815,31 +796,20 @@ function aspectText(width: string, height: string) {
 
 <template>
   <div class="render-container">
-    <!-- ==================================================================
-         Launcher.
 
-         A step page replaces this entirely rather than stacking over it, so the
-         launcher is unmounted while a step is active — `v-if`, not `v-show`.
-         ================================================================== -->
     <section v-if="!onStepPage" class="start-layer">
       <div class="start-scroll">
         <div class="start-inner">
-          <!-- ---------- Hero ---------- -->
-          <header class="hero">
-            <div class="hero-text">
-              <h1 class="hero-title">{{ t('steps.choose') }}</h1>
-              <p class="hero-tagline">{{ t('hero.tagline') }}</p>
-            </div>
-          </header>
 
-          <!-- ---------- Two cells: open, and what was open before ---------- -->
-          <div class="bento">
-            <!-- Primary: the two open actions, sized as the visual anchor. -->
-            <div class="bento-cell cell-open">
+          <p class="start-description">{{ t('hero.tagline') }}</p>
+
+          <div class="chart-groups">
+
+            <section class="chart-group cell-open" :aria-label="t('cards.open')">
               <h2 class="cell-title">{{ t('cards.open') }}</h2>
               <p class="cell-sub">{{ t('cards.open-desc') }}</p>
               <div class="open-row">
-                <button class="open-tile" type="button" @click="chooseChart(false)">
+                <button class="open-tile open-tile-primary" type="button" @click="chooseChart(false)">
                   <span class="md3-icon-badge md3-icon-badge-primary open-tile-icon">
                     <mdui-icon-folder-zip--outlined></mdui-icon-folder-zip--outlined>
                   </span>
@@ -858,22 +828,21 @@ function aspectText(width: string, height: string) {
                   </span>
                 </button>
               </div>
-            </div>
+            </section>
 
-            <!-- Recent charts: the highest-value content on a returning launch. -->
-            <div class="bento-cell cell-recent">
+            <section class="chart-group cell-recent" :aria-label="t('recent.title')">
               <div class="cell-head">
                 <h2 class="cell-title">{{ t('recent.title') }}</h2>
-                <mdui-button-icon v-if="recentCharts.length" @click="clearRecent">
+                <mdui-button-icon v-if="recentCharts.length" :aria-label="t('recent.clear')" @click="clearRecent">
                   <mdui-tooltip :content="t('recent.clear')">
-                    <mdui-icon-delete-sweep--outlined></mdui-icon-delete-sweep--outlined>
+                    <mdui-icon-delete--outlined></mdui-icon-delete--outlined>
                   </mdui-tooltip>
                 </mdui-button-icon>
               </div>
 
               <ul v-if="recentCharts.length" class="recent-list">
                 <li v-for="item in recentCharts" :key="item.path">
-                  <button class="recent-row" type="button" @click="loadChart(item.path)">
+                  <button class="recent-row" type="button" :disabled="parsingChart" @click="loadRecent(item.path)">
                     <span class="md3-icon-badge recent-icon">
                       <mdui-icon-description--outlined></mdui-icon-description--outlined>
                     </span>
@@ -881,67 +850,38 @@ function aspectText(width: string, height: string) {
                       <span class="recent-name">{{ item.name }}</span>
                       <span class="recent-meta">{{ [item.level, item.charter].filter(Boolean).join(' · ') || item.path }}</span>
                     </span>
-                    <mdui-icon-chevron-right class="recent-chevron"></mdui-icon-chevron-right>
+                    <mdui-icon-arrow-forward class="recent-chevron"></mdui-icon-arrow-forward>
                   </button>
                 </li>
               </ul>
 
               <div v-else class="recent-empty">
-                <mdui-icon-history--outlined class="recent-empty-icon"></mdui-icon-history--outlined>
+                <mdui-icon-inbox--outlined class="recent-empty-icon"></mdui-icon-inbox--outlined>
                 <span class="md3-caption">{{ t('recent.empty') }}</span>
               </div>
-            </div>
+            </section>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ==================================================================
-         Steps 1..3 — plain pages.
-
-         These used to be modal sheets stacked over the launcher. They are now
-         ordinary full-area pages: the launcher is unmounted while a step is
-         active, so there is no scrim, no depth sliver and no elevation to
-         maintain — each step owns the whole content area.
-         ================================================================== -->
     <Transition name="page">
       <section v-if="onStepPage" :key="step" class="step-page" :class="'is-' + step" :inert="editingField !== null">
         <!-- ---------- Page app bar ---------- -->
         <header class="page-bar">
-          <mdui-button-icon @click="goBack">
+          <mdui-button-icon :aria-label="t('prev-step')" @click="goBack">
             <mdui-tooltip :content="t('prev-step')">
               <mdui-icon-arrow-back></mdui-icon-arrow-back>
             </mdui-tooltip>
           </mdui-button-icon>
 
           <div class="page-heading">
-            <h2 class="page-title md3-title-large">{{ surfaceTitle }}</h2>
-            <!-- MD3 has no stepper; the current step is a pill and the rest are dots. -->
-            <div class="step-dots">
-              <template v-for="(s, i) in steps" :key="s">
-                <span v-if="step === s" class="step-pill"></span>
-                <span v-else class="step-dot" :class="{ 'is-done': stepIndex > i + 1 }"></span>
-              </template>
-            </div>
+            <h1 class="page-title md3-title-large">{{ surfaceTitle }}</h1>
           </div>
 
           <div class="page-actions">
-            <template v-if="step === 'options'">
-              <mdui-button variant="text" @click="playChart">
-                <mdui-icon-sports-esports slot="icon"></mdui-icon-sports-esports>
-                {{ t('play') }}
-              </mdui-button>
-              <mdui-button variant="text" @click="previewChart">
-                <mdui-icon-visibility slot="icon"></mdui-icon-visibility>
-                {{ t('preview') }}
-              </mdui-button>
-            </template>
             <mdui-button v-if="step === 'config'" variant="filled" @click="moveNext">
               {{ t('next-step') }}
-              <mdui-icon-arrow-forward slot="end-icon"></mdui-icon-arrow-forward>
-            </mdui-button>
-            <mdui-button v-else-if="step === 'options'" variant="filled" @click="moveNext">
-              {{ t('render') }}
               <mdui-icon-arrow-forward slot="end-icon"></mdui-icon-arrow-forward>
             </mdui-button>
           </div>
@@ -949,10 +889,9 @@ function aspectText(width: string, height: string) {
 
         <mdui-divider></mdui-divider>
 
-        <!-- ---------- Page body ---------- -->
         <div class="page-body">
-          <!-- Step 1: configure the parsed chart -->
-          <div v-if="step === 'config'" class="config-body" ref="flipCardRef">
+
+          <div v-show="step === 'config'" class="config-body" ref="flipCardRef">
             <form v-if="chartInfo" ref="form" class="config-form" @submit.prevent>
               <div class="config-controls">
                 <div class="field-group">
@@ -1053,13 +992,11 @@ function aspectText(width: string, height: string) {
             </form>
           </div>
 
-          <!-- Step 2: render options -->
-          <div v-else-if="step === 'options'" class="options-body">
-            <ConfigView ref="configView" :init-aspect-ratio="tryParseAspect()" />
+          <div v-show="step === 'options'" class="options-body">
+            <ConfigView ref="configView" floating-actions :init-aspect-ratio="tryParseAspect()" />
           </div>
 
-          <!-- Step 3: render summary -->
-          <div v-else-if="step === 'render' && chartInfo" class="render-body">
+          <div v-if="chartInfo" v-show="step === 'render'" class="render-body">
             <div class="render-hero">
               <div class="render-cover">
                 <img v-if="renderCover" :src="convertFileSrc(renderCover)" class="cover-img" alt="" />
@@ -1096,7 +1033,6 @@ function aspectText(width: string, height: string) {
               </div>
             </div>
 
-            <!-- `<mdui-linear-progress>` runs 0–1, while `renderProgress` is a percentage. -->
             <div v-if="renderProgress !== undefined" class="render-progress">
               <mdui-linear-progress :value="renderProgress / 100"></mdui-linear-progress>
               <p class="progress-text md3-caption">{{ renderMsg }}</p>
@@ -1117,9 +1053,40 @@ function aspectText(width: string, height: string) {
       </section>
     </Transition>
 
-    <!-- ==================================================================
-         Transient layers — drag affordance, parse spinner, shortcut help.
-         ================================================================== -->
+    <Transition name="fade">
+      <div v-if="actionsOpen" class="action-scrim" @click="actionsOpen = false"></div>
+    </Transition>
+    <div v-if="(step === 'config' || step === 'options') && chartInfo" class="floating-actions">
+      <Transition name="fab-menu">
+        <div v-if="actionsOpen" id="chart-actions" class="fab-menu" role="group" :aria-label="t('actions')">
+          <mdui-button variant="tonal" class="fab-action" :disabled="actionBusy" @click="runAction('play')">
+            <mdui-icon-sports-esports slot="icon"></mdui-icon-sports-esports>
+            {{ t('play') }}
+          </mdui-button>
+          <mdui-button variant="tonal" class="fab-action" :disabled="actionBusy" @click="runAction('preview')">
+            <mdui-icon-visibility slot="icon"></mdui-icon-visibility>
+            {{ t('preview') }}
+          </mdui-button>
+          <mdui-button variant="filled" class="fab-action" :disabled="actionBusy" @click="runAction('render')">
+            <mdui-icon-videocam slot="icon"></mdui-icon-videocam>
+            {{ t('render') }}
+          </mdui-button>
+        </div>
+      </Transition>
+      <mdui-fab
+        variant="primary"
+        :loading="actionBusy"
+        :disabled="actionBusy"
+        :aria-label="t('actions')"
+        :aria-expanded="actionsOpen"
+        aria-controls="chart-actions"
+        @click="actionsOpen = !actionsOpen">
+        <span slot="icon" class="fab-icon" role="img" :aria-label="t('actions')">
+          <mdui-icon-close v-if="actionsOpen"></mdui-icon-close>
+          <mdui-icon-play-arrow v-else></mdui-icon-play-arrow>
+        </span>
+      </mdui-fab>
+    </div>
 
     <!-- Deliberately not an `<mdui-dialog>`: this is a transient hover affordance,
          and a modal would trap focus and animate on every drag event. -->
@@ -1159,13 +1126,12 @@ function aspectText(width: string, height: string) {
       </div>
     </Transition>
 
-    <!-- Shortcut reference. Its own floating layer, so it stacks above the wizard. -->
     <Transition name="fade">
       <div v-if="showShortcuts" class="overlay" @click.self="showShortcuts = false">
         <div class="overlay-card shortcut-card">
           <div class="shortcut-head">
             <h3 class="md3-title-large">{{ t('shortcuts.title') }}</h3>
-            <mdui-button-icon @click="showShortcuts = false">
+            <mdui-button-icon :aria-label="t('close')" @click="showShortcuts = false">
               <mdui-icon-close></mdui-icon-close>
             </mdui-button-icon>
           </div>
@@ -1225,14 +1191,11 @@ function aspectText(width: string, height: string) {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   width: 100%;
   overflow: hidden;
 }
 
-/* ============================================================
-   Layer 0 — Start screen
-   ============================================================ */
 .start-layer {
   position: absolute;
   inset: 0;
@@ -1242,94 +1205,47 @@ function aspectText(width: string, height: string) {
 .start-scroll {
   height: 100%;
   overflow-y: auto;
-  scroll-behavior: smooth;
+  overscroll-behavior-y: contain;
 }
 
-/* Bounded measure, matching the settings pane so switching between the
-   launcher and ConfigView does not shift the content edges. */
 .start-inner {
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: 32px 32px 40px;
-  max-width: 1200px;
+  gap: var(--app-section-gap, 24px);
+  padding: var(--app-page-padding, 16px) var(--app-page-padding, 16px) 24px;
+  max-width: var(--app-content-max-width, 840px);
   margin: 0 auto;
   min-height: 100%;
   width: 100%;
 }
 
-/* ---------- Hero ---------- */
-.hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  flex-wrap: wrap;
-}
-
-.hero-text {
-  min-width: 0;
-}
-
-.hero-title {
+.start-description {
   margin: 0;
-  font-size: var(--mdui-typescale-display-small-size);
-  font-weight: var(--mdui-typescale-display-small-weight);
-  line-height: var(--mdui-typescale-display-small-line-height);
-  letter-spacing: -0.01em;
-  color: rgb(var(--mdui-color-on-surface));
-}
-
-.hero-tagline {
-  margin: 6px 0 0;
-  max-width: 46ch;
   font-size: var(--mdui-typescale-body-large-size);
   line-height: var(--mdui-typescale-body-large-line-height);
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 
-/* ---------- Bento grid ----------
-   Two columns, equal height.
-
-   `stretch` rather than `start`: a row whose two cards end at different heights
-   reads as unfinished, and the reference layout keeps its blocks rectangular.
-   The shorter card centres its own content instead of stretching its controls —
-   `.cell-open` below — so equal height never means an oversized button. */
-.bento {
+.chart-groups {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-columns: 1fr;
   align-items: stretch;
-  gap: 20px;
+  gap: var(--app-section-gap, 24px);
   min-height: 0;
 }
 
-/* The open cell is the shorter of the two, so its stack centres in the row's
-   height. Its tiles keep their intrinsic size — only the whitespace grows. */
 .cell-open {
-  justify-content: center;
+  grid-column: span 1;
 }
 
-.bento-cell {
+.chart-group {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 20px;
+  padding: var(--app-card-padding, 16px);
   background-color: rgb(var(--mdui-color-surface-container-low));
-  border-radius: var(--mdui-shape-corner-extra-large);
+  border-radius: var(--mdui-shape-corner-medium);
   min-width: 0;
-  /* Colour is an effect and the corner radius is a shape, so they run on
-     different MD3 clocks. */
-  transition-property: background-color, border-radius;
-  transition-duration: var(--app-motion-duration-effects-default), var(--app-motion-duration-spatial-slow);
-  transition-timing-function: var(--app-motion-spring-effects-default), var(--app-motion-spring-spatial-slow);
-
-  /* The two cells rise in sequence behind the hero. */
-  @include mo.enter-rise(16px);
-  @include mo.stagger(2, 60ms, 40ms);
-}
-
-.bento-cell:hover {
-  background-color: rgb(var(--mdui-color-surface-container));
 }
 
 .cell-head {
@@ -1349,25 +1265,14 @@ function aspectText(width: string, height: string) {
 
 .cell-sub {
   margin: 0;
-  font-size: var(--mdui-typescale-body-small-size);
-  line-height: var(--mdui-typescale-body-small-line-height);
+  font-size: var(--mdui-typescale-body-medium-size);
+  line-height: var(--mdui-typescale-body-medium-line-height);
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 
-/* ---------- Open tiles ----------
-   Plain <button>s rather than `<mdui-card clickable>`: these are the single most
-   important controls on the screen, and a real button keeps the keyboard and
-   screen-reader semantics (mdui's card only fakes the ripple).
-
-   Deliberately *not* `flex: 1`: the tiles are sized to their content so the card
-   hugs them. Letting them stretch made two short labels occupy ~700px of empty
-   height, which read as a broken layout rather than as a large target.
-
-   No `margin-top` either: the cell centres its whole stack, and an extra offset
-   here would push the centred block off-centre. */
 .open-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -1376,13 +1281,14 @@ function aspectText(width: string, height: string) {
 
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  /* MD3 minimum touch target. */
-  min-height: 48px;
+  gap: 12px;
+  padding: 12px;
+
+  min-height: 72px;
+  min-width: 0;
   border: none;
-  border-radius: var(--mdui-shape-corner-large);
-  background-color: rgb(var(--mdui-color-surface-container-high));
+  border-radius: var(--mdui-shape-corner-medium);
+  background-color: rgb(var(--mdui-color-surface-container));
   color: inherit;
   font: inherit;
   text-align: start;
@@ -1399,25 +1305,15 @@ function aspectText(width: string, height: string) {
     var(--app-motion-spring-bouncy, var(--mdui-motion-easing-emphasized-decelerate)), var(--app-motion-spring-spatial-default, var(--mdui-motion-easing-emphasized-decelerate));
 }
 
-/* The lift is the tile's own hover feedback; the state layer adds the MD3
-   overlay on top of it. */
-.open-tile:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--mdui-elevation-level2);
-}
-
-/* Pressing contracts quickly on the accelerate curve; releasing hands back to
-   the bouncy spring declared above, which is what makes the tile pop. */
-.open-tile:active {
-  transform: scale(0.97);
-  transition-duration: var(--mdui-motion-duration-short3), var(--app-motion-duration-effects-fast);
-  transition-timing-function: var(--mdui-motion-easing-standard-accelerate), var(--mdui-motion-easing-standard);
+.open-tile-primary {
+  background-color: rgb(var(--mdui-color-primary-container));
+  color: rgb(var(--mdui-color-on-primary-container));
 }
 
 .open-tile-icon {
-  width: 2.75rem;
-  height: 2.75rem;
-  font-size: 1.375rem;
+  width: 40px;
+  height: 40px;
+  font-size: 24px;
 }
 
 .open-tile-text {
@@ -1427,9 +1323,6 @@ function aspectText(width: string, height: string) {
   min-width: 0;
 }
 
-/* ---------- Recent charts ----------
-   Capped so the card cannot grow without bound as history accumulates; beyond a
-   handful of entries the list scrolls inside the card. */
 .recent-list {
   list-style: none;
   margin: 0;
@@ -1437,45 +1330,31 @@ function aspectText(width: string, height: string) {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 340px;
-  overflow-y: auto;
   min-height: 0;
 }
 
 .recent-row {
   @include st.interactive;
-  @include mo.press-scale(0.98);
 
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  /* MD3 two-line list item: 56dp tall with 16dp leading padding. Hand-rolled
-     rather than `<mdui-list-item>` because that renders a non-focusable <div>,
-     and these rows are the primary way back into a chart — a real <button>
-     keeps them keyboard-operable. */
-  min-height: 56px;
-  padding: 8px 16px;
+
+  min-height: 72px;
+  padding: 8px 0;
   border: none;
-  border-radius: var(--mdui-shape-corner-large);
+  border-radius: var(--mdui-shape-corner-medium);
   background-color: transparent;
   color: inherit;
   font: inherit;
   text-align: start;
 }
 
-/* Recent charts rise in sequence, so the list reads as assembling itself rather
-   than blinking into place. Delays stop at 8 entries; beyond that the rows enter
-   together rather than trailing in. */
-.recent-list li {
-  @include mo.enter-rise(8px);
-  @include mo.stagger(8, 45ms, 60ms);
-}
-
 .recent-icon {
-  width: 2.25rem;
-  height: 2.25rem;
-  font-size: 1.1rem;
+  width: 40px;
+  height: 40px;
+  font-size: 24px;
 }
 
 .recent-text {
@@ -1486,8 +1365,8 @@ function aspectText(width: string, height: string) {
 }
 
 .recent-name {
-  font-size: var(--mdui-typescale-body-medium-size);
-  line-height: var(--mdui-typescale-body-medium-line-height);
+  font-size: var(--mdui-typescale-body-large-size);
+  line-height: var(--mdui-typescale-body-large-line-height);
   color: rgb(var(--mdui-color-on-surface));
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1505,6 +1384,7 @@ function aspectText(width: string, height: string) {
 
 .recent-chevron {
   flex-shrink: 0;
+  font-size: 24px;
   color: rgb(var(--mdui-color-outline));
 }
 
@@ -1515,21 +1395,15 @@ function aspectText(width: string, height: string) {
   justify-content: center;
   gap: 10px;
   flex: 1;
-  min-height: 140px;
+  min-height: 96px;
   text-align: center;
 }
 
 .recent-empty-icon {
-  font-size: 2.5rem;
+  font-size: 32px;
   color: rgb(var(--mdui-color-outline));
 }
 
-/* ============================================================
-   Step pages
-
-   Plain full-area pages, not modal sheets: no scrim, no elevation, no depth
-   sliver. The page owns the whole content area beside the app rail.
-   ============================================================ */
 .step-page {
   position: absolute;
   inset: 0;
@@ -1539,7 +1413,6 @@ function aspectText(width: string, height: string) {
   background-color: rgb(var(--mdui-color-surface));
 }
 
-/* ---------- Page app bar ---------- */
 .page-bar {
   display: flex;
   align-items: center;
@@ -1548,6 +1421,9 @@ function aspectText(width: string, height: string) {
   height: 64px;
   padding: 0 16px 0 8px;
   background-color: rgb(var(--mdui-color-surface));
+  width: 100%;
+  max-width: var(--app-content-max-width, 840px);
+  margin-inline: auto;
 }
 
 .page-heading {
@@ -1573,43 +1449,12 @@ function aspectText(width: string, height: string) {
   flex-shrink: 0;
 }
 
-/* mdui sizes icon buttons at 2.5rem (40dp), below MD3's 48dp minimum touch
-   target, and its `overflow: hidden` blocks the pseudo-element trick. Growing
-   the box and pulling it back with a negative margin raises the target without
-   letting the bigger box reflow the bar. */
 .page-bar mdui-button-icon {
   min-width: 48px;
   min-height: 48px;
-  margin: -4px;
+  margin: 0;
 }
 
-.step-dots {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.step-pill {
-  width: 24px;
-  height: 8px;
-  border-radius: var(--mdui-shape-corner-full);
-  background-color: rgb(var(--mdui-color-primary));
-  transition: width var(--mdui-motion-duration-medium2) var(--mdui-motion-easing-emphasized);
-}
-
-.step-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--mdui-shape-corner-full);
-  background-color: rgb(var(--mdui-color-outline-variant));
-  transition: background-color var(--mdui-motion-duration-short4) var(--mdui-motion-easing-standard);
-}
-
-.step-dot.is-done {
-  background-color: rgb(var(--mdui-color-primary));
-}
-
-/* ---------- Page body ---------- */
 .page-body {
   flex: 1;
   min-height: 0;
@@ -1618,9 +1463,6 @@ function aspectText(width: string, height: string) {
   overflow: hidden;
 }
 
-/* ============================================================
-   Config surface
-   ============================================================ */
 .config-body {
   flex: 1;
   min-height: 0;
@@ -1828,41 +1670,44 @@ function aspectText(width: string, height: string) {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  min-height: var(--app-touch-target, 48px);
 }
 
-/* ============================================================
-   Options surface — ConfigView fills it edge to edge
-   ============================================================ */
 .options-body {
   flex: 1;
   min-height: 0;
   overflow: hidden;
 }
 
-/* ============================================================
-   Render surface
-   ============================================================ */
 .render-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 24px;
+  gap: var(--app-section-gap, 24px);
+  padding: var(--app-page-padding, 16px) var(--app-page-padding, 16px) calc(24px + env(safe-area-inset-bottom));
+  overscroll-behavior-y: contain;
+}
+
+.render-body > * {
+  width: 100%;
+  max-width: calc(var(--app-content-max-width, 840px) - 32px);
+  margin-inline: auto;
 }
 
 .render-hero {
   display: flex;
-  gap: 20px;
-  align-items: center;
+  gap: 16px;
+  align-items: flex-start;
+  flex-direction: column;
 }
 
 .render-cover {
-  width: 168px;
-  height: 168px;
+  width: 100%;
+  height: 140px;
   flex-shrink: 0;
-  border-radius: var(--mdui-shape-corner-extra-large);
+  border-radius: var(--mdui-shape-corner-medium);
   overflow: hidden;
   background-color: rgb(var(--mdui-color-surface-container-highest));
   display: flex;
@@ -1928,7 +1773,6 @@ function aspectText(width: string, height: string) {
   flex-wrap: wrap;
 }
 
-/* Static metadata pills — the same shape as a chip without the interaction. */
 .meta-chip {
   padding: 4px 12px;
   border-radius: var(--mdui-shape-corner-small);
@@ -1941,8 +1785,8 @@ function aspectText(width: string, height: string) {
 .info-rows {
   display: flex;
   flex-direction: column;
-  background-color: rgb(var(--mdui-color-surface-container));
-  border-radius: var(--mdui-shape-corner-large);
+  background-color: rgb(var(--mdui-color-surface-container-low));
+  border-radius: var(--mdui-shape-corner-medium);
   padding: 4px 16px;
 }
 
@@ -1950,7 +1794,8 @@ function aspectText(width: string, height: string) {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 0;
+  padding: 12px 0;
+  min-height: 48px;
   border-bottom: 1px solid rgba(var(--mdui-color-outline-variant), 0.5);
   font-size: var(--mdui-typescale-body-medium-size);
   line-height: var(--mdui-typescale-body-medium-line-height);
@@ -1984,15 +1829,13 @@ function aspectText(width: string, height: string) {
 .render-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
+  flex-direction: column;
   flex-wrap: wrap;
   margin-top: auto;
   padding-top: 8px;
 }
 
-/* ============================================================
-   Layer 2 — Transient overlays
-   ============================================================ */
 .overlay {
   position: absolute;
   inset: 0;
@@ -2000,7 +1843,8 @@ function aspectText(width: string, height: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(var(--mdui-color-scrim), 0.4);
+  background-color: rgba(var(--mdui-color-scrim), 0.32);
+  padding: 16px;
 }
 
 .overlay-card {
@@ -2008,6 +1852,9 @@ function aspectText(width: string, height: string) {
   border-radius: var(--mdui-shape-corner-extra-large);
   box-shadow: var(--mdui-elevation-level3);
   color: rgb(var(--mdui-color-on-surface));
+  max-width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
 }
 
 .drop-zone {
@@ -2015,7 +1862,7 @@ function aspectText(width: string, height: string) {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding: 48px;
+  padding: 24px;
   border: 2px dashed rgb(var(--mdui-color-primary));
 }
 
@@ -2035,7 +1882,7 @@ function aspectText(width: string, height: string) {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 24px 32px;
+  padding: 24px;
 }
 
 .parse-spinner {
@@ -2043,7 +1890,6 @@ function aspectText(width: string, height: string) {
   height: 2rem;
 }
 
-/* ---------- Shortcut help ---------- */
 .shortcut-card {
   display: flex;
   flex-direction: column;
@@ -2051,7 +1897,7 @@ function aspectText(width: string, height: string) {
   width: min(420px, 90vw);
   padding: 20px;
   background-color: rgb(var(--mdui-color-surface-container-high));
-  box-shadow: var(--mdui-elevation-level5);
+  box-shadow: var(--mdui-elevation-level3);
 }
 
 .shortcut-head {
@@ -2107,13 +1953,6 @@ function aspectText(width: string, height: string) {
   margin: 0;
 }
 
-/* ============================================================
-   Motion
-
-   Step pages are peers along the horizontal axis, so they slide (shared-axis X)
-   on a spatial spring; the transient overlays are not spatially related to what
-   they cover, so they use MD3 fade-through instead of a slide.
-   ============================================================ */
 .page-enter-active {
   @include mo.spatial((opacity, transform));
 }
@@ -2134,22 +1973,25 @@ function aspectText(width: string, height: string) {
   transform: translateX(-16px);
 }
 
-/* MD3 fade-through: the outgoing card shrinks away, the incoming one fades in
-   from slightly oversized. */
 .fade {
   @include mo.fade-through(0.92);
 }
 
-/* The scrim itself only needs an opacity change — scaling it would reveal the
-   edges of the surface behind. */
 .fade-enter-active .overlay,
 .fade-leave-active .overlay {
   transition: opacity var(--app-motion-duration-effects-fast) var(--app-motion-spring-effects-fast);
 }
 
-/* ============================================================
-   Responsive — MD3 window size classes
-   ============================================================ */
+.floating-actions {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 16px;
+  z-index: 3;
+}
 
 /* Compact (< 600px): single column. */
 @include bp.compact {
@@ -2187,14 +2029,17 @@ function aspectText(width: string, height: string) {
   .loading-preview {
     max-width: none;
   }
+
   .render-hero {
     flex-direction: column;
     align-items: flex-start;
   }
+
   .render-cover {
     width: 100%;
     height: 140px;
   }
+
   .config-body,
   .render-body {
     padding: 16px;
@@ -2221,14 +2066,4 @@ function aspectText(width: string, height: string) {
   }
 }
 
-/* Expanded (≥ 840px): roomier gutters. */
-@include bp.expanded {
-  .start-inner {
-    padding: 36px 40px 48px;
-    gap: 24px;
-  }
-  .page-bar {
-    padding: 0 24px 0 12px;
-  }
-}
 </style>

@@ -17,5 +17,15 @@ function onInput(e: Event) {
 </script>
 
 <template>
-  <mdui-slider :value="modelValue" @input="onInput"></mdui-slider>
+  <mdui-slider class="md-slider" :value="modelValue" @input="onInput"></mdui-slider>
 </template>
+
+<style scoped>
+.md-slider {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: var(--app-touch-target, 48px);
+  touch-action: pan-y;
+}
+</style>

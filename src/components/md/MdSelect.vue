@@ -62,7 +62,28 @@ watch(
 </script>
 
 <template>
-  <mdui-select ref="el" :value="selectedKey" @change="onChange">
+  <mdui-select ref="el" class="md-select" :value="selectedKey" @change="onChange">
     <mdui-menu-item v-for="opt in options" :key="opt.key" :value="opt.key">{{ opt.label }}</mdui-menu-item>
   </mdui-select>
 </template>
+
+<style scoped>
+.md-select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.md-select::part(text-field__container) {
+  min-height: 56px;
+}
+
+.md-select::part(text-field),
+.md-select::part(text-field__input) {
+  min-width: 0;
+}
+
+mdui-menu-item {
+  min-height: var(--app-touch-target, 48px);
+}
+</style>

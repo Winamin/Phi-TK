@@ -1,0 +1,148 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - android
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NDK_VERSION: 26.1.10909125
+  ANDROID_PLATFORM: 37
+  ANDROID_BUILD_TOOLS: 36.0.0
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-apk:
+    name: Build arm64 APK
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build components
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platforms;android-${ANDROID_PLATFORM}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "ndk;${NDK_VERSION}"
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+          NDK_HOME="${SDK_ROOT}/ndk/${NDK_VERSION}"
+          NDK_BIN="${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          SHADERC_DIR="${GITHUB_WORKSPACE}/vendor/shaderc-android/lib"
+
+          export ANDROID_HOME="${SDK_ROOT}"
+          export ANDROID_SDK_ROOT="${SDK_ROOT}"
+          export NDK_HOME
+          export ANDROID_NDK_HOME="${NDK_HOME}"
+          export ANDROID_NDK="${NDK_HOME}"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="${NDK_BIN}/aarch64-linux-android24-clang"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_AR="${NDK_BIN}/llvm-ar"
+          export CC_aarch64_linux_android="${NDK_BIN}/aarch64-linux-android24-clang"
+          export CXX_aarch64_linux_android="${NDK_BIN}/aarch64-linux-android24-clang++"
+          export AR_aarch64_linux_android="${NDK_BIN}/llvm-ar"
+          export SHADERC_LIB_DIR="${SHADERC_DIR}"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="-C link-arg=-L${SHADERC_DIR}"
+
+          test -x "${CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER}"
+          test -f "${SHADERC_DIR}/libshaderc_combined.a"
+          printf 'sdk.dir=%s\n' "${SDK_ROOT}" > src-tauri/gen/android/local.properties
+          chmod +x src-tauri/gen/android/gradlew
+          pnpm run android:build
+
+      - name: Sign APK with CI debug key
+        shell: bash
+        run: |
+          UNSIGNED_APK="$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*release-unsigned.apk' -print -quit)"
+          test -n "${UNSIGNED_APK}"
+
+          KEYSTORE="${RUNNER_TEMP}/phitk-ci.keystore"
+          ALIGNED_APK="${RUNNER_TEMP}/Phi-TK-android-arm64-aligned.apk"
+          OUTPUT_APK="${GITHUB_WORKSPACE}/Phi-TK-android-arm64.apk"
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+          BUILD_TOOLS_DIR="${SDK_ROOT}/build-tools/${ANDROID_BUILD_TOOLS}"
+
+          keytool -genkeypair \
+            -noprompt \
+            -keystore "${KEYSTORE}" \
+            -storepass android \
+            -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Phi-TK CI, OU=Android, O=Phi-TK, L=CI, S=CI, C=CN"
+
+          "${BUILD_TOOLS_DIR}/zipalign" -f -p 4 "${UNSIGNED_APK}" "${ALIGNED_APK}"
+          "${BUILD_TOOLS_DIR}/apksigner" sign \
+            --ks "${KEYSTORE}" \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --ks-key-alias androiddebugkey \
+            --out "${OUTPUT_APK}" \
+            "${ALIGNED_APK}"
+          "${BUILD_TOOLS_DIR}/apksigner" verify --verbose "${OUTPUT_APK}"
+          sha256sum "${OUTPUT_APK}" > "${OUTPUT_APK}.sha256"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phi-TK-android-arm64
+          path: |
+            Phi-TK-android-arm64.apk
+            Phi-TK-android-arm64.apk.sha256
+          if-no-files-found: error
+          retention-days: 14

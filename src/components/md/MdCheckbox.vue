@@ -17,7 +17,26 @@ function onChange(e: Event) {
 </script>
 
 <template>
-  <mdui-checkbox :checked="modelValue" @change="onChange">
+  <mdui-checkbox class="md-checkbox" :checked="modelValue" @change="onChange">
     <slot></slot>
   </mdui-checkbox>
 </template>
+
+<style scoped>
+.md-checkbox {
+  min-width: var(--app-touch-target, 48px);
+  min-height: var(--app-touch-target, 48px);
+}
+
+.md-checkbox::part(control) {
+  width: var(--app-touch-target, 48px);
+  height: var(--app-touch-target, 48px);
+}
+
+.md-checkbox::part(label) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: var(--mdui-typescale-body-large-size);
+  line-height: var(--mdui-typescale-body-large-line-height);
+}
+</style>

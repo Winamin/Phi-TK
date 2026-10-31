@@ -1,30 +1,33 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
-// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 prpr::tl_file!("main" mtl);
 
-//mod cli;
 mod common;
 mod gpu_info;
 mod ipc;
 mod preview;
-mod av1_level;
-pub mod render;
-mod vulkan_encode;
-pub mod vulkan_video;
+pub mod render_config;
 mod vulkan_readback;
+
+#[cfg(target_os = "android")]
+mod android_media;
+#[cfg(target_os = "android")]
+pub mod android_render;
+#[cfg(target_os = "android")]
+pub mod android_uri;
+#[cfg(target_os = "android")]
+mod android_platform;
+#[cfg(target_os = "android")]
+mod android_preview;
 mod task;
 
 use anyhow::{bail, Context, Result};
-use common::{resolve_output_dir, ensure_dir, respack_dir, CONFIG_DIR, DATA_DIR};
-use fs4::tokio::AsyncFileExt;
+use common::{ensure_dir, respack_dir, CONFIG_DIR, DATA_DIR};
 use gpu_info::get_msaa_sample_counts;
 use macroquad::prelude::set_pc_assets_folder;
 use prpr::{
     fs::{self, FileSystem},
     info::ChartInfo,
 };
-use render::{find_ffmpeg, RenderConfig, RenderParams};
+use render_config::{RenderConfig, RenderParams};
 use serde::Serialize;
 use std::{
     collections::HashMap,
@@ -33,16 +36,25 @@ use std::{
     io::{BufRead, BufReader, BufWriter},
     ops::DerefMut,
     path::{Path, PathBuf},
-    process::Stdio,
     sync::OnceLock,
     time::SystemTime,
 };
 use task::{TaskQueue, TaskView};
-use tauri::{ipc::InvokeError, Manager, State, WindowEvent};
+use tauri::{ipc::InvokeError, Manager, State};
+#[cfg(not(target_os = "android"))]
+use std::process::Stdio;
+#[cfg(not(target_os = "android"))]
 use tokio::{io::AsyncWriteExt, process::Command};
 
-static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
-static LOCK_FILE: OnceLock<tokio::fs::File> = OnceLock::new();
+pub(crate) static ASSET_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+pub fn set_data_dir(dir: PathBuf) {
+    let _ = DATA_DIR.set(dir);
+}
+
+pub fn set_asset_path(dir: PathBuf) {
+    let _ = ASSET_PATH.set(dir);
+}
 
 #[inline]
 async fn wrap_async<R>(f: impl Future<Output = Result<R>>) -> Result<R, InvokeError> {
@@ -52,6 +64,7 @@ async fn wrap_async<R>(f: impl Future<Output = Result<R>>) -> Result<R, InvokeEr
     })
 }
 
+#[cfg(not(target_os = "android"))]
 pub async fn run_wrapped(f: impl Future<Output = Result<()>>) -> ! {
     if let Err(err) = f.await {
         eprintln!("{err:?}");
@@ -60,8 +73,20 @@ pub async fn run_wrapped(f: impl Future<Output = Result<()>>) -> ! {
     std::process::exit(0);
 }
 
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "C" fn quad_main() { android_preview::start(); }
+
+#[cfg(target_os = "android")]
+pub fn install_panic_logger() {
+    std::panic::set_hook(Box::new(|info| android_uri::debug_log(&format!("PHITK_PANIC {info}"))));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() -> Result<()> {
+    #[cfg(target_os = "android")]
+    install_panic_logger();
+
     //dynamic cpu core
     let num_workers = std::thread::available_parallelism()
         .map(|n| n.get())
@@ -73,17 +98,12 @@ pub async fn run() -> Result<()> {
         .build()?;
     let _guard = rt.enter();
 
+    #[cfg(not(target_os = "android"))]
     if std::env::args().len() > 1 {
         match std::env::args().skip(1).next().as_deref() {
-            Some("render") => {
-                run_wrapped(render::main()).await;
-            }
             Some("preview") => {
                 run_wrapped(preview::main()).await;
             }
-            //Some("cli") => {
-            //    run_wrapped(cli::main()).await;
-           // }
             cmd => {
                 eprintln!("Unknown subcommand: {cmd:?}");
                 std::process::exit(1);
@@ -91,7 +111,10 @@ pub async fn run() -> Result<()> {
         }
     }
 
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(android_platform::init());
+    let app = builder
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
@@ -99,14 +122,14 @@ pub async fn run() -> Result<()> {
         .plugin(tauri_plugin_dialog::init())
         .manage(TaskQueue::new())
         .invoke_handler(tauri::generate_handler![
-            is_the_only_instance,
-            exit_program,
-            show_folder,
-            show_in_folder,
+            pick_chart_files,
+            import_chart,
+            view_video,
             save_text_file,
             save_binary_file,
             preview_chart,
             parse_chart,
+            load_chart_illustration,
             batch_add_tasks,
             post_render,
             get_tasks,
@@ -120,64 +143,24 @@ pub async fn run() -> Result<()> {
             set_rpe_dir,
             unset_rpe_dir,
             get_rpe_charts,
-            test_ffmpeg,
             open_app_folder,
             list_chart_files,
         ])
-        .on_window_event(|_, event| match event {
-            //WindowEvent::CloseRequested { api, .. } => {
-            WindowEvent::CloseRequested { .. } => {
-                /*event
-                .window()
-                .app_handle()
-                .tray_handle()
-                .get_item("toggle")
-                .set_title(mtl!("tray-show"))
-                .unwrap();*/
-                exit_program();
-                //event.window().hide().unwrap();
-                //api.prevent_close();
-            }
-            _ => {}
-        })
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
 
     let resolver = app.path();
+
+    #[cfg(not(target_os = "android"))]
     let exe = std::env::current_exe()?;
-    let exe_dir = exe.parent().unwrap();
 
-    let cache_dir = ensure_dir(
-        resolver
-            .app_cache_dir()
-            .unwrap_or_else(|_| exe_dir.to_owned()),
-    );
-    let lock_file = tokio::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(cache_dir.join("app.lock"))
-        .await?;
-    if lock_file.try_lock_exclusive().is_ok() {
-        LOCK_FILE.set(lock_file).unwrap();
-    } else {
-        eprintln!("Lock failed");
-    }
+    #[cfg(not(target_os = "android"))]
+    let exe_dir = exe.parent().context("Executable has no parent directory")?.to_path_buf();
 
-    CONFIG_DIR
-        .set(ensure_dir(
-            resolver
-                .app_config_dir()
-                .unwrap_or_else(|_| exe_dir.to_owned()),
-        ))
-        .unwrap();
-    DATA_DIR
-        .set(ensure_dir(
-            resolver
-                .app_data_dir()
-                .unwrap_or_else(|_| exe_dir.to_owned()),
-        ))
-        .unwrap();
+    CONFIG_DIR.set(ensure_dir(resolver.app_config_dir()?)).unwrap();
+    DATA_DIR.set(ensure_dir(resolver.app_data_dir()?)).unwrap();
+    #[cfg(target_os = "android")]
+    prpr::fs::set_cache_dir(ensure_dir(resolver.app_cache_dir()?));
 
     #[cfg(target_os = "linux")]
     let asset_dir = {
@@ -188,33 +171,26 @@ pub async fn run() -> Result<()> {
     #[cfg(target_os = "windows")]
     let asset_dir = exe_dir.join("assets");
 
+    #[cfg(target_os = "android")]
+    let asset_dir = DATA_DIR.get().unwrap().join("assets");
+
+    #[cfg(not(target_os = "android"))]
     if !asset_dir.exists() {
         eprintln!("错误：资源目录不存在 - {:?}", asset_dir);
         bail!("资源目录未找到，请检查安装路径");
     }
 
+    #[cfg(target_os = "android")]
+    let asset_dir = {
+        let dir = asset_dir.clone();
+        ensure_dir(dir)
+    };
     ASSET_PATH.set(asset_dir.clone()).unwrap();
     set_pc_assets_folder(&asset_dir.display().to_string());
 
     app.run(|_, _| {});
 
     Ok(())
-}
-
-#[tauri::command]
-fn is_the_only_instance() -> bool {
-    LOCK_FILE.get().is_some()
-}
-
-#[tauri::command]
-fn exit_program() {
-    std::process::exit(0);
-}
-
-#[tauri::command]
-fn show_folder(path: Option<String>) -> Result<(), InvokeError> {
-    let dir = resolve_output_dir(path.as_deref().map(Path::new)).map_err(InvokeError::from_anyhow)?;
-    open_dir(&dir).map_err(InvokeError::from_anyhow)
 }
 
 fn open_dir(path: &Path) -> anyhow::Result<()> {
@@ -234,46 +210,6 @@ fn open_dir(path: &Path) -> anyhow::Result<()> {
 }
 
 #[tauri::command]
-fn show_in_folder(path: &Path) -> Result<(), InvokeError> {
-    (move || {
-        #[cfg(target_os = "windows")]
-        {
-            Command::new("explorer")
-                .args(["/select,", &path.display().to_string()]) // The comma after select is not a typo
-                .spawn()?;
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            Command::new("gdbus")
-                .args([
-                    "call",
-                    "--session",
-                    "--dest",
-                    "org.freedesktop.FileManager1",
-                    "--object-path",
-                    "/org/freedesktop/FileManager1",
-                    "--method",
-                    "org.freedesktop.FileManager1.ShowItems",
-                    &format!("['file://{}']", path.canonicalize()?.display()),
-                    "",
-                ])
-                .spawn()?;
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            Command::new("open")
-                .args(["-R", &path.display().to_string()])
-                .spawn()?;
-        }
-
-        Ok(())
-    })()
-    .map_err(InvokeError::from_anyhow)
-}
-
-#[tauri::command]
 fn save_text_file(path: PathBuf, content: String) -> Result<(), InvokeError> {
     std::fs::write(path, content).map_err(|e| InvokeError::from_anyhow(e.into()))
 }
@@ -284,20 +220,78 @@ fn save_binary_file(path: PathBuf, data: Vec<u8>) -> Result<(), InvokeError> {
 }
 
 #[tauri::command]
-async fn parse_chart(path: &Path) -> Result<ChartInfo, InvokeError> {
+async fn import_chart(path: PathBuf) -> Result<ImportedChart, InvokeError> {
     wrap_async(async move {
+        #[cfg(target_os = "android")]
+        let path = tokio::task::spawn_blocking(move || android_uri::resolve(&path)).await??;
+
+        #[cfg(not(target_os = "android"))]
+        let path = path.to_path_buf();
+
+        #[cfg(target_os = "android")]
+        android_uri::debug_log(&format!("parse_chart: {}", path.display()));
+
         let mut fs: Box<dyn FileSystem + Send + Sync + 'static> =
-            fs::fs_from_file(path).with_context(|| mtl!("read-chart-failed"))?;
+            fs::fs_from_file(&path).with_context(|| mtl!("read-chart-failed"))?;
         let info = fs::load_info(fs.deref_mut())
             .await
             .with_context(|| mtl!("load-info-failed"))?;
-        Ok(info)
+
+        #[cfg(target_os = "android")]
+        android_uri::debug_log("parse_chart: ok");
+
+        Ok(ImportedChart { path, info })
+    })
+    .await
+}
+
+#[derive(Serialize)]
+struct ImportedChart { path: PathBuf, info: ChartInfo }
+
+#[tauri::command]
+async fn parse_chart(path: PathBuf) -> Result<ChartInfo, InvokeError> {
+    Ok(import_chart(path).await?.info)
+}
+
+#[tauri::command]
+async fn pick_chart_files(directory: bool, multiple: bool) -> Result<Vec<String>, InvokeError> {
+    #[cfg(target_os = "android")]
+    return wrap_async(android_platform::pick_charts(directory, multiple)).await;
+    #[cfg(not(target_os = "android"))]
+    Err(InvokeError::from("Use the desktop file picker"))
+}
+
+#[tauri::command]
+async fn view_video(uri: Option<String>) -> Result<(), InvokeError> {
+    #[cfg(target_os = "android")]
+    return wrap_async(async move {
+        tokio::task::spawn_blocking(move || android_platform::call::<serde_json::Value>("viewVideo", serde_json::json!({ "uri": uri }))).await??;
+        Ok(())
+    }).await;
+    #[cfg(not(target_os = "android"))]
+    Err(InvokeError::from("Open your gallery to view videos"))
+}
+
+#[tauri::command]
+async fn load_chart_illustration(path: &Path, illustration: &str) -> Result<tauri::ipc::Response, InvokeError> {
+    wrap_async(async move {
+        let mut fs = fs::fs_from_file(path).with_context(|| mtl!("read-chart-failed"))?;
+        let data = fs.load_file(illustration).await?;
+        Ok(tauri::ipc::Response::new(data))
     })
     .await
 }
 
 #[tauri::command]
 async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
+    #[cfg(target_os = "android")]
+    return wrap_async(async move {
+        let mut params = params;
+        let path = params.path.clone();
+        params.path = tokio::task::spawn_blocking(move || android_uri::resolve(&path)).await??;
+        android_platform::launch_preview(params).await
+    }).await;
+    #[cfg(not(target_os = "android"))]
     wrap_async(async move {
         let mut child = Command::new(std::env::current_exe()?)
             .arg("preview")
@@ -317,10 +311,18 @@ async fn preview_chart(params: RenderParams) -> Result<(), InvokeError> {
     .await
 }
 #[tauri::command]
-async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams, output_path: Option<String>) -> Result<(), InvokeError> {
+async fn post_render(queue: State<'_, TaskQueue>, params: RenderParams) -> Result<(), InvokeError> {
     wrap_async(async move {
-        let output_path = output_path.map(PathBuf::from);
-        queue.post(params, output_path).await?;
+        #[cfg(target_os = "android")]
+        let mut params = params;
+
+        #[cfg(target_os = "android")]
+        {
+            let path = params.path.clone();
+            params.path = tokio::task::spawn_blocking(move || android_uri::resolve(&path)).await??;
+        }
+
+        queue.post(params).await?;
         Ok(())
     })
     .await
@@ -366,21 +368,23 @@ fn get_respacks() -> Result<Vec<RespackInfo>, InvokeError> {
 #[tauri::command]
 async fn batch_add_tasks(
     queue: State<'_, TaskQueue>,
-    tasks: Vec<(String, String, Option<String>)> // (path, preset_name, output_path)
+    tasks: Vec<(String, String)> // (path, preset_name)
 ) -> Result<(), InvokeError> {
     wrap_async(async move {
-        for (path, preset_name, output_path) in tasks {
+        for (path, preset_name) in tasks {
             let mut presets = get_presets().await.map_err(|e| anyhow::anyhow!("Failed to get presets: {:?}", e))?;
             let config = presets.remove(&preset_name).unwrap_or_else(|| {
                 create_default_render_config()
             });
+            #[cfg(target_os = "android")]
+            let path = android_uri::resolve(Path::new(&path))?;
+
             let params = RenderParams {
                 path: PathBuf::from(path),
                 config,
                 info: ChartInfo::default(),
             };
-            let output_path = output_path.map(PathBuf::from);
-            queue.post(params, output_path).await.map_err(|e| anyhow::anyhow!("Failed to post task: {:?}", e))?;
+            queue.post(params).await.map_err(|e| anyhow::anyhow!("Failed to post task: {:?}", e))?;
         }
         Ok(())
     }).await
@@ -632,11 +636,6 @@ fn get_rpe_charts() -> Result<Option<Vec<RPEChartInfo>>, InvokeError> {
         Ok(Some(results))
     })()
     .map_err(InvokeError::from_anyhow)
-}
-
-#[tauri::command]
-fn test_ffmpeg() -> Result<bool, InvokeError> {
-    (|| Ok(find_ffmpeg()?.is_some()))().map_err(InvokeError::from_anyhow)
 }
 
 #[tauri::command]

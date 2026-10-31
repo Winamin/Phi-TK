@@ -1,0 +1,7 @@
+<resources>
+    <string name="preview_failed">Unable to open this preview. Please return and select the chart again.</string>
+    <style name="Theme.PhiTK.Preview" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

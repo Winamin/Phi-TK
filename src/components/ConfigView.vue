@@ -1,32 +1,17 @@
 <i18n>
 en:
   resolution: Resolution
-  ffmpeg-preset: Preset
-  video-codec: Encoder
-  encoder-select: Hardware Encoder
-  encoder-auto: Auto
-  encoder-nvenc: NVIDIA NVENC
-  encoder-qsv: Intel QSV
-  encoder-amf: AMD AMF
-  encoder-vulkan: Vulkan
-  encoder-dx12: DirectX 12
-  encoder-dx12-hint: 此 ffmpeg 构建只带 hevc_d3d12va；若所选编码格式没有对应的 DX12 编码器，会自动回退到 HEVC。
-  encoder-cpu: CPU Software
+  video-codec: Video Codec
   fps: FPS
-  hw-accel: Hardware Acceleration
-  hw-accel-tips: Improve speed, slightly reduce quality
   fxaa: FXAA
   fxaa-tips: Causes blur, not recommended
   sample-count: Sample Count
   sample-count-off: Off (1x)
   sample-count-device: 'GPU: {device}, up to {max}x MSAA'
   sample-count-unknown: 'GPU capability unavailable; using 1/2/4/8'
-  bitrate-control: Bitrate Control
-  bitrate: Bitrate/CRF
-  vulkan-qp-hint: "Vulkan encoder constant QP: {qp} (derived from the existing CRF/bitrate setting)"
-  ffmpeg-thread: Thread Optimization
-  video-format: Video Format
-  video-format-flac-error: Not available with FLAC audio
+  bitrate: Target Bitrate
+  bitrate-hint: 'CBR, in bps. 8M = 8000k = 8000000 bps (8 Mbps).'
+  bitrate-invalid: 'Enter a bitrate between 200000 and 2147483647 bps.'
   player-avatar: Avatar
   player-name: Name
   player-rks: RKS
@@ -45,15 +30,12 @@ en:
   disable-effect: No Effects
   volume-music: Music Volume
   volume-sfx: SFX Volume
-  audio-format: Audio Format
-  audio-bit-depth: Bit Depth
   ending-length: Ending Duration
   disable-loading: Skip Loading
   disable-loading-tips: May have issues
   chart_debug: Debug Mode
   chart_ratio: Chart Scale
   buffer_size: Buffer Size
-  target_audio: Sample Rate
   combo: COMBO Text
   watermark: Watermark
   flid_x: Mirror
@@ -88,11 +70,9 @@ en:
 
   group:
     resolution-fps: Resolution & Frame Rate
-    encoder: Encoder
     bitrate: Bitrate
     performance: Performance
     volume: Volume
-    audio-format: Audio Format
     chart-scale: Chart Scale & Note Speed
     text-ending: Text & Ending
     respack: Resource Pack
@@ -105,32 +85,17 @@ en:
 
 zh-CN:
   resolution: 分辨率
-  ffmpeg-preset: 编码预设
-  video-codec: 编码器
-  encoder-select: 硬件编码器
-  encoder-auto: 自动选择
-  encoder-nvenc: NVIDIA NVENC
-  encoder-qsv: Intel QSV
-  encoder-amf: AMD AMF
-  encoder-vulkan: Vulkan
-  encoder-dx12: DirectX 12
-  encoder-dx12-hint: This ffmpeg build only ships hevc_d3d12va; if the selected codec has no DX12 encoder, it falls back to HEVC.
-  encoder-cpu: CPU 软编码
+  video-codec: 视频编码格式
   fps: 帧率
-  hw-accel: 硬件加速
-  hw-accel-tips: 提升速度，略微降低质量
   fxaa: FXAA 抗锯齿
   fxaa-tips: 会导致画面模糊
   sample-count: 采样数
   sample-count-off: 关闭
   sample-count-device: 显卡：{device}，最高支持 {max}x MSAA
   sample-count-unknown: 未能检测到显卡信息，使用 1/2/4/8
-  bitrate-control: 码率控制
-  bitrate: 码率/CRF
-  vulkan-qp-hint: "Vulkan 编码器常量 QP：{qp}（由现有 CRF/码率设置换算）"
-  ffmpeg-thread: 线程优化
-  video-format: 视频格式
-  video-format-flac-error: FLAC 音频下不可用
+  bitrate: 目标码率
+  bitrate-hint: 'CBR，单位 bps。8M = 8000k = 8000000 bps（8 Mbps）。'
+  bitrate-invalid: '请输入 200000 至 2147483647 bps 范围内的码率。'
   player-avatar: 头像
   player-name: 名称
   player-rks: RKS
@@ -149,15 +114,12 @@ zh-CN:
   disable-effect: 禁用特效
   volume-music: 音乐音量
   volume-sfx: 音效音量
-  audio-format: 音频格式
-  audio-bit-depth: 位深度
   ending-length: 结算时长
   disable-loading: 渲染时跳过加载
   disable-loading-tips: 可能有问题
   chart_debug: 调试模式
   chart_ratio: 谱面缩放
   buffer_size: 缓冲区
-  target_audio: 采样率
   combo: COMBO 文本
   watermark: 水印
   flid_x: 镜像
@@ -192,11 +154,9 @@ zh-CN:
 
   group:
     resolution-fps: 分辨率与帧率
-    encoder: 编码器
     bitrate: 码率
     performance: 性能
     volume: 音量
-    audio-format: 音频格式
     chart-scale: 谱面缩放与流速
     text-ending: 文本与结算
     respack: 资源包
@@ -209,7 +169,7 @@ zh-CN:
 </i18n>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
@@ -217,58 +177,25 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { toast, anyFilter, toastError, validateFields } from '@/common';
 import type { RenderConfig } from '@/model';
+import { normalizeRenderConfig, parseBitrateBps } from '@/render-config';
 import TipSwitch from './TipSwitch.vue';
 import MdCombobox from './md/MdCombobox.vue';
 import MdSelect from './md/MdSelect.vue';
 import MdSlider from './md/MdSlider.vue';
 import MdTextField from './md/MdTextField.vue';
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-defineProps<{ initAspectRatio?: number }>();
+import MdCheckbox from './md/MdCheckbox.vue';
+defineProps<{ initAspectRatio?: number; floatingActions?: boolean }>();
 const RESOLUTIONS = ['1280x720', '1920x1080', '2560x1440', '3840x2160', '2844x1600', '2388x1668', '1600x1080', '7680x4320'];
-const FFMPEG_PRESETS = [
-  { value: 'veryfast', title: 'VeryFast' },
-  { value: 'faster', title: 'Faster' },
-  { value: 'fast', title: 'Fast' },
-  { value: 'medium', title: 'Medium' },
-  { value: 'slow', title: 'Slow' },
-  { value: 'slower', title: 'Slower' },
-  { value: 'veryslow', title: 'VerySlow' },
-];
 
-const VIDEO_FORMAT = [
-  { value: 'mp4', title: 'MP4' },
-  { value: 'mov', title: 'MOV' },
-];
 const VIDEO_CODECS = [
   { value: 'h264', title: 'H.264' },
   { value: 'hevc', title: 'HEVC' },
-  { value: 'av1', title: 'AV1' },
 ];
-const ENCODERS = computed(() => [
-  { value: 'auto', title: t('encoder-auto') },
-  { value: 'nvenc', title: t('encoder-nvenc') },
-  { value: 'qsv', title: t('encoder-qsv') },
-  { value: 'amf', title: t('encoder-amf') },
-  { value: 'vulkan', title: t('encoder-vulkan') },
-  { value: 'dx12', title: t('encoder-dx12') },
-  { value: 'cpu', title: t('encoder-cpu') },
-]);
-const AUDIO_FORMATS = ['flac', 'mp3', 'aac', 'opus', 'wav'];
-const AUDIO_BITS = [16, 24, 32];
-const SAMPLE_RATES = [44100, 48000, 96000, 192000, 384000, 768000];
-const BITRATE_CONTROLS = ['CRF', 'CBR'];
+
 const STD_CHALLENGE_COLORS = ['white', 'green', 'blue', 'red', 'golden', 'rainbow'];
 
 const form = ref<HTMLFormElement>();
 
-/**
- * Icons are `@mdui/icons` custom-element tag names, rendered through `<component :is>`.
- *
- * This is the destination list for the landscape navigation rail — the same
- * primary-navigation pattern a native Android tablet settings app uses
- * (rail on the leading edge, one destination's content in the pane beside it).
- */
 const categories = [
   { key: 'output', icon: 'mdui-icon-videocam--outlined', activeIcon: 'mdui-icon-videocam' },
   { key: 'recording', icon: 'mdui-icon-music-note--outlined', activeIcon: 'mdui-icon-music-note' },
@@ -279,6 +206,12 @@ const categories = [
 ] as const;
 
 const activeCategory = ref<(typeof categories)[number]['key']>('output');
+
+function onCategoryChange(event: Event) {
+  const value = (event.target as HTMLElement & { value?: string }).value;
+  const category = categories.find((item) => item.key === value);
+  if (category) activeCategory.value = category.key;
+}
 
 const resolution = ref('1920x1080');
 const fps = ref('60');
@@ -310,24 +243,16 @@ async function updateMsaaSupport() {
       sampleCount.value = clampSampleCount(sampleCount.value);
     }
   } catch {
-    /* empty */
+    return;
   } finally {
     msaaLoaded.value = true;
   }
 }
 updateMsaaSupport();
 const videoCodec = ref('h264');
-const encoder = ref('auto');
-const ffmpegPreset = ref('medium');
 
-const bitrateControl = ref('CRF');
-const bitrate = ref('28');
-const hwAccel = ref(true);
+const bitrate = ref('8M');
 const fxaa = ref(false);
-const ffmpegThread = ref(false);
-const audioFormat = ref('flac');
-const audioBit = ref<number | undefined>(undefined);
-const targetAudio = ref(48000);
 const volumeMusic = ref(1);
 const volumeSfx = ref(1);
 const bufferSize = ref(256);
@@ -359,7 +284,6 @@ const flidX = ref(false);
 const handSplit = ref(false);
 const disableLoading = ref(false);
 
-/** `<v-img>` used the raw path, which the webview cannot load — Tauri needs an asset URL. */
 const avatarUrl = computed(() => {
   if (!playerAvatar.value) return '';
   try {
@@ -369,102 +293,9 @@ const avatarUrl = computed(() => {
   }
 });
 
-const videoFormat = ref('mp4');
-const video = ref(false);
-watch([audioFormat, video], ([newAudio, newVideo]) => {
-  if (newAudio === 'flac' && newVideo) {
-    video.value = false;
-    videoFormat.value = 'mp4';
-    toast(t('video-format-flac-error'), 'error');
-  }
-});
-watch(videoFormat, (val) => {
-  video.value = val === 'mov';
-});
-
-/*
- * Rust Vulkan encoder mapping.
- *
- * The encoder is constant-QP and only implements H.264, so it deliberately has
- * no dedicated UI.  Instead the controls that already exist are mapped onto it:
- *   - Hardware Acceleration + Encoder (auto/vulkan) + Video Codec decide
- *     whether the Rust Vulkan path is used at all;
- *   - Bitrate Control + Bitrate/CRF produce the QP (CRF is the QP directly,
- *     CBR is converted from the target bitrate), exactly like the backend.
- * buildConfig() writes these normalized values back into the existing
- * RenderConfig fields, so no extra input or option is introduced.
- */
-const VULKAN_CODEC = 'h264';
-
-function parseBitrateBps(raw: string): number | null {
-  const s = raw.trim().toLowerCase().replace(/\s+/g, '');
-  if (!s) return null;
-  let num = s;
-  let mult = 1;
-  if (s.endsWith('kbps')) {
-    num = s.slice(0, -4);
-    mult = 1e3;
-  } else if (s.endsWith('mbps')) {
-    num = s.slice(0, -4);
-    mult = 1e6;
-  } else if (s.endsWith('k')) {
-    num = s.slice(0, -1);
-    mult = 1e3;
-  } else if (s.endsWith('m')) {
-    num = s.slice(0, -1);
-    mult = 1e6;
-  }
-  const n = Number(num);
-  return Number.isFinite(n) && n > 0 ? n * mult : null;
-}
-
-/** Keep in sync with `encoder_qp()` in src-tauri/src/render.rs. */
-function resolveVulkanQp(control: string, bitrate: string, width: number, height: number, fps: number): number {
-  if (control.toUpperCase() === 'CBR') {
-    const bps = parseBitrateBps(bitrate);
-    if (!bps) return 28;
-    const bpp = bps / Math.max(width * height * Math.max(fps, 1), 1);
-    return Math.min(51, Math.max(1, Math.round(28 - 6 * Math.log2(bpp / 0.04))));
-  }
-  const raw = bitrate.trim();
-  const crf = Number(raw);
-  return Math.min(51, Math.max(1, Math.round(raw && Number.isFinite(crf) ? crf : 28)));
-}
-
-const vulkanEligible = computed(
-  () => hwAccel.value && videoCodec.value === VULKAN_CODEC && (encoder.value === 'auto' || encoder.value === 'vulkan'),
-);
-
-const vulkanQp = computed(() => {
-  const [width, height] = resolution.value.split('x').map(Number);
-  return resolveVulkanQp(
-    bitrateControl.value,
-    bitrate.value,
-    width || 1920,
-    height || 1080,
-    parseInt(fps.value) || 60,
-  );
-});
-
-// The Rust encoder implements H.264 only.  Do not rewrite the existing
-// encoder choice here: for HEVC/AV1 the same "vulkan" selection still means
-// ffmpeg's hevc_vulkan/av1_vulkan encoder, and the backend gates only the
-// Rust encoder by codec.
-
-/** Normalize the existing encoder controls into the values the backend reads. */
-function resolveEncoderParams(width: number, height: number) {
-  const control = bitrateControl.value.toUpperCase() === 'CBR' ? 'CBR' : 'CRF';
-  const value = vulkanEligible.value && control === 'CRF'
-    ? String(resolveVulkanQp(control, bitrate.value, width, height, parseInt(fps.value) || 60))
-    : bitrate.value.trim();
-  return { encoder: encoder.value, bitrateControl: control, bitrate: value };
-}
-
 const pctLabel = (value: number) => `${Math.round(value * 100)}%`;
 const numLabel = (value: number) => value.toFixed(2);
 
-/* A `type` rather than an `interface` so it satisfies `MdSelect`'s `items` prop: TypeScript
-   only gives object *literal* types an implicit index signature, never interfaces. */
 type Respack = {
   name: string;
   path: string | null;
@@ -480,16 +311,10 @@ async function updateRespacks() {
 }
 updateRespacks();
 
-/**
- * The select carries `index`, not the object: the old `<v-select>` had no `item-value`, so
- * Vuetify fell back to the *title* and stored the name string — leaving `respack.path`
- * undefined and silently dropping `resPackPath` from every render.
- */
 function onRespackChange(value: unknown) {
   respack.value = respacks.value.find((x) => x.index === Number(value)) ?? respacks.value[0];
 }
 
-/* See `Respack`: a `type`, not an `interface`, for `MdSelect`'s `items` prop. */
 type Preset = {
   name: string;
   key: string;
@@ -500,7 +325,6 @@ const DEFAULT_PRESET: Preset = {
   key: 'default',
   config: {
     resolution: [1920, 1080],
-    ffmpegPreset: 'medium',
     endingLength: -2.0,
     disableLoading: true,
     chartDebug: false,
@@ -508,15 +332,10 @@ const DEFAULT_PRESET: Preset = {
     chartRatio: 1,
     bufferSize: 256,
     fps: 60,
-    hardwareAccel: true,
     videoCodec: 'h264',
-    encoder: 'auto',
-    bitrateControl: 'CRF',
-    bitrate: '28',
+    bitrateControl: 'CBR',
+    bitrate: '8M',
     targetAudio: 48000,
-    video: false,
-    audioBit: undefined,
-    audioFormat: 'flac',
     background: false,
     aggressive: false,
     challengeColor: 'golden',
@@ -536,7 +355,6 @@ const DEFAULT_PRESET: Preset = {
     volumeSfx: 1,
     combo: 'AUTOPLAY',
     watermark: '',
-    ffmpegThread: false,
     showProgressText: false,
     showTimeText: false,
     handSplit: false,
@@ -570,7 +388,6 @@ async function updatePresets() {
 }
 updatePresets();
 
-/** Replaces `<v-select return-object>` — the select carries `key`, the object is looked up. */
 function onPresetChange(value: unknown) {
   const found = presets.value.find((x) => x.key === String(value));
   if (!found) return;
@@ -596,10 +413,12 @@ async function buildConfig(): Promise<RenderConfig | null> {
     return null;
   }
   const [w, h] = resolution.value.split('x').map(Number);
-  const encoderParams = resolveEncoderParams(w, h);
+  if (parseBitrateBps(bitrate.value) === null) {
+    toast(t('bitrate-invalid'), 'error');
+    return null;
+  }
   return {
     resolution: [w, h],
-    ffmpegPreset: ffmpegPreset.value || 'medium',
     endingLength: parseFloat(endingLength.value),
     disableLoading: disableLoading.value,
     chartDebug: chartDebug.value,
@@ -607,18 +426,13 @@ async function buildConfig(): Promise<RenderConfig | null> {
     chartRatio: chartRatio.value,
     bufferSize: bufferSize.value,
     fps: parseInt(fps.value),
-    hardwareAccel: hwAccel.value,
     videoCodec: videoCodec.value,
-    encoder: encoderParams.encoder,
-    bitrateControl: encoderParams.bitrateControl,
-    bitrate: encoderParams.bitrate,
-    targetAudio: targetAudio.value,
+    bitrateControl: 'CBR',
+    bitrate: bitrate.value.trim(),
+    targetAudio: 48000,
     background: background.value,
     handSplit: handSplit.value,
     noteSpeedFactor: noteSpeedFactor.value,
-    video: video.value,
-    audioBit: audioFormat.value === 'wav' ? audioBit.value : undefined,
-    audioFormat: audioFormat.value,
     bar: bar.value,
     aggressive: aggressive.value,
     challengeColor: STD_CHALLENGE_COLORS[challengeColors.value.indexOf(challengeColor.value)],
@@ -638,7 +452,6 @@ async function buildConfig(): Promise<RenderConfig | null> {
     volumeSfx: volumeSfx.value,
     combo: combo.value,
     watermark: watermark.value,
-    ffmpegThread: ffmpegThread.value,
     scoreAmin: scoreAmin.value,
     uiLine: render.value.includes(renderList.value[0]),
     uiScore: render.value.includes(renderList.value[1]),
@@ -653,8 +466,8 @@ async function buildConfig(): Promise<RenderConfig | null> {
 }
 
 function applyConfig(c: RenderConfig) {
+  c = normalizeRenderConfig(c);
   resolution.value = c.resolution.join('x');
-  ffmpegPreset.value = c.ffmpegPreset || 'medium';
   endingLength.value = String(c.endingLength);
   disableLoading.value = c.disableLoading;
   chartDebug.value = c.chartDebug;
@@ -662,18 +475,11 @@ function applyConfig(c: RenderConfig) {
   chartRatio.value = c.chartRatio;
   bufferSize.value = c.bufferSize;
   fps.value = String(c.fps);
-  hwAccel.value = c.hardwareAccel;
-  videoCodec.value = c.videoCodec || VULKAN_CODEC;
-  encoder.value = c.encoder || 'auto';
-  bitrateControl.value = (c.bitrateControl || 'CRF').toUpperCase() === 'CBR' ? 'CBR' : 'CRF';
-  bitrate.value = c.bitrate || '28';
-  targetAudio.value = c.targetAudio;
+  videoCodec.value = c.videoCodec || 'h264';
+  bitrate.value = c.bitrate || '8M';
   background.value = c.background ?? false;
   handSplit.value = c.handSplit ?? false;
   noteSpeedFactor.value = c.noteSpeedFactor;
-  video.value = c.video;
-  audioFormat.value = c.audioFormat || 'flac';
-  audioBit.value = c.audioBit;
   aggressive.value = c.aggressive;
   challengeColor.value = challengeColors.value[STD_CHALLENGE_COLORS.indexOf(c.challengeColor)];
   challengeRank.value = String(c.challengeRank);
@@ -693,7 +499,6 @@ function applyConfig(c: RenderConfig) {
   watermark.value = c.watermark;
   bar.value = c.bar ?? false;
   scoreAmin.value = c.scoreAmin;
-  ffmpegThread.value = c.ffmpegThread ?? false;
   render.value = [];
   const list = renderList.value;
   if ((c.uiLine ?? true) && list[0]) render.value.push(list[0]);
@@ -708,10 +513,13 @@ function applyConfig(c: RenderConfig) {
 }
 defineExpose({ buildConfig, applyConfig });
 
+const presetDialog = ref(false);
+const presetName = ref('');
+
 async function createPreset() {
   const config = await buildConfig();
   if (!config) return;
-  const name = prompt(t('preset-create-title'));
+  const name = presetName.value.trim();
   if (!name) return;
   if (name === 'default') {
     toast(t('preset-cannot-use-default'), 'error');
@@ -721,6 +529,7 @@ async function createPreset() {
     await invoke('add_preset', { name, config });
     await updatePresets();
     preset.value = presets.value.find((x) => x.key === name) || presets.value[0];
+    presetDialog.value = false;
     toast(t('preset-created'), 'success');
   } catch (e) {
     toastError(e);
@@ -749,38 +558,16 @@ async function replacePreset() {
 }
 </script>
 
-
 <template>
   <form ref="form" class="config-root" @submit.prevent>
-    <!-- ==================================================================
-         Landscape tablet layout — MD3 adaptive "list-detail".
 
-         A fixed navigation rail on the leading edge lists the six
-         destinations; the pane beside it shows exactly one destination's
-         settings. This is the same primary-navigation shell a native
-         Android tablet settings app uses at the `expanded` window size
-         class, and it is why the rail never scrolls with the content.
-         ================================================================== -->
-    <nav class="config-rail" :aria-label="t('settings')">
-      <ul class="rail-list">
-        <li v-for="cat in categories" :key="cat.key">
-          <button
-            type="button"
-            class="rail-item"
-            :class="{ 'is-active': activeCategory === cat.key }"
-            :aria-current="activeCategory === cat.key ? 'page' : undefined"
-            @click="activeCategory = cat.key">
-            <!-- The active destination swaps to its filled icon — MD3's selected
-                 state for navigation items, not just a colour change. -->
-            <span class="rail-icon"><component :is="activeCategory === cat.key ? cat.activeIcon : cat.icon" /></span>
-            <span class="rail-label">{{ t(`cat.${cat.key}`) }}</span>
-          </button>
-        </li>
-      </ul>
-
-      <!-- Preset management lives at the rail's foot: it acts on the whole
-           config rather than on any one destination. -->
-      <div class="rail-foot">
+    <div class="config-header">
+      <mdui-tabs variant="secondary" :value="activeCategory" :aria-label="t('settings')" @change="onCategoryChange">
+        <mdui-tab v-for="cat in categories" :key="cat.key" :value="cat.key">
+          {{ t(`cat.${cat.key}`) }}
+        </mdui-tab>
+      </mdui-tabs>
+      <div class="preset-toolbar">
         <MdSelect
           class="preset-select"
           variant="outlined"
@@ -790,31 +577,32 @@ async function replacePreset() {
           item-value="key"
           :label="t('presets')"
           @update:model-value="onPresetChange" />
-        <div class="preset-actions">
-          <mdui-button variant="tonal" class="preset-btn" @click="createPreset">
-            <mdui-icon-add slot="icon"></mdui-icon-add>
-            {{ t('preset-new') }}
-          </mdui-button>
-          <mdui-button variant="tonal" class="preset-btn" :disabled="preset.key === 'default'" @click="replacePreset">
-            <mdui-icon-save--outlined slot="icon"></mdui-icon-save--outlined>
-            {{ t('preset-save') }}
-          </mdui-button>
-          <mdui-button variant="tonal" class="preset-btn btn-danger" :disabled="preset.key === 'default'" @click="deletePreset">
-            <mdui-icon-delete--outlined slot="icon"></mdui-icon-delete--outlined>
-            {{ t('preset-delete') }}
-          </mdui-button>
-        </div>
+        <mdui-dropdown placement="bottom-end">
+          <mdui-button-icon slot="trigger" :aria-label="t('presets')">
+            <mdui-icon-more-vert></mdui-icon-more-vert>
+          </mdui-button-icon>
+          <mdui-menu>
+            <mdui-menu-item @click="presetName = ''; presetDialog = true">
+              <mdui-icon-add slot="icon"></mdui-icon-add>
+              {{ t('preset-new') }}
+            </mdui-menu-item>
+            <mdui-menu-item :disabled="preset.key === 'default'" @click="replacePreset">
+              <mdui-icon-save--outlined slot="icon"></mdui-icon-save--outlined>
+              {{ t('preset-save') }}
+            </mdui-menu-item>
+            <mdui-menu-item :disabled="preset.key === 'default'" @click="deletePreset">
+              <mdui-icon-delete--outlined slot="icon"></mdui-icon-delete--outlined>
+              {{ t('preset-delete') }}
+            </mdui-menu-item>
+          </mdui-menu>
+        </mdui-dropdown>
       </div>
-    </nav>
+    </div>
 
-    <!-- ==================== Detail pane ====================
-         No pane header: the rail already marks the active destination, so an
-         icon + title repeating it here was duplication. The settings grid is the
-         first thing in the pane. -->
     <div class="config-pane">
 
-      <div class="settings-scroll">
-        <!-- ==================== OUTPUT ==================== -->
+      <div class="settings-scroll" :class="{ 'has-floating-actions': floatingActions }">
+
         <div v-show="activeCategory === 'output'" class="settings-stack">
           <section class="settings-section">
             <h2 class="section-title">{{ t('group.resolution-fps') }}</h2>
@@ -837,18 +625,12 @@ async function replacePreset() {
           </section>
 
           <section class="settings-section">
-            <h2 class="section-title">{{ t('group.encoder') }}</h2>
+            <h2 class="section-title">{{ t('video-codec') }}</h2>
             <div class="setting-card">
               <div class="field-row">
                 <MdSelect v-model="videoCodec" variant="outlined" :items="VIDEO_CODECS" :label="t('video-codec')" />
-                <MdSelect v-model="encoder" variant="outlined" :items="ENCODERS" :label="t('encoder-select')" />
               </div>
 
-              <div v-if="encoder === 'dx12'" class="field-hint">{{ t('encoder-dx12-hint') }}</div>
-              <div class="field-row">
-                <MdSelect v-model="ffmpegPreset" variant="outlined" :items="FFMPEG_PRESETS" :label="t('ffmpeg-preset')" />
-                <MdSelect v-model="videoFormat" variant="outlined" :items="VIDEO_FORMAT" :label="t('video-format')" />
-              </div>
             </div>
           </section>
 
@@ -856,12 +638,8 @@ async function replacePreset() {
             <h2 class="section-title">{{ t('group.bitrate') }}</h2>
             <div class="setting-card">
               <div class="field-row">
-                <MdSelect v-model="bitrateControl" variant="outlined" :items="BITRATE_CONTROLS" :label="t('bitrate-control')" />
-                <MdTextField v-model="bitrate" variant="outlined" :label="t('bitrate')" />
+                <MdTextField v-model="bitrate" variant="outlined" required :label="t('bitrate')" :helper="t('bitrate-hint')" />
               </div>
-              <!-- Read-only mapping of the existing CRF/bitrate controls to the
-                   Vulkan encoder's constant QP.  No extra input is added. -->
-              <div v-if="vulkanEligible" class="field-hint">{{ t('vulkan-qp-hint', { qp: vulkanQp }) }}</div>
             </div>
           </section>
 
@@ -869,15 +647,12 @@ async function replacePreset() {
             <h2 class="section-title">{{ t('group.performance') }}</h2>
             <div class="setting-card">
               <div class="switch-grid">
-                <TipSwitch v-model="hwAccel" :label="t('hw-accel')" :tooltip="t('hw-accel-tips')" />
                 <TipSwitch v-model="fxaa" :label="t('fxaa')" :tooltip="t('fxaa-tips')" />
-                <TipSwitch v-model="ffmpegThread" :label="t('ffmpeg-thread')" />
               </div>
             </div>
           </section>
         </div>
 
-        <!-- ==================== RECORDING ==================== -->
         <div v-show="activeCategory === 'recording'" class="settings-stack">
           <section class="settings-section">
             <h2 class="section-title">{{ t('group.volume') }}</h2>
@@ -885,37 +660,22 @@ async function replacePreset() {
               <div class="setting-item">
                 <span class="md3-icon-badge item-icon"><mdui-icon-music-note></mdui-icon-music-note></span>
                 <span class="item-label">{{ t('volume-music') }}</span>
-                <!-- The readout sits in a fixed-width slot so the two sliders'
-                     tracks line up, which a bare percentage would not guarantee. -->
+
                 <span class="item-value">{{ pctLabel(volumeMusic) }}</span>
               </div>
-              <MdSlider v-model="volumeMusic" class="item-slider" :min="0" :max="2" :step="0.01" :labelFormatter="pctLabel" />
+              <MdSlider v-model="volumeMusic" class="item-slider" :aria-label="t('volume-music')" :min="0" :max="2" :step="0.01" :labelFormatter="pctLabel" />
               <mdui-divider></mdui-divider>
               <div class="setting-item">
                 <span class="md3-icon-badge item-icon"><mdui-icon-volume-up></mdui-icon-volume-up></span>
                 <span class="item-label">{{ t('volume-sfx') }}</span>
                 <span class="item-value">{{ pctLabel(volumeSfx) }}</span>
               </div>
-              <MdSlider v-model="volumeSfx" class="item-slider" :min="0" :max="2" :step="0.01" :labelFormatter="pctLabel" />
+              <MdSlider v-model="volumeSfx" class="item-slider" :aria-label="t('volume-sfx')" :min="0" :max="2" :step="0.01" :labelFormatter="pctLabel" />
             </div>
           </section>
 
-          <section class="settings-section">
-            <h2 class="section-title">{{ t('group.audio-format') }}</h2>
-            <div class="setting-card">
-              <div class="field-row">
-                <MdSelect v-model="audioFormat" variant="outlined" :items="AUDIO_FORMATS" :label="t('audio-format')" />
-                <MdSelect v-model="audioBit" variant="outlined" :items="AUDIO_BITS" :label="t('audio-bit-depth')" :disabled="audioFormat !== 'wav'" />
-              </div>
-              <div class="field-row">
-                <MdSelect v-model="targetAudio" variant="outlined" :items="SAMPLE_RATES" :label="t('target_audio')" />
-                <MdTextField v-model="bufferSize" variant="outlined" :number="true" inputmode="numeric" :label="t('buffer_size')" />
-              </div>
-            </div>
-          </section>
         </div>
 
-        <!-- ==================== GAME ==================== -->
         <div v-show="activeCategory === 'game'" class="settings-stack">
           <section class="settings-section">
             <h2 class="section-title">{{ t('group.chart-scale') }}</h2>
@@ -924,13 +684,13 @@ async function replacePreset() {
                 <span class="item-label">{{ t('chart_ratio') }}</span>
                 <span class="item-value">{{ numLabel(chartRatio) }}</span>
               </div>
-              <MdSlider v-model="chartRatio" class="item-slider" :min="0.05" :max="1" :step="0.01" :labelFormatter="numLabel" />
+              <MdSlider v-model="chartRatio" class="item-slider" :aria-label="t('chart_ratio')" :min="0.05" :max="1" :step="0.01" :labelFormatter="numLabel" />
               <mdui-divider></mdui-divider>
               <div class="setting-item">
                 <span class="item-label">{{ t('note-speed-factor') }}</span>
                 <span class="item-value">{{ numLabel(noteSpeedFactor) }}</span>
               </div>
-              <MdSlider v-model="noteSpeedFactor" class="item-slider" :min="0.1" :max="2" :step="0.01" :labelFormatter="numLabel" />
+              <MdSlider v-model="noteSpeedFactor" class="item-slider" :aria-label="t('note-speed-factor')" :min="0.1" :max="2" :step="0.01" :labelFormatter="numLabel" />
               <mdui-divider></mdui-divider>
               <div class="switch-grid">
                 <TipSwitch v-model="background" :label="t('background')" />
@@ -954,7 +714,6 @@ async function replacePreset() {
           </section>
         </div>
 
-        <!-- ==================== GRAPHICS ==================== -->
         <div v-show="activeCategory === 'graphics'" class="settings-stack">
           <section class="settings-section">
             <h2 class="section-title">{{ t('group.respack') }}</h2>
@@ -970,12 +729,12 @@ async function replacePreset() {
                   :label="t('respack')"
                   @update:model-value="onRespackChange" />
                 <mdui-tooltip :content="t('refresh')">
-                  <mdui-button-icon @click="updateRespacks">
+                  <mdui-button-icon :aria-label="t('refresh')" @click="updateRespacks">
                     <mdui-icon-refresh></mdui-icon-refresh>
                   </mdui-button-icon>
                 </mdui-tooltip>
                 <mdui-tooltip :content="t('open-folder')">
-                  <mdui-button-icon @click="openRespackFolder">
+                  <mdui-button-icon :aria-label="t('open-folder')" @click="openRespackFolder">
                     <mdui-icon-folder-open></mdui-icon-folder-open>
                   </mdui-button-icon>
                 </mdui-tooltip>
@@ -990,7 +749,7 @@ async function replacePreset() {
                 <span class="item-label">{{ t('note-scale') }}</span>
                 <span class="item-value">{{ numLabel(noteScale) }}</span>
               </div>
-              <MdSlider v-model="noteScale" class="item-slider" :min="0" :max="5" :step="0.05" :labelFormatter="numLabel" />
+              <MdSlider v-model="noteScale" class="item-slider" :aria-label="t('note-scale')" :min="0" :max="5" :step="0.05" :labelFormatter="numLabel" />
             </div>
           </section>
 
@@ -1009,24 +768,20 @@ async function replacePreset() {
           <section class="settings-section">
             <h2 class="section-title">{{ t('group.ui') }}</h2>
             <div class="setting-card">
-              <!-- Filter chips are `<mdui-chip variant="filter">`'s only correct use:
-                   a multi-select set of independent display toggles. -->
+
               <div class="ui-grid">
-                <mdui-chip
+                <MdCheckbox
                   v-for="item in renderList"
                   :key="item"
-                  variant="filter"
-                  selectable
-                  :selected="render.includes(item)"
-                  @change="(e: Event) => { (e.target as any).selected ? render.push(item) : render = render.filter(x => x !== item) }">
+                  :model-value="render.includes(item)"
+                  @update:model-value="checked => { checked ? render.push(item) : render = render.filter(x => x !== item) }">
                   {{ item }}
-                </mdui-chip>
+                </MdCheckbox>
               </div>
             </div>
           </section>
         </div>
 
-        <!-- ==================== PLAYER ==================== -->
         <div v-show="activeCategory === 'player'" class="settings-stack">
           <section class="settings-section">
             <h2 class="section-title">{{ t('group.profile') }}</h2>
@@ -1063,7 +818,6 @@ async function replacePreset() {
           </section>
         </div>
 
-        <!-- ==================== DEBUG ==================== -->
         <div v-show="activeCategory === 'debug'" class="settings-stack">
           <section class="settings-section">
             <h2 class="section-title">{{ t('group.debug') }}</h2>
@@ -1080,228 +834,96 @@ async function replacePreset() {
       </div>
     </div>
   </form>
+  <mdui-dialog :open="presetDialog" :headline="t('preset-create-title')" close-on-overlay-click @close="presetDialog = false">
+    <MdTextField v-model="presetName" variant="outlined" required :label="t('preset-create-title')" @keydown.enter="createPreset" />
+    <mdui-button slot="action" variant="text" @click="presetDialog = false">{{ t('back') }}</mdui-button>
+    <mdui-button slot="action" variant="filled" :disabled="!presetName.trim()" @click="createPreset">{{ t('preset-save') }}</mdui-button>
+  </mdui-dialog>
 </template>
 
 <style scoped lang="scss">
-@use '../styles/breakpoints' as bp;
-@use '../styles/states' as st;
 @use '../styles/motion' as mo;
 
 .field-hint {
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 1.5;
-  opacity: 0.65;
+  margin: 0;
+  font-size: var(--mdui-typescale-body-small-size);
+  line-height: var(--mdui-typescale-body-small-line-height);
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
-/* ============================================================
-   ConfigView — landscape tablet MD3
-
-   Shell: MD3 adaptive list-detail. A fixed navigation rail (the leading
-   edge) owns destination switching, and the pane beside it renders exactly
-   one destination. Neither column scrolls as a whole — only `.settings-scroll`
-   does — so the rail and the pane header stay pinned the way a native
-   Android settings app behaves on a landscape tablet.
-
-   Spacing follows MD3's padding/gap model (md32.png): 16dp horizontal pane
-   padding, 24dp between groups, 8dp between a label and its control.
-   ============================================================ */
-
 .config-root {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
+  min-width: 0;
   min-height: 0;
   background-color: rgb(var(--mdui-color-surface));
 }
 
-/* ============================================================
-   Navigation rail — primary destinations
-   ============================================================ */
-.config-rail {
-  display: flex;
-  flex-direction: column;
-  width: 240px;
+.config-header {
   flex-shrink: 0;
-  min-height: 0;
-  padding: 16px 12px;
-  gap: 8px;
-  /* `surface-container` is the MD3 container tone for a rail that shares the
-     screen with content, rather than `surface` which it would blend into. */
-  background-color: rgb(var(--mdui-color-surface-container));
-  border-radius: 0 var(--mdui-shape-corner-extra-large) var(--mdui-shape-corner-extra-large) 0;
+  min-width: 0;
 }
 
-/* Destination list.
-
-   The rail is narrow, so the global 6px scrollbar reads as a heavy bar against
-   the pill-shaped items. It is slimmed to 3px and kept invisible until the rail
-   is actually hovered — the scroll affordance is still there, it just does not
-   compete with the navigation items. */
-.rail-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
+.config-header mdui-tabs {
+  min-width: 0;
 }
 
-.rail-list::-webkit-scrollbar {
-  width: 3px;
+.config-header mdui-tabs::part(container) {
+  scrollbar-width: none;
 }
 
-.rail-list::-webkit-scrollbar-thumb {
-  background: transparent;
+.config-header mdui-tab {
+  flex-shrink: 0;
+  min-width: 64px;
 }
 
-.rail-list:hover::-webkit-scrollbar-thumb {
-  background: rgba(var(--mdui-color-outline), 0.5);
-}
-
-/* MD3 navigation item: 56dp tall (well above the 48dp minimum), full pill radius
-   on the selected state. The state layer composites over the selected fill, so a
-   press on the active row still reads as a press. */
-.rail-item {
-  @include st.interactive;
-
+.preset-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  width: 100%;
-  height: 56px;
-  padding: 0 16px;
-  border: none;
-  border-radius: var(--mdui-shape-corner-full);
-  background-color: transparent;
-  color: rgb(var(--mdui-color-on-surface-variant));
-  font: inherit;
-  font-size: var(--mdui-typescale-label-large-size);
-  font-weight: var(--mdui-typescale-label-large-weight);
-  line-height: var(--mdui-typescale-label-large-line-height);
-  text-align: start;
-  transition: color var(--mdui-motion-duration-short4) var(--mdui-motion-easing-standard);
-}
-
-.rail-item.is-active {
-  background-color: rgb(var(--mdui-color-secondary-container));
-  color: rgb(var(--mdui-color-on-secondary-container));
-  font-weight: 600;
-}
-
-.rail-icon {
-  display: flex;
-  flex-shrink: 0;
-  font-size: 1.375rem;
-}
-
-/* MD3's rail indicator is a shape that appears on selection. The selected item
-   swaps to its filled icon, so animating that swap on the bouncy spring reads as
-   the indicator arriving rather than the icon simply being replaced. */
-.rail-item.is-active .rail-icon {
-  animation: rail-icon-pop var(--app-motion-duration-bouncy)
-    var(--app-motion-spring-bouncy, var(--mdui-motion-easing-emphasized-decelerate)) both;
-}
-
-@keyframes rail-icon-pop {
-  from {
-    transform: scale(0.7);
-    opacity: 0;
-  }
-  to {
-    transform: none;
-    opacity: 1;
-  }
-}
-
-.rail-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Preset management — acts on the whole config, so it sits below the
-   destination list rather than inside any one destination. */
-.rail-foot {
-  display: flex;
-  flex-direction: column;
   gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(var(--mdui-color-outline-variant), 0.6);
-  flex-shrink: 0;
+  padding: 16px var(--app-page-padding, 16px);
+  width: 100%;
+  max-width: var(--app-content-max-width, 840px);
+  margin: 0 auto;
 }
 
 .preset-select {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
 }
 
-.preset-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-/* "Save" spans the full width — it is the primary preset action. */
-.preset-actions .preset-btn:nth-child(2) {
-  grid-column: span 2;
-  order: -1;
-}
-
-.preset-actions .preset-btn {
-  --mdui-button-height: 2.5rem;
-}
-
-.btn-danger {
-  --mdui-color-secondary-container: var(--mdui-color-error-container);
-  --mdui-color-on-secondary-container: var(--mdui-color-on-error-container);
-}
-
-/* ============================================================
-   Detail pane
-   ============================================================ */
 .config-pane {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-width: 0;
   min-height: 0;
 }
 
-/* ---------- Scrolling settings column ----------
-   A bounded, centred measure with a *stable* two-column grid.
-
-   Two columns is not arbitrary: every destination has an even number of groups
-   (output 4, recording 2, game 2, graphics 4, player 2, debug 1), so the rows
-   always fill completely. The previous `auto-fit` track cap let the count drift
-   between two and four as the window changed, which produced half-empty rows
-   and cards ending at different heights — the ragged look this replaces.
-
-   `max-width` is what pins the count: 340px tracks inside 1000px can never fit
-   three columns, so the layout is the same at 1100px and at 2400px. */
 .settings-scroll {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
-  padding: 8px 24px 32px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  align-content: start;
-  max-width: 1000px;
-  margin: 0 auto;
-  width: 100%;
-  /* Row gap larger than column gap: groups stacked vertically need more air
-     between them than neighbours sitting side by side. */
-  gap: 28px 24px;
-  scroll-behavior: smooth;
+  overscroll-behavior-y: contain;
+  padding: 0 var(--app-page-padding, 16px) var(--app-section-gap, 24px);
+  scroll-padding-bottom: 24px;
+}
+
+.settings-scroll.has-floating-actions {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  scroll-padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
 .settings-stack {
-  display: contents;
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-section-gap, 24px);
+  width: 100%;
+  max-width: var(--app-content-max-width, 840px);
+  margin: 0 auto;
 }
 
 .settings-section {
@@ -1310,153 +932,122 @@ async function replacePreset() {
   gap: 8px;
   min-width: 0;
 
-  /* The groups rise in sequence as the pane appears. `.settings-stack` is
-     `display: contents`, so each visible stack's sections form their own
-     1..N sequence and the stagger restarts per destination. */
   @include mo.enter-rise(10px);
   @include mo.stagger(6, 40ms, 40ms);
 }
 
-/* ---------- Section title ----------
-   Flush with the card edge below it. It used to carry `padding: 0 4px`, which
-   put the header 4px right of the card and 12px left of the card's contents —
-   three different left edges in one group. */
 .section-title {
   margin: 0;
   padding: 0;
   font-size: var(--mdui-typescale-title-small-size);
-  font-weight: 600;
+  font-weight: var(--mdui-typescale-title-small-weight);
   line-height: var(--mdui-typescale-title-small-line-height);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--mdui-typescale-title-small-tracking);
   color: rgb(var(--mdui-color-primary));
 }
 
-/* ---------- Setting card ----------
-   Row spacing is a single `gap` on the card rather than a padding on each row
-   type. The old scheme gave `.field-row`, `.switch-grid`, `.setting-item` and
-   `.item-slider` four different paddings, so the vertical rhythm inside a card
-   depended on which kinds of row it happened to contain. Now rows only carry
-   their 16dp side padding and the card owns all vertical spacing. */
 .setting-card {
   background-color: rgb(var(--mdui-color-surface-container-low));
-  border-radius: var(--mdui-shape-corner-extra-large);
-  padding: 14px 0;
+  border-radius: var(--mdui-shape-corner-medium);
+  padding: var(--app-card-padding, 16px);
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  /* The fill is an effect and the corner radius is a shape, so they run on
-     separate MD3 clocks — the radius settles on the slower spatial spring. */
-  transition-property: background-color, border-radius;
-  transition-duration: var(--app-motion-duration-effects-default), var(--app-motion-duration-spatial-slow);
-  transition-timing-function: var(--app-motion-spring-effects-default), var(--app-motion-spring-spatial-slow);
+  gap: 16px;
 }
 
-/* Focus morphs the card from an extra-large rounded rectangle to a tighter one —
-   a shape change, which is exactly what MD3 reserves spatial springs for. */
-.setting-card:focus-within {
-  background-color: rgb(var(--mdui-color-surface-container));
-  border-radius: var(--mdui-shape-corner-large);
-}
-
-/* ---------- Form rows ----------
-   Side padding only; the card's `gap` supplies all vertical spacing. */
 .field-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 0 16px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
 }
 
-/* A lone control spans the row rather than sitting in a half-width column. */
 .field-row > :only-child {
   grid-column: 1 / -1;
 }
 
 .switch-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px 12px;
-  padding: 0 16px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px 16px;
 }
 
-/* ---------- Slider rows ---------- */
 .setting-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 16px;
+  min-height: 40px;
 }
 
 .item-icon {
-  width: 2.25rem;
-  height: 2.25rem;
-  font-size: 1.1rem;
+  width: 40px;
+  height: 40px;
+  font-size: 24px;
 }
 
 .item-label {
   flex: 1;
   min-width: 0;
-  font-size: var(--mdui-typescale-body-medium-size);
-  line-height: var(--mdui-typescale-body-medium-line-height);
+  font-size: var(--mdui-typescale-body-large-size);
+  line-height: var(--mdui-typescale-body-large-line-height);
+  overflow-wrap: anywhere;
   color: rgb(var(--mdui-color-on-surface));
 }
 
-/* Fixed-width readout so stacked sliders share one track alignment. */
 .item-value {
   min-width: 3.5rem;
   text-align: right;
   flex-shrink: 0;
   color: rgb(var(--mdui-color-primary));
-  font-family: 'Roboto Mono', 'Consolas', monospace;
   font-size: var(--mdui-typescale-body-medium-size);
-  font-weight: 600;
+  font-weight: var(--mdui-typescale-label-large-weight);
   font-variant-numeric: tabular-nums;
 }
 
 .item-slider {
   display: block;
-  padding: 0 16px;
+  padding: 0;
 }
 
-/* ---------- Resource pack row ---------- */
 .respack-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 16px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .respack-select {
-  flex: 1;
+  flex: 1 1 100%;
   min-width: 0;
 }
 
-/* ---------- UI display filter chips ---------- */
 .ui-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0 16px;
 }
 
-/* ---------- Avatar ---------- */
 .avatar-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
   align-items: center;
-  gap: 16px;
-  padding: 0 16px;
+  gap: 12px;
+}
+
+.avatar-row mdui-button {
+  grid-column: 1 / -1;
 }
 
 .avatar {
-  width: 64px;
-  height: 64px;
+  width: 48px;
+  height: 48px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--mdui-shape-corner-full);
   overflow: hidden;
-  background-color: rgb(var(--mdui-color-surface-variant));
+  background-color: rgb(var(--mdui-color-secondary-container));
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 
@@ -1476,119 +1067,39 @@ async function replacePreset() {
   gap: 2px;
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-/* ============================================================
-   Breakpoints — MD3 window size classes
-
-   `large` (>=1080px) shows the rail with a measured, centred grid; `medium`
-   (600–1079px) narrows the rail and lets the grid fill the pane; `compact`
-   (<600px) moves the rail to a horizontal scroller above the pane, because a
-   fixed side rail would eat most of a phone-width window.
-
-   The previous `max-width: 839px` block was labelled "compact" but 839px is
-   actually the top of `medium`, so 600–839px windows incorrectly got the
-   horizontal rail. The named mixins make that class of mistake impossible.
-   ============================================================ */
-
-/* Compact and medium: narrow the rail and let the grid fill the pane instead of
-   floating in the middle of it. */
-@include bp.below-large {
-  .config-rail {
-    width: 200px;
-    padding: 12px 10px;
-    gap: 6px;
-  }
-  /* Shorter rows so six destinations plus the preset foot fit without the rail
-     growing its own scrollbar on a short window. */
-  .rail-item {
-    height: 48px;
-    padding: 0 12px;
-    gap: 10px;
-    font-size: var(--mdui-typescale-label-medium-size);
-  }
-  .rail-icon {
-    font-size: 1.25rem;
-  }
-  .rail-foot {
-    padding-top: 8px;
-  }
-  /* Only the gutter narrows. The track width is deliberately NOT overridden:
-     lowering it to 260px would let a third column fit inside the 1000px cap and
-     reintroduce the uneven rows the base rule is sized to prevent. */
-  .settings-scroll {
-    padding: 16px 20px 28px;
-  }
+mdui-button-icon {
+  width: var(--app-touch-target, 48px);
+  height: var(--app-touch-target, 48px);
 }
 
-/* Compact: rail moves to the top as a horizontal scroller and the pane stacks
-   under it. Only here does the settings grid collapse to a single column. */
-@include bp.compact {
-  .config-root {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
+.respack-row mdui-tooltip:first-of-type {
+  margin-inline-start: auto;
+}
+
+@media (min-width: 600px) {
+  .field-row,
+  .ui-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .config-rail {
-    width: 100%;
-    padding: 8px 12px;
-    gap: 6px;
-    border-radius: 0 0 var(--mdui-shape-corner-large) var(--mdui-shape-corner-large);
-  }
-  /* A horizontal rail: destinations scroll sideways, presets stay pinned below. */
-  .rail-list {
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    flex: none;
-    gap: 4px;
-    padding-bottom: 4px;
-  }
-  .rail-item {
-    width: auto;
-    /* MD3 minimum touch target is 48dp; 40dp was below it. */
-    height: 48px;
-    padding: 0 12px;
-    white-space: nowrap;
-    flex-shrink: 0;
-    font-size: var(--mdui-typescale-label-medium-size);
-  }
-  .rail-icon {
-    font-size: 1.125rem;
-  }
-  .rail-foot {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    padding-top: 8px;
-  }
-  .preset-select {
-    width: auto;
+
+  .respack-select {
     flex: 1;
-    min-width: 0;
   }
-  .preset-actions {
-    display: flex;
-    flex-shrink: 0;
+
+  .respack-row mdui-tooltip:first-of-type {
+    margin-inline-start: 0;
   }
-  /* One compact action survives; the rest would not fit beside the select. */
-  .preset-actions .preset-btn:nth-child(1),
-  .preset-actions .preset-btn:nth-child(3) {
-    display: none;
+
+  .avatar-row {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
   }
-  .preset-actions .preset-btn:nth-child(2) {
-    order: 0;
-  }
-  .settings-scroll {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-    padding: 12px 16px 20px;
-  }
-  .field-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
-  .setting-card {
-    border-radius: var(--mdui-shape-corner-large);
+
+  .avatar-row mdui-button {
+    grid-column: auto;
   }
 }
+
 </style>

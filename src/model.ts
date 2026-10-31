@@ -24,6 +24,9 @@ export type TaskStatus =
       type: 'mixing';
     }
   | {
+      type: 'saving';
+    }
+  | {
       type: 'rendering';
       progress: number;
       fps: number;
@@ -34,6 +37,7 @@ export type TaskStatus =
       type: 'done';
       duration: number;
       output: string;
+      video_uri: string;
     }
   | {
       type: 'canceled';
@@ -54,7 +58,6 @@ export interface Task {
 
 export interface RenderConfig {
   resolution: number[];
-  ffmpegPreset: string;
   endingLength: number;
   disableLoading: boolean;
   chartDebug: boolean;
@@ -67,15 +70,10 @@ export interface RenderConfig {
   watermark: string;
   background: boolean;
   fps: number;
-  hardwareAccel: boolean;
   videoCodec: string;
   bitrateControl: string;
   bitrate: string;
   targetAudio: number;
-  video: boolean;
-  audioBit?: number;
-  audioFormat: string;
-  encoder?: string;
 
   aggressive: boolean;
   challengeColor: string;
@@ -104,7 +102,6 @@ export interface RenderConfig {
   uiPb: boolean;
   uiPause: boolean;
   bar: boolean;
-  ffmpegThread: boolean;
   scoreAmin: boolean;
 }
 

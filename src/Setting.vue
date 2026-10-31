@@ -3,23 +3,7 @@
 en:
   settings:
     title: Settings
-    outputPath:
-      label: "Custom output path"
-      placeholder: "Click to choose folder or type manually"
-      hint: "Prefer Browser FS API; use Electron for absolute path"
-      aria: "Custom output path"
-    selectFolder: "Select folder"
-    save: "Save"
-    copy: "Copy path"
-    clear: "Clear"
-    saved: "Saved"
-    selected:
-      picked: "Selected folder: {name} (browser does not expose absolute path)"
-      fallback: "Fallback selection: {count} files (root: {root})"
     warning:
-      empty: "Path must not be empty"
-      select_error: "Failed to select folder: {msg}"
-      copy_error: "Copy failed: please copy manually"
       noBackground: "Set a custom background image first — there is nothing to derive colours from"
       derive_failed: "Could not derive colours from this image"
     background:
@@ -41,23 +25,7 @@ en:
 zh-CN:
   settings:
     title: 设置
-    outputPath:
-      label: "自定义输出路径"
-      placeholder: "点击选择文件夹或手动输入"
-      hint: "请输入正确路径"
-      aria: "自定义输出路径"
-    selectFolder: "选择文件夹"
-    save: "保存路径"
-    copy: "复制路径"
-    clear: "清除"
-    saved: "保存成功！"
-    selected:
-      picked: "已选择文件夹：{name}"
-      fallback: "回退选择：{count} 个文件（根：{root})"
     warning:
-      empty: "路径不能为空"
-      select_error: "选择文件夹时出错：{msg}"
-      copy_error: "复制失败：请手动复制"
       noBackground: "请先设置自定义背景图，否则没有可取色的来源"
       derive_failed: "无法从这张图片取色（格式或读取失败）"
     background:
@@ -84,10 +52,8 @@ import { useI18n } from 'vue-i18n';
 import { open } from '@tauri-apps/plugin-dialog';
 import { appConfigDir } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { getOutputPath, setOutputPath, clearOutputPath } from './outputPath';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
-import { RULES as rules, toast } from './common';
+import { toast } from './common';
 import {
   type ThemeMode,
   applyThemeMode,
@@ -98,8 +64,6 @@ import {
   setWallpaperColorEnabled,
   BACKGROUND_KEY,
   getDerivedColor,
-  readAppliedPrimary,
-  colorSchemeDiagnostics,
 } from './theme';
 import TipSwitch from './components/TipSwitch.vue';
 import MdTextField from './components/md/MdTextField.vue';
@@ -108,20 +72,19 @@ defineOptions({ name: 'SettingsPanel' });
 
 const { t } = useI18n();
 
-const outputPath = ref<string>(getOutputPath());
-const selectedInfo = ref<string | null>(null);
-
 const backgroundPath = ref<string>(localStorage.getItem(BACKGROUND_KEY) || '');
 
 const themeMode = ref<ThemeMode>(getThemeMode());
 const wallpaperColor = ref(isWallpaperColorEnabled());
 const derivedColor = ref<string | null>(getDerivedColor());
-const appliedPrimary = ref(readAppliedPrimary());
-const appliedPrimaryCss = computed(() => `rgb(${appliedPrimary.value})`);
 
 const backgroundPreviewUrl = computed(() => {
   if (backgroundPath.value) {
-    try { return convertFileSrc(backgroundPath.value); } catch { return backgroundPath.value; }
+    try {
+      return convertFileSrc(backgroundPath.value);
+    } catch {
+      return backgroundPath.value;
+    }
   }
   return '';
 });
@@ -151,38 +114,6 @@ async function onWallpaperColorChange(enabled: boolean) {
   else toast(t('settings.warning.derive_failed'), 'warning');
 }
 
-async function selectFolder() {
-  selectedInfo.value = null;
-  try {
-    const selected = await open({ directory: true, multiple: false, defaultPath: await appConfigDir() });
-    if (selected === null) return;
-    const path = Array.isArray(selected) ? selected[0] : selected;
-    outputPath.value = path;
-    const rootName = path.split(/[\\/]/).pop() || path;
-    selectedInfo.value = t('settings.selected.picked', { name: rootName });
-  } catch (err: any) {
-    toast(t('settings.warning.select_error', { msg: err.message || String(err) }), 'warning');
-  }
-}
-
-function saveOutputPath() {
-  if (rules.non_empty(outputPath.value) !== true) { toast(t('settings.warning.empty'), 'warning'); return; }
-  setOutputPath(outputPath.value);
-  toast(t('settings.saved'), 'success');
-}
-
-async function copyPath() {
-  if (!outputPath.value) return;
-  try { await writeText(outputPath.value); toast(t('settings.saved'), 'success'); }
-  catch { toast(t('settings.warning.copy_error'), 'warning'); }
-}
-
-function clearPath() {
-  outputPath.value = '';
-  selectedInfo.value = null;
-  clearOutputPath();
-}
-
 async function selectBackground() {
   try {
     const selected = await open({ multiple: false, filters: [{ name: 'Image', extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] }], defaultPath: await appConfigDir() });
@@ -190,7 +121,9 @@ async function selectBackground() {
     const path = Array.isArray(selected) ? selected[0] : selected;
     backgroundPath.value = path as string;
     await saveBackground();
-  } catch (err: any) { console.error('Failed to select background:', err); }
+  } catch (err: any) {
+    console.error('Failed to select background:', err);
+  }
 }
 
 async function saveBackground() {
@@ -217,23 +150,17 @@ function clearBackground() {
 <template>
   <div class="settings-container">
     <div class="settings-scroll">
-      <h1 class="page-title md3-headline">{{ t('settings.title') }}</h1>
-
-      <!-- Appearance Section -->
       <div class="section">
         <div class="section-header">
           <mdui-icon-palette--outlined class="section-icon"></mdui-icon-palette--outlined>
           <span class="section-title">{{ t('settings.appearance.label') }}</span>
         </div>
         <div class="section-card">
-          <div class="setting-item">
+          <div class="setting-item theme-setting">
             <div class="item-text">
               <span class="item-label">{{ t('settings.appearance.mode') }}</span>
             </div>
-            <mdui-segmented-button-group
-              selects="single"
-              :value="themeMode"
-              @change="onThemeModeChange">
+            <mdui-segmented-button-group class="theme-options" :aria-label="t('settings.appearance.mode')" selects="single" :value="themeMode" @change="onThemeModeChange">
               <mdui-segmented-button value="light">
                 <mdui-icon-light-mode slot="icon"></mdui-icon-light-mode>
                 {{ t('settings.appearance.light') }}
@@ -255,66 +182,18 @@ function clearBackground() {
               <span class="item-hint">{{ t('settings.appearance.wallpaperColorTip') }}</span>
               <span v-if="wallpaperColor && derivedColor" class="item-hint derived-color">
                 <i class="derived-dot" :style="{ background: derivedColor }"></i>{{ derivedColor }}
-                <i class="derived-dot" :style="{ background: appliedPrimaryCss }"
-                   :title="colorSchemeDiagnostics()"></i>
-                <span class="derived-applied">applied</span>
               </span>
             </div>
             <TipSwitch
+              class="wallpaper-switch"
               :model-value="wallpaperColor"
               :label="''"
+              :aria-label="t('settings.appearance.wallpaperColor')"
               @update:model-value="onWallpaperColorChange" />
           </div>
         </div>
       </div>
 
-      <!-- Output Path Section -->
-      <div class="section">
-        <div class="section-header">
-          <mdui-icon-folder-open--outlined class="section-icon"></mdui-icon-folder-open--outlined>
-          <span class="section-title">{{ t('settings.outputPath.label') }}</span>
-        </div>
-        <div class="section-card">
-          <div class="setting-item item-block">
-            <MdTextField
-              v-model="outputPath"
-              variant="outlined"
-              required
-              clearable
-              :label="t('settings.outputPath.label')"
-              :placeholder="t('settings.outputPath.placeholder')"
-              :helper="t('settings.outputPath.hint')">
-              <mdui-button-icon slot="end-icon" :aria-label="t('settings.selectFolder')" @click="selectFolder">
-                <mdui-icon-folder-open></mdui-icon-folder-open>
-              </mdui-button-icon>
-            </MdTextField>
-          </div>
-          <div v-if="selectedInfo" class="item-hint px-4">{{ selectedInfo }}</div>
-          <div class="setting-actions">
-            <mdui-button variant="tonal" @click="saveOutputPath">
-              <mdui-icon-save--outlined slot="icon"></mdui-icon-save--outlined>
-              {{ t('settings.save') }}
-            </mdui-button>
-            <mdui-button variant="text" @click="selectFolder">
-              <mdui-icon-folder--outlined slot="icon"></mdui-icon-folder--outlined>
-              {{ t('settings.selectFolder') }}
-            </mdui-button>
-            <div class="action-spacer"></div>
-            <mdui-tooltip :content="t('settings.copy')">
-              <mdui-button-icon :disabled="!outputPath" @click="copyPath">
-                <mdui-icon-content-copy></mdui-icon-content-copy>
-              </mdui-button-icon>
-            </mdui-tooltip>
-            <mdui-tooltip :content="t('settings.clear')">
-              <mdui-button-icon :disabled="!outputPath" @click="clearPath">
-                <mdui-icon-close></mdui-icon-close>
-              </mdui-button-icon>
-            </mdui-tooltip>
-          </div>
-        </div>
-      </div>
-
-      <!-- Background Section -->
       <div class="section">
         <div class="section-header">
           <mdui-icon-image--outlined class="section-icon"></mdui-icon-image--outlined>
@@ -346,7 +225,7 @@ function clearBackground() {
             </mdui-button>
             <div class="action-spacer"></div>
             <mdui-tooltip :content="t('settings.background.clear')">
-              <mdui-button-icon :disabled="!backgroundPath" @click="clearBackground">
+              <mdui-button-icon :aria-label="t('settings.background.clear')" :disabled="!backgroundPath" @click="clearBackground">
                 <mdui-icon-close></mdui-icon-close>
               </mdui-button-icon>
             </mdui-tooltip>
@@ -358,164 +237,139 @@ function clearBackground() {
 </template>
 
 <style scoped lang="scss">
-@use './styles/breakpoints' as bp;
-@use './styles/motion' as mo;
-
-.derived-color {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: monospace;
-}
-
-.derived-applied {
-  margin-left: 6px;
-  opacity: 0.7;
-}
-.derived-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 1px solid rgba(var(--mdui-color-outline), 0.6);
-}
-
 .settings-container {
-  width: 100%;
-  max-width: 720px;
-  margin: 0 auto;
-  height: 100vh;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: var(--app-content-max-width, 840px);
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
 }
-
 .settings-scroll {
+  display: flex;
   flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--app-section-gap, 24px);
   overflow-y: auto;
-  padding: 24px;
+  padding: var(--app-page-padding, 16px);
+  overscroll-behavior-y: contain;
+}
+.section {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-
-.page-title {
-  color: rgb(var(--mdui-color-on-surface));
-  margin: 0 0 16px 0;
-}
-
-/* ===== Section ===== */
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  /* Sections are flex items of the scrolling `.settings-scroll`, which squeezes them
-  flex-shrink: 0;
-
-  /* Sections rise in sequence as the page appears. */
-  @include mo.enter-rise(10px);
-  @include mo.stagger(6, 45ms, 40ms);
-}
-
 .section-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
+  padding: 0 4px;
 }
-
 .section-icon {
-  font-size: 1.25rem;
+  font-size: 20px;
   color: rgb(var(--mdui-color-primary));
 }
-
 .section-title {
   font-size: var(--mdui-typescale-title-small-size);
   font-weight: var(--mdui-typescale-title-small-weight);
+  line-height: var(--mdui-typescale-title-small-line-height);
   color: rgb(var(--mdui-color-primary));
 }
-
 .section-card {
-  background-color: rgb(var(--mdui-color-surface-container-low));
-  border-radius: var(--mdui-shape-corner-extra-large);
-  padding: 0;
   overflow: hidden;
+  background-color: rgb(var(--mdui-color-surface-container-low));
+  border-radius: var(--mdui-shape-corner-medium, 12px);
 }
-
-/* ===== Setting Item ===== */
 .setting-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 20px;
-  min-height: 56px;
+  min-height: 72px;
+  padding: var(--app-card-padding, 16px);
 }
-
-.setting-item.item-block {
+.setting-item.item-block,
+.theme-setting {
   flex-direction: column;
   align-items: stretch;
 }
-
-.item-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
+.theme-options {
+  width: 100%;
   min-width: 0;
 }
-
+.theme-options mdui-segmented-button {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--app-touch-target, 48px);
+}
+.item-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.wallpaper-switch {
+  width: auto;
+  flex: 0 0 auto;
+}
 .item-label {
   font-size: var(--mdui-typescale-body-large-size);
   line-height: var(--mdui-typescale-body-large-line-height);
   color: rgb(var(--mdui-color-on-surface));
 }
-
 .item-hint {
-  font-size: var(--mdui-typescale-body-small-size);
-  line-height: var(--mdui-typescale-body-small-line-height);
+  font-size: var(--mdui-typescale-body-medium-size);
+  line-height: var(--mdui-typescale-body-medium-line-height);
   color: rgb(var(--mdui-color-on-surface-variant));
+  overflow-wrap: anywhere;
 }
-
 .px-4 {
-  padding-left: 20px;
-  padding-right: 20px;
+  padding: 0 16px;
 }
-
-/* ===== Actions ===== */
 .setting-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px 16px;
   flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 16px;
 }
-
 .action-spacer {
   flex: 1;
-  min-width: 8px;
 }
-
-/* ===== Background Preview ===== */
 .bg-preview {
-  margin: 0 20px;
-  width: calc(100% - 40px);
+  margin: 0 16px 16px;
   max-width: 360px;
   height: 140px;
-  border-radius: var(--mdui-shape-corner-medium);
   overflow: hidden;
+  border-radius: var(--mdui-shape-corner-medium, 12px);
   background-color: rgb(var(--mdui-color-surface-container-highest));
 }
-
 .preview-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-
-/* ===== Responsive ===== */
-@include bp.compact {
-  .settings-scroll { padding: 16px; }
-  .setting-item { padding: 12px 16px; }
-  .setting-actions { padding: 8px 16px 12px; }
-  .action-spacer { display: none; }
+.derived-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: monospace;
+}
+.derived-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgb(var(--mdui-color-outline));
+}
+@media (max-width: 399px) {
+  .setting-actions > mdui-button {
+    flex: 1 1 auto;
+  }
+  .action-spacer {
+    display: none;
+  }
 }
 </style>

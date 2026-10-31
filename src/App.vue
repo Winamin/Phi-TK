@@ -7,15 +7,19 @@ en:
   batch-render: Batch Render
   setting: Setting
   more: More
+  back: Back
+  navigation: Main navigation
 
 zh-CN:
   render: 渲染
   rpe: RPE
-  tasks: 任务列表
+  tasks: 任务
   about: 关于
   batch-render: 批量渲染
   setting: 设置
   more: 更多
+  back: 返回
+  navigation: 主导航
 
 </i18n>
 
@@ -45,57 +49,60 @@ declare global {
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { useWindowSize } from './window-size';
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
-/**
- * MD3's adaptive navigation: `<mdui-navigation-rail>` for the `medium` class and
- * up, `<mdui-navigation-bar>` below it. The rail is a side column and the bar is
- * a bottom row, so the main content area changes shape with it — that is the
- * whole point of the size classes, and a fixed rail on a phone-width window
- * would eat most of the horizontal space.
- */
-const { isCompact } = useWindowSize();
-
-/** Icons are `@mdui/icons` custom-element tag names, rendered through `<component :is>`. */
 const navItems = [
   { key: 'render', icon: 'mdui-icon-play-circle--outlined', activeIcon: 'mdui-icon-play-circle' },
-  { key: 'rpe', icon: 'mdui-icon-menu-book--outlined', activeIcon: 'mdui-icon-menu-book' },
   { key: 'tasks', icon: 'mdui-icon-dns--outlined', activeIcon: 'mdui-icon-dns' },
   { key: 'batch-render', icon: 'mdui-icon-pending-actions--outlined', activeIcon: 'mdui-icon-pending-actions' },
   { key: 'setting', icon: 'mdui-icon-settings--outlined', activeIcon: 'mdui-icon-settings' },
+];
+
+const moreItems = [
+  { key: 'rpe', icon: 'mdui-icon-menu-book--outlined' },
   { key: 'about', icon: 'mdui-icon-info--outlined', activeIcon: 'mdui-icon-info' },
 ];
 
+const moreOpen = ref(false);
+const navValue = computed(() => (navItems.some((item) => item.key === route.name) ? String(route.name) : ''));
+const pageTitle = computed(() => t(String(route.name ?? 'render')));
+const secondaryPage = computed(() => moreItems.some((item) => item.key === route.name));
+const lastPrimaryPage = ref('render');
+
+watch(
+  () => route.name,
+  (name) => {
+    if (navItems.some((item) => item.key === name)) lastPrimaryPage.value = String(name);
+  },
+);
+
 const navigateTo = (name: string) => {
+  moreOpen.value = false;
   router.push({ name });
 };
 
 window.goto = navigateTo;
 
-/**
- * `<mdui-navigation-rail>` also fires `change` when its `value` is set programmatically —
- * which happens on every route change, since `value` mirrors `route.name`. Ignoring
- * no-op transitions keeps that from bouncing back into the router.
- */
 function onNavChange(e: Event) {
   const name = (e.target as HTMLElement & { value?: string }).value;
-  if (name && name !== route.name) navigateTo(name);
+  if (name && name !== route.name) {
+    navigateTo(name);
+  }
 }
 
 const customBackground = ref<string | null>(null);
 
-/**
- * Views that take over the whole window hide the app rail while they are mid-flow.
- *
- * `<mdui-navigation-rail>` is app chrome, so it lives here rather than in the view —
- * which means a view that wants it out of the way has to say so. RenderView raises
- * this while a step is open and drops it again when the flow finishes, so the rail
- * comes back once the user is done rather than staying hidden.
- */
 const railHidden = ref(false);
+
+watch(
+  [railHidden, secondaryPage],
+  ([focused, secondary]) => {
+    document.documentElement.classList.toggle('app-focus-mode', focused || secondary);
+  },
+  { immediate: true },
+);
 
 function onRailHidden(e: Event) {
   railHidden.value = (e as CustomEvent<boolean>).detail === true;
@@ -106,14 +113,18 @@ onMounted(() => {
 });
 onUnmounted(() => {
   window.removeEventListener('rail-hidden', onRailHidden as EventListener);
+  document.documentElement.classList.remove('app-focus-mode');
 });
+
+function onBackgroundChanged(event: Event) {
+  customBackground.value = (event as CustomEvent<string | null>).detail;
+}
 
 onMounted(() => {
   customBackground.value = localStorage.getItem('customBackground');
-  window.addEventListener('customBackgroundChanged', ((event: CustomEvent) => {
-    customBackground.value = event.detail;
-  }) as EventListener);
+  window.addEventListener('customBackgroundChanged', onBackgroundChanged);
 });
+onUnmounted(() => window.removeEventListener('customBackgroundChanged', onBackgroundChanged));
 
 const backgroundStyle = computed(() => {
   if (customBackground.value) {
@@ -135,60 +146,107 @@ const backgroundStyle = computed(() => {
 </script>
 
 <template>
-  <!-- The wallpaper sits outside <mdui-layout>: it is the only place the user's image is
-       meant to show through, and every surface above it is an opaque MD3 container. -->
-  <div v-if="customBackground" class="custom-bg-layer" :style="backgroundStyle"></div>
-  <div v-if="customBackground" class="custom-bg-overlay"></div>
+  <div v-if="customBackground" class="custom-bg-layer" :style="backgroundStyle" aria-hidden="true"></div>
+  <div v-if="customBackground" class="custom-bg-overlay" aria-hidden="true"></div>
 
-  <mdui-layout full-height>
-    <!-- Medium and up: a side rail. -->
-    <mdui-navigation-rail
-      v-if="!isCompact"
-      v-show="!railHidden"
-      alignment="center"
-      divider
-      :value="(route.name as string)"
-      @change="onNavChange">
-      <mdui-navigation-rail-item v-for="item in navItems" :key="item.key" :value="item.key">
-        {{ t(item.key) }}
-        <span slot="icon" class="rail-icon"><component :is="item.icon" /></span>
-        <span slot="active-icon" class="rail-icon"><component :is="item.activeIcon" /></span>
-      </mdui-navigation-rail-item>
-    </mdui-navigation-rail>
-
-    <mdui-layout-main>
+  <div class="mobile-layout" :class="{ 'focus-mode': railHidden || secondaryPage }">
+    <mdui-top-app-bar v-if="!railHidden" variant="small" class="app-bar">
+      <mdui-button-icon v-if="secondaryPage" :aria-label="t('back')" @click="navigateTo(lastPrimaryPage)">
+        <mdui-icon-arrow-back></mdui-icon-arrow-back>
+      </mdui-button-icon>
+      <mdui-top-app-bar-title
+        ><h1 class="app-title">{{ pageTitle }}</h1></mdui-top-app-bar-title
+      >
+      <mdui-dropdown :open="moreOpen" placement="bottom-end" @opened="moreOpen = true" @closed="moreOpen = false">
+        <mdui-button-icon slot="trigger" :aria-label="t('more')">
+          <mdui-icon-more-vert></mdui-icon-more-vert>
+        </mdui-button-icon>
+        <mdui-menu>
+          <mdui-menu-item v-for="item in moreItems" :key="item.key" @click="navigateTo(item.key)">
+            <component :is="item.icon" slot="icon" />
+            {{ t(item.key) }}
+          </mdui-menu-item>
+        </mdui-menu>
+      </mdui-dropdown>
+    </mdui-top-app-bar>
+    <main class="app-main">
       <router-view v-slot="{ Component }">
         <Suspense timeout="0">
           <template #default>
             <component :is="Component" ref="component" class="route-view" />
           </template>
           <template #fallback>
-            <div class="loading-container">
-              <mdui-circular-progress></mdui-circular-progress>
+            <div class="loading-container" role="status">
+              <mdui-circular-progress :aria-label="pageTitle"></mdui-circular-progress>
             </div>
           </template>
         </Suspense>
       </router-view>
-    </mdui-layout-main>
+    </main>
 
-    <!-- Compact: a bottom bar. Declared after the main area so the layout system
-         reserves space at the bottom edge rather than around the content. -->
-    <mdui-navigation-bar
-      v-if="isCompact"
-      v-show="!railHidden"
-      label-visibility="selected"
-      :value="(route.name as string)"
-      @change="onNavChange">
+    <mdui-navigation-bar v-if="!railHidden && !secondaryPage" label-visibility="labeled" :aria-label="t('navigation')" :value="navValue" @change="onNavChange">
       <mdui-navigation-bar-item v-for="item in navItems" :key="item.key" :value="item.key">
         {{ t(item.key) }}
         <span slot="icon" class="rail-icon"><component :is="item.icon" /></span>
         <span slot="active-icon" class="rail-icon"><component :is="item.activeIcon" /></span>
       </mdui-navigation-bar-item>
     </mdui-navigation-bar>
-  </mdui-layout>
+  </div>
 </template>
 
 <style scoped>
+.mobile-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.mobile-layout.focus-mode {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.app-bar {
+  position: relative;
+  flex-shrink: 0;
+  height: var(--app-top-bar-height);
+  padding: 8px 4px 8px 16px;
+  align-items: center;
+  background-color: rgb(var(--mdui-color-surface));
+  color: rgb(var(--mdui-color-on-surface));
+  transition: none;
+}
+
+.app-title {
+  margin: 0;
+  font: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-bar mdui-top-app-bar-title {
+  min-width: 0;
+}
+
+.app-bar mdui-dropdown {
+  flex-shrink: 0;
+}
+
+mdui-navigation-bar {
+  position: relative;
+  flex-shrink: 0;
+  height: calc(var(--app-navigation-height) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background-color: rgb(var(--mdui-color-surface-container));
+  box-shadow: none;
+  transition: none;
+}
+
 .custom-bg-layer {
   position: fixed;
   inset: 0;
@@ -196,54 +254,29 @@ const backgroundStyle = computed(() => {
   z-index: 0;
 }
 
-/* Vignette that keeps foreground text legible over an arbitrary wallpaper. Built from the
-   background token so it darkens in dark mode and lightens in light mode. */
 .custom-bg-overlay {
   position: fixed;
   inset: 0;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(var(--mdui-color-background), 0) 0%,
-    rgba(var(--mdui-color-background), 0.45) 40%,
-    rgba(var(--mdui-color-background), 0.92) 100%
-  );
+  background: rgba(var(--mdui-color-surface), 0.94);
   pointer-events: none;
   z-index: 0;
 }
-
-/* `<mdui-layout>` and `<mdui-layout-main>` are transparent by default, so the wallpaper
-   shows through behind the view's own surfaces. The rail deliberately stays opaque
-   `surface` — MD3 treats it as chrome, not as part of the backdrop.
-
-   `v-show` (not `v-if`) hides the rail: it is a flex sibling of `mdui-layout-main`,
-   so `display: none` is enough for the main area to reclaim the full width, and
-   keeping the element alive preserves the ripple/scroll state on the way back. */
 
 .rail-icon {
   display: flex;
 }
 
-/* MD3 shared-axis X entrance for top-level destinations.
-   The rail sits on the leading edge, so destinations are siblings along the
-   horizontal axis and sliding them in from the trailing side states that
-   relationship. A vertical rise would imply a stack that does not exist here.
-
-   `backwards`, never `both`: a filled transform animation leaves this element with a
-   computed transform of `matrix(1, 0, 0, 1, 0, 0)` rather than `none`, which makes the
-   whole view a containing block for `position: fixed` descendants. Every mdui dropdown,
-   select and tooltip panel in the view is such an element, so the forward fill would
-   offset all of them by the view's own origin. */
 .route-view {
   width: 100%;
-  min-height: 100%;
-  animation: route-enter var(--app-motion-duration-spatial-default)
-    var(--app-motion-spring-spatial-default, var(--mdui-motion-easing-emphasized-decelerate)) backwards;
+  height: 100%;
+  min-height: 0;
+  animation: route-enter 200ms var(--mdui-motion-easing-standard) backwards;
 }
 
 @keyframes route-enter {
   from {
     opacity: 0;
-    transform: translateX(24px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -256,5 +289,13 @@ const backgroundStyle = computed(() => {
   justify-content: center;
   align-items: center;
   min-height: 100%;
+}
+
+.app-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 </style>

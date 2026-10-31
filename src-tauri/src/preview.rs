@@ -1,4 +1,4 @@
-use crate::render::{build_player, RenderParams};
+use crate::render_config::{build_player, RenderParams};
 use anyhow::Result;
 use macroquad::prelude::*;
 use prpr::{
@@ -9,7 +9,9 @@ use prpr::{
     ui::{FontArc, TextPainter, Ui},
     Main,
 };
-use std::{collections::VecDeque, io::BufRead, time::Instant};
+use std::{collections::VecDeque, time::Instant};
+#[cfg(not(target_os = "android"))]
+use std::io::BufRead;
 struct BaseScene(Option<NextScene>, bool);
 impl Scene for BaseScene {
     fn on_result(&mut self, _tm: &mut TimeManager, result: Box<dyn std::any::Any>) -> Result<()> {
@@ -44,6 +46,7 @@ impl Scene for BaseScene {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 pub async fn main() -> Result<()> {
     set_pc_assets_folder(&std::env::args().nth(2).unwrap());
 
@@ -53,11 +56,18 @@ pub async fn main() -> Result<()> {
     let mut line = String::new();
     stdin.read_line(&mut line)?;
     let params: RenderParams = serde_json::from_str(line.trim())?;
+    run(params).await
+}
 
+pub async fn run(params: RenderParams) -> Result<()> {
     let fs = fs::fs_from_file(&params.path)?;
     let info = params.info;
     let mut config = params.config.to_config();
-    config.mods = config.autoplay.unwrap_or(false).then(|| config.mods | Mods::AUTOPLAY).unwrap_or_else(|| config.mods & !Mods::AUTOPLAY);
+    config.mods = config
+        .autoplay
+        .unwrap_or(false)
+        .then(|| config.mods | Mods::AUTOPLAY)
+        .unwrap_or_else(|| config.mods & !Mods::AUTOPLAY);
 
     let font = FontArc::try_from_vec(load_file("font.ttf").await?)?;
     let mut painter = TextPainter::new(font);
@@ -66,7 +76,7 @@ pub async fn main() -> Result<()> {
 
     let ctm = TimeManager::from_config(&config); // strange variable name...
     let config_ref = &config;
-    let mut main = Main::new(
+    let main = Main::new(
         Box::new(BaseScene(
             Some(NextScene::Overlay(Box::new(
                 LoadingScene::new(
@@ -86,27 +96,57 @@ pub async fn main() -> Result<()> {
         None,
     )
     .await?;
+    let main = std::rc::Rc::new(std::cell::RefCell::new(main));
+    #[cfg(target_os = "android")]
+    {
+        let weak = std::rc::Rc::downgrade(&main);
+        macroquad::window::set_lifecycle_callback(Some(Box::new(move |resumed| {
+            if let Some(main) = weak.upgrade() {
+                let result = if resumed {
+                    main.borrow_mut().resume()
+                } else {
+                    main.borrow_mut().pause()
+                };
+                if let Err(error) = result {
+                    show_error(error);
+                }
+            }
+        })));
+    }
     let mut is_fullscreen = false;
     let started = Instant::now();
-    let duration = std::env::var("PRPR_PREVIEW_SECONDS").ok().and_then(|it| it.parse::<f64>().ok());
-    let warmup = std::env::var("PRPR_PREVIEW_WARMUP").ok().and_then(|it| it.parse::<f64>().ok()).unwrap_or(5.0);
+    let duration = std::env::var("PRPR_PREVIEW_SECONDS")
+        .ok()
+        .and_then(|it| it.parse::<f64>().ok());
+    let warmup = std::env::var("PRPR_PREVIEW_WARMUP")
+        .ok()
+        .and_then(|it| it.parse::<f64>().ok())
+        .unwrap_or(5.0);
     let mut report_time = started;
     let mut frame_times = VecDeque::with_capacity(100);
     let mut frame_sum = 0.0;
     let mut measured = Vec::new();
-    loop {
+    'app: loop {
+        #[cfg(target_os = "android")]
+        if is_key_pressed(KeyCode::Escape) {
+            break 'app;
+        }
         let frame_start = Instant::now();
         if is_key_pressed(KeyCode::F11) {
             is_fullscreen = !is_fullscreen;
             set_fullscreen(is_fullscreen);
         }
-        main.update()?;
-        let updated = Instant::now();
-        main.render(&mut painter)?;
-        let rendered = Instant::now();
-        if main.should_exit() {
-            break;
-        }
+        let (updated, rendered) = {
+            let mut main = main.borrow_mut();
+            main.update()?;
+            let updated = Instant::now();
+            main.render(&mut painter)?;
+            let rendered = Instant::now();
+            if main.should_exit() {
+                break 'app;
+            }
+            (updated, rendered)
+        };
         next_frame().await;
         let now = Instant::now();
         let update = (updated - frame_start).as_secs_f64();

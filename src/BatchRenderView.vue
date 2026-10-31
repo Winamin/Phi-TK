@@ -1,6 +1,7 @@
 <i18n>
 en:
   title: Batch Render
+  cancel: Cancel
   chart-file: Chart file
   select-charts: Select Charts
   select-preset: Select Preset
@@ -32,8 +33,9 @@ en:
   deselect-all: Deselect All
   progress: Progress
   eta: ETA
-  no-charts: Drag and drop chart folders/files here, or use the buttons above to add them.
+  no-charts: Use the buttons above to add chart files.
   no-results: No results found
+  search-charts: Search charts
   search-placeholder: Search charts, charter or level...
   selected: "Selected: {count}"
   filtered-results: "Filtered: {count}"
@@ -44,7 +46,6 @@ en:
   no-charts-selected: No charts selected
   batch-completed: "Batch completed: {count} rendered"
   batch-stopped: "Batch queue stopped"
-  ffmpeg-not-found: FFmpeg not found
   chart-info-missing: Chart info missing
   adding-charts: Adding...
   invalid-chart-file: Invalid chart file
@@ -70,6 +71,7 @@ en:
   hold-off: Off
 zh-CN:
   title: 批量渲染
+  cancel: 取消
   chart-file: 谱面文件
   select-charts: 选择谱面
   select-preset: 选择预设
@@ -100,8 +102,9 @@ zh-CN:
   deselect-all: 取消全选
   progress: 进度
   eta: 预计
-  no-charts: 将谱面文件或文件夹拖拽至此，或使用上方按钮添加
+  no-charts: 使用上方按钮添加谱面文件或文件夹
   no-results: 未找到相关谱面
+  search-charts: 搜索谱面
   search-placeholder: 搜索谱面名称、谱师或难度...
   selected: "已选择 {count} 项"
   filtered-results: "筛选结果: {count}"
@@ -113,7 +116,6 @@ zh-CN:
   no-charts-selected: 未选择任何谱面
   batch-completed: "批量任务完成，共处理 {count} 个谱面"
   batch-stopped: "已停止队列"
-  ffmpeg-not-found: 未找到 FFmpeg 环境
   chart-info-missing: 谱面信息缺失
   adding-charts: 解析中...
   invalid-chart-file: 无效的谱面文件
@@ -140,11 +142,11 @@ zh-CN:
 </i18n>
 
 <script setup lang="ts">
+import { normalizeRenderConfig } from './render-config';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@tauri-apps/api/core';
-import { getOutputPathArg } from './outputPath';
-import { open } from '@tauri-apps/plugin-dialog';
+import { importChart, pickChartFiles } from './chart-files';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import moment from 'moment';
 
@@ -224,90 +226,26 @@ async function previewChart(id: string) {
   }
 }
 
-/*
- * The Rust Vulkan encoder is constant-QP and H.264-only.  Batch rendering
- * reuses the exact same existing controls as ConfigView; these helpers only
- * normalize the RenderConfig the backend actually consumes (no new fields or
- * UI options).
- */
-const VULKAN_CODEC = 'h264';
-
-function parseBitrateBps(raw: string): number | null {
-  const s = raw.trim().toLowerCase().replace(/\s+/g, '');
-  if (!s) return null;
-  let num = s;
-  let mult = 1;
-  if (s.endsWith('kbps')) {
-    num = s.slice(0, -4);
-    mult = 1e3;
-  } else if (s.endsWith('mbps')) {
-    num = s.slice(0, -4);
-    mult = 1e6;
-  } else if (s.endsWith('k')) {
-    num = s.slice(0, -1);
-    mult = 1e3;
-  } else if (s.endsWith('m')) {
-    num = s.slice(0, -1);
-    mult = 1e6;
-  }
-  const n = Number(num);
-  return Number.isFinite(n) && n > 0 ? n * mult : null;
-}
-
-/** Keep in sync with `encoder_qp()` in src-tauri/src/render.rs. */
-function resolveVulkanQp(control: string, bitrate: string, width: number, height: number, fps: number): number {
-  if (control.toUpperCase() === 'CBR') {
-    const bps = parseBitrateBps(bitrate);
-    if (!bps) return 28;
-    const bpp = bps / Math.max(width * height * Math.max(fps, 1), 1);
-    return Math.min(51, Math.max(1, Math.round(28 - 6 * Math.log2(bpp / 0.04))));
-  }
-  const raw = bitrate.trim();
-  const crf = Number(raw);
-  return Math.min(51, Math.max(1, Math.round(raw && Number.isFinite(crf) ? crf : 28)));
-}
-
-/**
- * Map the existing Encoder / Video Codec / Hardware Acceleration / Bitrate
- * controls onto the Rust Vulkan encoder's parameters before queueing a task.
- */
-function normalizeRenderConfig(cfg: RenderConfig): RenderConfig {
-  const videoCodec = cfg.videoCodec || VULKAN_CODEC;
-  // Keep the user's encoder choice: "vulkan" also selects ffmpeg's
-  // hevc_vulkan/av1_vulkan encoders for non-H.264 codecs.  The backend gates
-  // only the Rust (H.264-only) encoder by codec.
-  const encoder = cfg.encoder || 'auto';
-  const bitrateControl = (cfg.bitrateControl || 'CRF').toUpperCase() === 'CBR' ? 'CBR' : 'CRF';
-  const bitrate = (cfg.bitrate || '28').trim();
-  const [width, height] = cfg.resolution?.length === 2 ? cfg.resolution : [1920, 1080];
-  const vulkanEligible =
-    cfg.hardwareAccel !== false && videoCodec === VULKAN_CODEC && (encoder === 'auto' || encoder === 'vulkan');
-  const normalizedBitrate = vulkanEligible && bitrateControl === 'CRF'
-    ? String(resolveVulkanQp(bitrateControl, bitrate, width, height, cfg.fps || 60))
-    : bitrate;
-  return { ...cfg, videoCodec, encoder, bitrateControl, bitrate: normalizedBitrate };
-}
-
 function loadDefaultConfig(): RenderConfig {
   const saved = localStorage.getItem('defaultRenderConfig');
   if (saved) {
     try {
       const parsed = JSON.parse(saved) as RenderConfig | null;
       if (parsed) return normalizeRenderConfig(parsed);
-    } catch { /* empty */ }
+    } catch (error) { console.error('Failed to load saved configuration:', error); }
   }
   return normalizeRenderConfig({
-    resolution: [1920, 1080], ffmpegPreset: 'medium', endingLength: -2.0,
+    resolution: [1920, 1080], endingLength: -2.0,
     disableLoading: true, chartDebug: false, flidX: false, chartRatio: 1,
-    bufferSize: 256, fps: 60, hardwareAccel: true, videoCodec: 'h264',
-    encoder: 'auto', bitrateControl: 'CRF', bitrate: '28', targetAudio: 48000,
-    video: false, audioBit: undefined, audioFormat: 'flac', background: false,
+    bufferSize: 256, fps: 60, videoCodec: 'h264',
+    bitrateControl: 'CBR', bitrate: '8M', targetAudio: 48000,
+    background: false,
     aggressive: false, challengeColor: 'golden', challengeRank: 45,
     disableEffect: false, doubleHint: true, fxaa: false, noteScale: 1,
     particle: true, playerAvatar: null, playerName: '', playerRks: 15,
     sampleCount: 4, resPackPath: null, speed: 1, volumeMusic: 1, volumeSfx: 1,
     combo: 'AUTOPLAY', watermark: '', handSplit: false, noteSpeedFactor: 1.0,
-    ffmpegThread: false, showProgressText: false, showTimeText: false,
+    showProgressText: false, showTimeText: false,
     uiLine: true, uiScore: true, uiCombo: true, uiLevel: true, uiName: true,
     uiPb: true, uiPause: true, bar: false, scoreAmin: false
   });
@@ -320,8 +258,6 @@ function saveDefaultConfig(config: RenderConfig) {
   toast(t('config-saved'), 'success');
 }
 
-// Declared after the helpers it uses so normalizeRenderConfig()'s VULKAN_CODEC
-// is initialized before the saved config is read.
 const defaultConfig = ref<RenderConfig>(loadDefaultConfig());
 
 async function getPresets() {
@@ -329,7 +265,7 @@ async function getPresets() {
     const m = (await invoke('get_presets')) as Record<string, any>;
     presets.value = [{ name: 'default' }, ...Object.keys(m).map((name) => ({ name }))];
     selectedPreset.value = presets.value[0].name;
-  } catch { /* empty */ }
+  } catch (error) { console.error('Failed to load saved configuration:', error); }
 }
 
 async function processNewPaths(paths: string[]) {
@@ -345,9 +281,7 @@ async function addFiles() {
   if (isAddingFiles.value) return;
   isAddingFiles.value = true;
   try {
-    const files = await open({ multiple: true, filters: [{ name: t('chart-file'), extensions: ['zip', 'json', 'pez'] }] });
-    if (!files) return;
-    const paths = (Array.isArray(files) ? files : [files]).map((f) => typeof f === 'string' ? f : (f as any).path);
+    const paths = await pickChartFiles(false, true);
     await processNewPaths(paths);
   } catch { toast(t('add-files-failed'), 'error'); }
   finally { isAddingFiles.value = false; }
@@ -357,9 +291,8 @@ async function addFolder() {
   if (isAddingFolder.value) return;
   isAddingFolder.value = true;
   try {
-    const folder = await open({ directory: true });
-    if (!folder) return;
-    const folderPath = typeof folder === 'string' ? folder : (folder as any).path;
+    const [folderPath] = await pickChartFiles(true);
+    if (!folderPath) return;
     const files = (await invoke('list_chart_files', { path: folderPath })) as string[];
     if (!files?.length) return toast(t('no-charts-found'), 'warning');
     const valid = files.filter((f) => ['.json', '.zip', '.pez'].includes(f.toLowerCase().slice(f.lastIndexOf('.'))));
@@ -373,7 +306,9 @@ async function addChart(path: string) {
   const placeholder: BatchChart = { id: generateId(), path, name: t('adding-charts'), level: '...', charter: '...', status: 'pending', selected: true };
   const idx = charts.value.push(placeholder) - 1;
   try {
-    const info = (await invoke('parse_chart', { path })) as ChartInfo;
+    const imported = await importChart(path);
+    const info = imported.info;
+    placeholder.path = imported.path;
     let aW = String(info.aspectRatio), aH = '1.0';
     for (const asp of [[16, 9], [4, 3], [8, 5], [3, 2]]) {
       if (Math.abs(asp[0] / asp[1] - info.aspectRatio) < 1e-4) { aW = String(asp[0]); aH = String(asp[1]); break; }
@@ -387,13 +322,13 @@ async function addChart(path: string) {
   }
 }
 
-function clearList() { if (confirm(t('clear-list') + '?')) charts.value = []; }
+const clearDialog = ref(false);
+function clearList() { clearDialog.value = true; }
 function clearDone() { charts.value = charts.value.filter((c) => c.status !== 'done'); }
 function retryFailed() { charts.value.forEach((c) => { if (c.status === 'failed') c.status = 'pending'; }); }
 function removeChart(id: string) { charts.value = charts.value.filter((c) => c.id !== id); }
 
 async function buildRenderParams() {
-  if (!(await invoke('test_ffmpeg'))) throw new Error(t('ffmpeg-not-found'));
   let cfg = selectedPreset.value === 'default' ? defaultConfig.value : ((await invoke('get_presets')) as any)[selectedPreset.value];
   if (!cfg) cfg = defaultConfig.value;
   if (!cfg.resolution) throw new Error('Resolution missing');
@@ -419,7 +354,7 @@ async function startRender() {
       renderProgress.value = 0;
       try {
         if (!chart.chartInfo) throw new Error(t('chart-info-missing'));
-      await invoke('post_render', { params: { path: chart.path, info: chart.chartInfo, config: cfg }, outputPath: getOutputPathArg() });
+      await invoke('post_render', { params: { path: chart.path, info: chart.chartInfo, config: cfg } });
         chart.status = 'done';
       } catch (err: any) {
         chart.status = 'failed';
@@ -506,7 +441,7 @@ onMounted(() => {
   getPresets();
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
-    try { charts.value = JSON.parse(saved).map((c: any) => ({ ...c, status: c.status === 'rendering' ? 'failed' : c.status })); } catch { /* empty */ }
+    try { charts.value = JSON.parse(saved).map((c: any) => ({ ...c, status: c.status === 'rendering' ? 'failed' : c.status })); } catch (error) { console.error('Failed to load saved configuration:', error); }
   }
 });
 
@@ -521,77 +456,62 @@ function onHoldCoverChange(e: Event) {
 
 <template>
   <div class="batch-layout">
-    <!-- Header -->
+
     <div class="batch-header">
       <div class="header-row">
-        <div class="search-wrap">
-          <mdui-icon-search class="search-icon"></mdui-icon-search>
-          <input v-model="searchQuery" :placeholder="t('search-placeholder')" class="search-input" />
-        </div>
+        <MdTextField v-model="searchQuery" class="search-field" variant="outlined" type="search" clearable :label="t('search-charts')" :placeholder="t('search-placeholder')">
+          <mdui-icon-search slot="icon"></mdui-icon-search>
+        </MdTextField>
         <div class="header-actions">
-          <mdui-button variant="tonal" :disabled="isAddingFiles" @click="addFiles">
+          <mdui-button variant="filled" :loading="isAddingFiles" :disabled="isAddingFiles" @click="addFiles">
             <mdui-icon-note-add--outlined slot="icon"></mdui-icon-note-add--outlined>
             <span class="btn-label">{{ t('add-files') }}</span>
           </mdui-button>
-          <mdui-button variant="tonal" :disabled="isAddingFolder" @click="addFolder">
+          <mdui-button variant="tonal" :loading="isAddingFolder" :disabled="isAddingFolder" @click="addFolder">
             <mdui-icon-create-new-folder--outlined slot="icon"></mdui-icon-create-new-folder--outlined>
             <span class="btn-label">{{ t('add-folder') }}</span>
-          </mdui-button>
-          <mdui-button variant="tonal" @click="configDialog = true">
-            <mdui-icon-settings--outlined slot="icon"></mdui-icon-settings--outlined>
-            <span class="btn-label">{{ t('configure') }}</span>
           </mdui-button>
         </div>
       </div>
     </div>
 
-    <!-- Selection bar -->
     <div class="selection-bar">
       <div class="sel-left">
-        <MdCheckbox :model-value="allSelected" @update:model-value="toggleSelectAll" />
+        <MdCheckbox :model-value="allSelected" :aria-label="t(allSelected ? 'deselect-all' : 'select-all')" @update:model-value="toggleSelectAll" />
         <span class="sel-count">{{ t('selected', { count: selectedCount }) }} / {{ t('total-charts', { count: charts.length }) }}</span>
         <mdui-button v-if="selectedCount > 1" variant="text" @click="openBulkEditDialog">
           <mdui-icon-edit-note slot="icon"></mdui-icon-edit-note>
           {{ t('bulk-edit') }}
         </mdui-button>
       </div>
-      <div class="sel-right">
-        <mdui-button v-if="charts.some((c) => c.status === 'failed')" variant="text" @click="retryFailed">
-          <mdui-icon-refresh slot="icon"></mdui-icon-refresh>
-          {{ t('retry-failed') }}
-        </mdui-button>
-        <mdui-button v-if="charts.some((c) => c.status === 'done')" variant="text" @click="clearDone">
-          <mdui-icon-done-all slot="icon"></mdui-icon-done-all>
-          {{ t('clear-done') }}
-        </mdui-button>
-        <mdui-button variant="text" :disabled="!charts.length" @click="clearList">
-          <mdui-icon-delete--outlined slot="icon"></mdui-icon-delete--outlined>
-          {{ t('clear-list') }}
-        </mdui-button>
-      </div>
+      <mdui-dropdown placement="bottom-end">
+        <mdui-button-icon slot="trigger" :aria-label="t('actions')">
+          <mdui-icon-more-vert></mdui-icon-more-vert>
+        </mdui-button-icon>
+        <mdui-menu>
+          <mdui-menu-item @click="configDialog = true">
+            <mdui-icon-settings--outlined slot="icon"></mdui-icon-settings--outlined>
+            {{ t('configure') }}
+          </mdui-menu-item>
+          <mdui-divider></mdui-divider>
+          <mdui-menu-item :disabled="!charts.some((chart) => chart.status === 'failed')" @click="retryFailed">{{ t('retry-failed') }}</mdui-menu-item>
+          <mdui-menu-item :disabled="!charts.some((chart) => chart.status === 'done')" @click="clearDone">{{ t('clear-done') }}</mdui-menu-item>
+          <mdui-menu-item :disabled="!charts.length" @click="clearList">{{ t('clear-list') }}</mdui-menu-item>
+        </mdui-menu>
+      </mdui-dropdown>
     </div>
 
-    <!-- Render bar -->
-    <div class="render-bar">
-      <template v-if="isRenderingQueue">
-        <mdui-chip variant="elevated" class="rendering-chip">
-          <mdui-circular-progress slot="icon" class="spin-anim"></mdui-circular-progress>
-          {{ t('rendering') }}
-        </mdui-chip>
-        <mdui-button variant="text" @click="stopRender" style="color: var(--mdui-color-error)">
-          <mdui-icon-stop slot="icon"></mdui-icon-stop>
-          {{ t('stop-render') }}
-        </mdui-button>
-      </template>
-      <template v-else>
-        <mdui-button variant="filled" :disabled="!selectedCount" @click="startRender">
-          <mdui-icon-play-arrow slot="icon"></mdui-icon-play-arrow>
-          {{ t('start-render') }} ({{ selectedCount }})
-        </mdui-button>
-      </template>
+    <div class="batch-fab">
+      <mdui-fab v-if="isRenderingQueue" variant="tertiary" extended @click="stopRender">
+        <mdui-icon-stop slot="icon"></mdui-icon-stop>
+        {{ t('stop-render') }}
+      </mdui-fab>
+      <mdui-fab v-else variant="primary" extended :disabled="!selectedCount" @click="startRender">
+        <mdui-icon-play-arrow slot="icon"></mdui-icon-play-arrow>
+        {{ t('start-render') }} ({{ selectedCount }})
+      </mdui-fab>
     </div>
 
-    <!-- Chart list -->
     <div class="chart-list">
       <div v-if="!charts.length" class="empty-state">
         <mdui-icon-inbox--outlined class="empty-icon"></mdui-icon-inbox--outlined>
@@ -605,7 +525,7 @@ function onHoldCoverChange(e: Event) {
         <div v-for="item in filteredCharts" :key="item.id" class="chart-row" :class="{ 'is-rendering': item.status === 'rendering', 'is-failed': item.status === 'failed' }">
           <div v-if="item.status === 'rendering' && item.id === currentRenderingId" class="progress-bg" :style="{ width: `${renderProgress}%` }"></div>
           <div class="row-content">
-            <MdCheckbox v-model="item.selected" :disabled="item.status === 'rendering'" />
+            <MdCheckbox v-model="item.selected" :disabled="item.status === 'rendering'" :aria-label="`${t('select-charts')}: ${item.name}`" />
             <div class="row-info">
               <div class="row-title">
                 <span class="row-name" :title="item.name">{{ item.name }}</span>
@@ -621,38 +541,31 @@ function onHoldCoverChange(e: Event) {
                   <span class="error-status" :title="item.error">{{ item.error }}</span>
                 </template>
               </div>
+              <span class="status-label" :class="`status-${item.status}`">{{ t(item.status) }}</span>
             </div>
-            <mdui-chip
-              :variant="item.status === 'pending' ? 'outlined' : 'elevated'"
-              class="status-chip"
-              :class="`status-${item.status}`">
-              {{ t(item.status) }}
-            </mdui-chip>
-            <div class="row-actions">
-              <mdui-button-icon :disabled="!item.chartInfo || item.status === 'rendering'" @click="openEditDialog(item.id)" :title="t('edit')">
-                <mdui-icon-edit--outlined></mdui-icon-edit--outlined>
+            <mdui-dropdown placement="bottom-end">
+              <mdui-button-icon slot="trigger" :aria-label="`${t('actions')}: ${item.name}`" :disabled="item.status === 'rendering'">
+                <mdui-icon-more-vert></mdui-icon-more-vert>
               </mdui-button-icon>
-              <mdui-button-icon :disabled="!item.chartInfo || item.status === 'rendering'" @click="previewChart(item.id)" :title="t('preview')">
-                <mdui-icon-play-circle--outlined></mdui-icon-play-circle--outlined>
-              </mdui-button-icon>
-              <mdui-button-icon :disabled="item.status === 'rendering'" @click="removeChart(item.id)" :title="t('close')">
-                <mdui-icon-close></mdui-icon-close>
-              </mdui-button-icon>
-            </div>
+              <mdui-menu>
+                <mdui-menu-item :disabled="!item.chartInfo" @click="openEditDialog(item.id)">{{ t('edit') }}</mdui-menu-item>
+                <mdui-menu-item :disabled="!item.chartInfo" @click="previewChart(item.id)">{{ t('preview') }}</mdui-menu-item>
+                <mdui-menu-item @click="removeChart(item.id)">{{ t('close') }}</mdui-menu-item>
+              </mdui-menu>
+            </mdui-dropdown>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Config Dialog -->
-    <mdui-dialog :open="configDialog" @close="configDialog = false" class="config-dialog">
-      <div class="dialog-toolbar">
-        <mdui-button-icon @click="configDialog = false">
+    <mdui-dialog fullscreen :open="configDialog" @close="configDialog = false" class="config-dialog">
+      <div slot="header" class="dialog-toolbar">
+        <mdui-button-icon :aria-label="t('close')" @click="configDialog = false">
           <mdui-icon-close></mdui-icon-close>
         </mdui-button-icon>
         <span class="dialog-title">{{ t('configure') }}</span>
         <div class="toolbar-spacer"></div>
-        <mdui-button variant="tonal" @click="saveConfig">
+        <mdui-button variant="text" @click="saveConfig">
           <mdui-icon-save slot="icon"></mdui-icon-save>
           {{ t('save') }}
         </mdui-button>
@@ -662,15 +575,14 @@ function onHoldCoverChange(e: Event) {
       </div>
     </mdui-dialog>
 
-    <!-- Edit Dialog -->
-    <mdui-dialog :open="editDialog" @close="editDialog = false" class="edit-dialog">
-      <div class="dialog-toolbar">
-        <mdui-button-icon @click="editDialog = false">
+    <mdui-dialog fullscreen :open="editDialog" @close="editDialog = false" class="edit-dialog">
+      <div slot="header" class="dialog-toolbar">
+        <mdui-button-icon :aria-label="t('close')" @click="editDialog = false">
           <mdui-icon-close></mdui-icon-close>
         </mdui-button-icon>
         <span class="dialog-title">{{ t('chart-info') }}</span>
         <div class="toolbar-spacer"></div>
-        <mdui-button variant="tonal" @click="saveChartInfo">
+        <mdui-button variant="text" @click="saveChartInfo">
           <mdui-icon-save slot="icon"></mdui-icon-save>
           {{ t('save') }}
         </mdui-button>
@@ -696,11 +608,11 @@ function onHoldCoverChange(e: Event) {
                 <span>{{ t('dim') }}</span>
                 <span class="slider-val">{{ Math.round(editingChart.chartInfo.backgroundDim * 100) }}%</span>
               </div>
-              <MdSlider v-model="editingChart.chartInfo.backgroundDim" :min="0" :max="1" :step="0.01" />
+              <MdSlider v-model="editingChart.chartInfo.backgroundDim" :min="0" :max="1" :step="0.01" :aria-label="t('dim')" />
             </div>
             <div class="field-toggle">
               <span class="field-label">{{ t('hold_cover') }}</span>
-              <MdSwitch v-model="editingChart.chartInfo.HoldPartialCover" />
+              <MdSwitch v-model="editingChart.chartInfo.HoldPartialCover" :aria-label="t('hold_cover')" />
             </div>
             <MdTextField v-model="editingChart.chartInfo.tip" variant="outlined" :label="t('tip')" />
           </div>
@@ -708,15 +620,14 @@ function onHoldCoverChange(e: Event) {
       </div>
     </mdui-dialog>
 
-    <!-- Bulk Edit Dialog -->
-    <mdui-dialog :open="bulkEditDialog" @close="bulkEditDialog = false" class="bulk-edit-dialog">
-      <div class="dialog-toolbar">
-        <mdui-button-icon @click="bulkEditDialog = false">
+    <mdui-dialog fullscreen :open="bulkEditDialog" @close="bulkEditDialog = false" class="bulk-edit-dialog">
+      <div slot="header" class="dialog-toolbar">
+        <mdui-button-icon :aria-label="t('close')" @click="bulkEditDialog = false">
           <mdui-icon-close></mdui-icon-close>
         </mdui-button-icon>
         <span class="dialog-title">{{ t('bulk-edit-title') }}</span>
         <div class="toolbar-spacer"></div>
-        <mdui-button variant="tonal" @click="saveBulkEdit">
+        <mdui-button variant="text" @click="saveBulkEdit">
           <mdui-icon-save slot="icon"></mdui-icon-save>
           {{ t('save') }}
         </mdui-button>
@@ -737,11 +648,11 @@ function onHoldCoverChange(e: Event) {
               <span>{{ t('dim') }}</span>
               <span class="slider-val">{{ bulkEditData.backgroundDim !== null ? Math.round(bulkEditData.backgroundDim * 100) + '%' : '—' }}</span>
             </div>
-            <MdSlider :model-value="bulkEditData.backgroundDim ?? 0" @update:model-value="(v: number) => bulkEditData.backgroundDim = v" :min="0" :max="1" :step="0.01" />
+            <MdSlider :model-value="bulkEditData.backgroundDim ?? 0" @update:model-value="(v: number) => bulkEditData.backgroundDim = v" :min="0" :max="1" :step="0.01" :aria-label="t('dim')" />
           </div>
           <div class="field-toggle">
             <span class="field-label">{{ t('hold_cover') }}</span>
-            <mdui-segmented-button-group selects="single" :value="holdCoverValue" @change="onHoldCoverChange">
+            <mdui-segmented-button-group selects="single" :value="holdCoverValue" :aria-label="t('hold_cover')" @change="onHoldCoverChange">
               <mdui-segmented-button value="keep">{{ t('hold-keep') }}</mdui-segmented-button>
               <mdui-segmented-button value="on">{{ t('hold-on') }}</mdui-segmented-button>
               <mdui-segmented-button value="off">{{ t('hold-off') }}</mdui-segmented-button>
@@ -750,130 +661,88 @@ function onHoldCoverChange(e: Event) {
         </div>
       </div>
     </mdui-dialog>
+    <mdui-dialog :open="clearDialog" :headline="t('clear-list')" close-on-overlay-click @close="clearDialog = false">
+      <mdui-button slot="action" variant="text" @click="clearDialog = false">{{ t('cancel') }}</mdui-button>
+      <mdui-button slot="action" variant="text" @click="charts = []; clearDialog = false">{{ t('clear-list') }}</mdui-button>
+    </mdui-dialog>
   </div>
 </template>
 
 <style scoped lang="scss">
-@use './styles/breakpoints' as bp;
-@use './styles/motion' as mo;
-
 .batch-layout {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   width: 100%;
-  padding: 20px;
+  min-height: 0;
+  max-width: var(--app-content-max-width, 840px);
+  margin-inline: auto;
+  padding: var(--app-page-padding, 16px);
   box-sizing: border-box;
+  position: relative;
 }
 
-/* ===== Header ===== */
 .batch-header {
   flex-shrink: 0;
-  background-color: rgb(var(--mdui-color-surface-container));
-  border-radius: var(--mdui-shape-corner-extra-large);
-  padding: 14px 18px;
+  background-color: rgb(var(--mdui-color-surface-container-low));
+  border-radius: var(--mdui-shape-corner-medium);
+  padding: var(--app-card-padding, 16px);
   margin-bottom: 12px;
 }
 
 .header-row {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.search-wrap {
-  position: relative;
-  flex: 1;
-  max-width: 320px;
-  min-width: 160px;
-}
-
-.search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: rgb(var(--mdui-color-on-surface-variant));
-  pointer-events: none;
-  font-size: 1.25rem;
-}
-
-.search-input {
+.search-field {
   width: 100%;
-  padding: 10px 12px 10px 40px;
-  background-color: rgb(var(--mdui-color-surface-container-high));
-  border: 1px solid rgb(var(--mdui-color-outline-variant));
-  border-radius: var(--mdui-shape-corner-full);
-  color: rgb(var(--mdui-color-on-surface));
-  font-size: var(--mdui-typescale-body-medium-size);
-  font-family: inherit;
-  transition: border-color var(--mdui-motion-duration-short4) var(--mdui-motion-easing-standard);
-}
-.search-input:focus {
-  outline: none;
-  border-color: rgb(var(--mdui-color-primary));
-}
-.search-input::placeholder {
-  color: rgb(var(--mdui-color-on-surface-variant));
+  min-width: 0;
 }
 
 .header-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin-left: auto;
+  min-width: 0;
 }
 
-/* ===== Selection Bar ===== */
+.header-actions mdui-button {
+  min-width: 0;
+  min-height: var(--app-touch-target, 48px);
+  padding-inline: 12px;
+}
+
 .selection-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 8px;
+  min-height: 56px;
+  padding: 0;
   flex-shrink: 0;
 }
 
-.sel-left, .sel-right {
+.sel-left {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .sel-count {
-  font-size: var(--mdui-typescale-body-small-size);
+  font-size: var(--mdui-typescale-body-medium-size);
+  line-height: var(--mdui-typescale-body-medium-line-height);
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 
-/* ===== Render Bar ===== */
-.render-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 4px 0;
-  flex-shrink: 0;
-}
-
-.rendering-chip {
-  animation: pulse-glow 2s infinite;
-}
-@keyframes pulse-glow {
-  0% { box-shadow: 0 0 0 0 rgba(var(--mdui-color-tertiary), 0.4); }
-  70% { box-shadow: 0 0 0 8px rgba(var(--mdui-color-tertiary), 0); }
-  100% { box-shadow: 0 0 0 0 rgba(var(--mdui-color-tertiary), 0); }
-}
-
-.spin-anim {
-  width: 1rem;
-  height: 1rem;
-  animation: spin 1.5s linear infinite;
-}
-@keyframes spin { 100% { transform: rotate(360deg); } }
-
-/* ===== Chart List ===== */
 .chart-list {
   flex: 1;
+  min-height: 0;
   overflow: hidden;
   position: relative;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
 .list-scroll {
@@ -882,42 +751,37 @@ function onHoldCoverChange(e: Event) {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 4px;
+  padding: 4px 0;
+  overscroll-behavior-y: contain;
 }
 
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  height: 100%;
-  gap: 16px;
+  justify-content: flex-start;
+  min-height: 96px;
+  gap: 12px;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.empty-state p {
+  margin: 0;
 }
 
 .empty-icon {
-  font-size: 4rem;
+  font-size: 40px;
   color: rgb(var(--mdui-color-outline));
 }
 
-/* ===== Chart Row ===== */
 .chart-row {
   position: relative;
   background-color: rgb(var(--mdui-color-surface-container-low));
-  border-radius: var(--mdui-shape-corner-large);
+  border-radius: var(--mdui-shape-corner-medium);
   overflow: hidden;
-  /* The list is a fixed-height column flex container, so rows would be squeezed below
-     their content height and `overflow: hidden` would cut the charter line in half —
-     which reads as text bleeding between adjacent cards. Rows keep their natural
-     height; `.list-scroll` already scrolls. */
+
   flex-shrink: 0;
-  @include mo.spatial(box-shadow);
-
-  @include mo.enter-rise(14px);
-  @include mo.stagger(10, 45ms, 40ms);
-}
-
-.chart-row:hover {
-  box-shadow: var(--mdui-elevation-level1);
 }
 
 .chart-row.is-failed {
@@ -933,10 +797,9 @@ function onHoldCoverChange(e: Event) {
   top: 0;
   left: 0;
   height: 100%;
-  background: linear-gradient(90deg, rgba(var(--mdui-color-tertiary-container), 0.3), rgba(var(--mdui-color-tertiary-container), 0.6));
+  background-color: rgba(var(--mdui-color-tertiary-container), 0.4);
   z-index: 0;
-  /* A determinate progress fill reads as decelerating into its target rather
-     than stopping dead, so it eases out instead of running linear. */
+
   transition: width var(--app-motion-duration-effects-slow) var(--mdui-motion-easing-standard-decelerate);
 }
 
@@ -945,8 +808,9 @@ function onHoldCoverChange(e: Event) {
   z-index: 1;
   display: flex;
   align-items: center;
-  padding: 12px 14px;
-  gap: 12px;
+  padding: 12px 8px;
+  gap: 8px;
+  min-height: 88px;
 }
 
 .row-info {
@@ -961,6 +825,7 @@ function onHoldCoverChange(e: Event) {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .row-name {
@@ -970,6 +835,7 @@ function onHoldCoverChange(e: Event) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .level-chip {
@@ -983,6 +849,9 @@ function onHoldCoverChange(e: Event) {
   gap: 6px;
   font-size: var(--mdui-typescale-body-small-size);
   color: rgb(var(--mdui-color-on-surface-variant));
+  flex-wrap: wrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .sub-icon {
@@ -996,15 +865,17 @@ function onHoldCoverChange(e: Event) {
 
 .error-status {
   color: rgb(var(--mdui-color-error));
-  max-width: 200px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.status-chip {
-  flex-shrink: 0;
-  --shape-corner: var(--mdui-shape-corner-full);
+.status-label {
+  align-self: flex-start;
+  font-size: var(--mdui-typescale-label-medium-size);
+  font-weight: var(--mdui-typescale-label-medium-weight);
+  line-height: var(--mdui-typescale-label-medium-line-height);
 }
 
 .status-pending { color: rgb(var(--mdui-color-tertiary)); }
@@ -1012,26 +883,26 @@ function onHoldCoverChange(e: Event) {
 .status-done { color: rgb(var(--mdui-color-success)); }
 .status-failed { color: rgb(var(--mdui-color-error)); }
 
-.row-actions {
-  display: flex;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-/* ===== Dialogs ===== */
-.config-dialog::part(panel) {
+.config-dialog::part(panel),
+.edit-dialog::part(panel),
+.bulk-edit-dialog::part(panel) {
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   max-width: none;
   max-height: none;
   border-radius: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
 }
 
-.edit-dialog::part(panel),
-.bulk-edit-dialog::part(panel) {
-  max-width: min(600px, 90vw);
+.config-dialog::part(body),
+.edit-dialog::part(body),
+.bulk-edit-dialog::part(body) {
+  flex: 1;
+  min-height: 0;
+  margin-top: 0;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .dialog-toolbar {
@@ -1041,12 +912,20 @@ function onHoldCoverChange(e: Event) {
   padding: 8px 16px;
   flex-shrink: 0;
   border-bottom: 1px solid rgb(var(--mdui-color-outline-variant));
+  min-height: calc(64px + env(safe-area-inset-top));
+  padding-top: calc(8px + env(safe-area-inset-top));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
 }
 
 .dialog-title {
   font-size: var(--mdui-typescale-title-large-size);
   font-weight: var(--mdui-typescale-title-large-weight);
   color: rgb(var(--mdui-color-on-surface));
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .toolbar-spacer {
@@ -1057,14 +936,18 @@ function onHoldCoverChange(e: Event) {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  width: 100%;
 }
 
 .dialog-body {
-  padding: 20px;
+  padding: var(--app-page-padding, 16px);
   overflow-y: auto;
+  overscroll-behavior-y: contain;
+  max-width: var(--app-content-max-width, 840px);
+  margin-inline: auto;
+  width: 100%;
 }
 
-/* ===== Form ===== */
 .edit-form {
   display: flex;
   flex-direction: column;
@@ -1075,12 +958,19 @@ function onHoldCoverChange(e: Event) {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .aspect-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.aspect-row mdui-text-field {
+  flex: 1;
+  min-width: 0;
 }
 
 .aspect-sep {
@@ -1113,6 +1003,9 @@ function onHoldCoverChange(e: Event) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: var(--app-touch-target, 48px);
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .field-label {
@@ -1137,10 +1030,74 @@ function onHoldCoverChange(e: Event) {
   flex-shrink: 0;
 }
 
-/* ===== Responsive ===== */
-@include bp.below-expanded {
-  .batch-layout { padding: 12px; }
-  .header-actions { flex-wrap: wrap; }
-  .btn-label { display: none; }
+.batch-fab {
+  position: absolute;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 1;
 }
+
+.selection-bar,
+.sel-left {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.sel-left {
+  flex: 1;
+}
+
+.selection-bar > mdui-dropdown {
+  flex-shrink: 0;
+}
+
+.sel-left > mdui-button {
+  min-height: var(--app-touch-target, 48px);
+}
+
+.config-dialog::part(body) {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+}
+
+@media (min-width: 600px) {
+  .header-actions {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-height: 480px) {
+  .batch-layout {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .chart-list {
+    flex: none;
+    overflow: visible;
+    min-height: 120px;
+    padding-bottom: 0;
+  }
+
+  .list-scroll {
+    height: auto;
+    overflow: visible;
+  }
+
+  .batch-fab {
+    position: static;
+    align-self: flex-end;
+    order: 1;
+    margin: 16px;
+  }
+}
+
 </style>
