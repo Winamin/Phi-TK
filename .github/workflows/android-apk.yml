@@ -132,11 +132,16 @@ jobs:
 
             CLEAN_LOG="${RUNNER_TEMP}/android-build-clean.log"
             sed -E 's/\x1B\[[0-9;]*[mK]//g' "${BUILD_LOG}" > "${CLEAN_LOG}"
-            ERROR_LOG="$(sed -n '/^FAILURE: Build/,/^BUILD FAILED/p' "${CLEAN_LOG}" | tail -c 3500)"
+            ERROR_LOG="$(awk '
+              /^FAILURE: Build/ { exit }
+              length($0) >= 1500 { next }
+              /failed to build (Android app|APK):/ { next }
+              /ELIFECYCLE/ { next }
+              { print }
+            ' "${CLEAN_LOG}" | tail -c 3500)"
 
             if [[ -z "${ERROR_LOG}" ]]; then
-              ERROR_LOG="$(grep -vE 'failed to build APK:|Error failed to build APK:|ELIFECYCLE' \
-                "${CLEAN_LOG}" | tail -c 3500)"
+              ERROR_LOG="$(sed -n '/^FAILURE: Build/,/^BUILD FAILED/p' "${CLEAN_LOG}" | tail -c 3500)"
             fi
 
             ERROR_LOG="${ERROR_LOG//'%'/'%25'}"
