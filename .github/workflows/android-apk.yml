@@ -53,14 +53,32 @@ jobs:
         with:
           targets: aarch64-linux-android
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: >-
-            platform-tools
-            platforms;android-${{ env.ANDROID_PLATFORM }}
-            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
-            ndk;${{ env.NDK_VERSION }}
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="${SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+
+          if [[ ! -x "${SDKMANAGER}" ]]; then
+            SDKMANAGER="$(find "${SDK_ROOT}/cmdline-tools" -mindepth 3 -maxdepth 3 \
+              -type f -name sdkmanager -print 2>/dev/null | sort -V | tail -n 1)"
+          fi
+
+          if [[ -z "${SDKMANAGER}" || ! -x "${SDKMANAGER}" ]]; then
+            SDKMANAGER="$(command -v sdkmanager || true)"
+          fi
+
+          test -n "${SDKMANAGER}"
+          test -x "${SDKMANAGER}"
+          yes | "${SDKMANAGER}" --sdk_root="${SDK_ROOT}" --licenses >/dev/null || true
+          "${SDKMANAGER}" --sdk_root="${SDK_ROOT}" --install \
+            "platform-tools" \
+            "platforms;android-${ANDROID_PLATFORM}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "ndk;${NDK_VERSION}"
+
+          printf 'ANDROID_HOME=%s\n' "${SDK_ROOT}" >> "${GITHUB_ENV}"
+          printf 'ANDROID_SDK_ROOT=%s\n' "${SDK_ROOT}" >> "${GITHUB_ENV}"
 
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
