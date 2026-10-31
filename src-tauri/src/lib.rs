@@ -27,9 +27,10 @@ use prpr::{
 use render::{find_ffmpeg, RenderConfig, RenderParams};
 use serde::Serialize;
 use std::{
-    collections::HashMap,
+    collections::{hash_map::DefaultHasher, HashMap},
     fs::File,
     future::Future,
+    hash::{Hash, Hasher},
     io::{BufRead, BufReader, BufWriter},
     ops::DerefMut,
     path::{Path, PathBuf},
@@ -107,6 +108,7 @@ pub async fn run() -> Result<()> {
             save_binary_file,
             preview_chart,
             parse_chart,
+            load_chart_illustration,
             batch_add_tasks,
             post_render,
             get_tasks,
@@ -292,6 +294,36 @@ async fn parse_chart(path: &Path) -> Result<ChartInfo, InvokeError> {
             .await
             .with_context(|| mtl!("load-info-failed"))?;
         Ok(info)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn load_chart_illustration(
+    app: tauri::AppHandle,
+    path: PathBuf,
+    illustration: String,
+) -> Result<String, InvokeError> {
+    wrap_async(async move {
+        let mut fs: Box<dyn FileSystem + Send + Sync + 'static> =
+            fs::fs_from_file(&path).with_context(|| mtl!("read-chart-failed"))?;
+        let data = fs
+            .load_file(&illustration)
+            .await
+            .with_context(|| format!("Failed to load chart illustration: {illustration}"))?;
+
+        let cache_dir = ensure_dir(app.path().app_cache_dir()?.join("chart-covers"));
+        let mut hasher = DefaultHasher::new();
+        path.hash(&mut hasher);
+        illustration.hash(&mut hasher);
+        let extension = Path::new(&illustration)
+            .extension()
+            .and_then(|value| value.to_str())
+            .filter(|value| value.chars().all(|ch| ch.is_ascii_alphanumeric()))
+            .unwrap_or("img");
+        let cover_path = cache_dir.join(format!("{:016x}.{extension}", hasher.finish()));
+        tokio::fs::write(&cover_path, data).await?;
+        Ok(cover_path.display().to_string())
     })
     .await
 }
