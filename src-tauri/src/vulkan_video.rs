@@ -1,7 +1,7 @@
 use ash::vk;
 use ash::vk::Handle;
 
-use crate::vulkan_encode::{VideoFns, VulkanVideoEncoder};
+use crate::vulkan_encode::{VideoFns, VulkanVideoCodec, VulkanVideoEncoder};
 
 /// One NV12 image the renderer can fill while the encoder is busy with the
 /// previous one.  The images are separate from the encoder session: a single
@@ -38,6 +38,21 @@ impl VideoContext {
     /// dropped — so every frame had to be an IDR, which is what made renders
     /// enormous.)
     pub fn new(width: u32, height: u32, qp: u8, source_count: usize) -> Option<Self> {
+        Self::new_with_codec(width, height, qp, source_count, VulkanVideoCodec::H264)
+    }
+
+    /// Create an AV1 session sharing the renderer's Vulkan device.
+    pub fn new_av1(width: u32, height: u32, qp: u8, source_count: usize) -> Option<Self> {
+        Self::new_with_codec(width, height, qp, source_count, VulkanVideoCodec::AV1)
+    }
+
+    fn new_with_codec(
+        width: u32,
+        height: u32,
+        qp: u8,
+        source_count: usize,
+        codec: VulkanVideoCodec,
+    ) -> Option<Self> {
         let context = macroquad::window::miniquad_context().vulkan_context()?;
         let queue_family = context.video_queue_family?;
         let graphics_family = context.queue_family_index;
@@ -65,7 +80,11 @@ impl VideoContext {
         };
         let fns = unsafe { VideoFns::load(&entry, &instance, &device)? };
         let encoder = unsafe {
-            VulkanVideoEncoder::try_new_h264(
+            let create = match codec {
+                VulkanVideoCodec::H264 => VulkanVideoEncoder::try_new_h264,
+                VulkanVideoCodec::AV1 => VulkanVideoEncoder::try_new_av1,
+            };
+            create(
                 &device,
                 &instance,
                 vk::PhysicalDevice::from_raw(raw_physical),
@@ -119,6 +138,10 @@ impl VideoContext {
 
     pub fn source_count(&self) -> usize {
         self.sources.len()
+    }
+
+    pub fn enable_av1_cbr(&mut self, bitrate: u64, fps: u32, gop_size: u32) -> bool {
+        self.encoder.enable_av1_cbr(bitrate, fps, gop_size)
     }
 
     /// Raw `VkImage` handle for `slot`, for `copy_nv12_from_textures`.

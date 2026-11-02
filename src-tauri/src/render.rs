@@ -25,7 +25,7 @@ use std::{
     process::{Command, Stdio},
     rc::Rc,
     sync::{
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         mpsc, Condvar, Mutex,
     },
     time::Instant,
@@ -229,7 +229,7 @@ pub enum IPCEvent {
 struct FramePipeline {
     pool: Vec<Vec<u8>>,
     pool_addrs: Vec<usize>,
-    free_pool: Mutex<Vec<usize>>,
+    free_pool: Mutex<(Vec<usize>, Option<String>)>, // (free buffers, writer error)
     free_cv: Condvar,
     jobq: Mutex<(VecDeque<usize>, bool)>, // (queue, stopped)
     jobq_cv: Condvar,
@@ -703,7 +703,7 @@ impl FramePipeline {
         Self {
             pool: (0..pool_size).map(|_| vec![0u8; frame_size]).collect(),
             pool_addrs: Vec::new(),
-            free_pool: Mutex::new((0..pool_size).collect()),
+            free_pool: Mutex::new(((0..pool_size).collect(), None)),
             free_cv: Condvar::new(),
             jobq: Mutex::new((VecDeque::new(), false)),
             jobq_cv: Condvar::new(),
@@ -724,18 +724,21 @@ impl FramePipeline {
         self.pool_addrs = self.pool.iter_mut().map(|b| b.as_mut_ptr() as usize).collect();
     }
 
-    fn acquire_buf(&self) -> usize {
+    fn acquire_buf(&self) -> Result<usize> {
         let mut free = self.free_pool.lock().unwrap();
         let mut wait_start: Option<Instant> = None;
         loop {
-            if let Some(idx) = free.pop() {
+            if let Some(error) = &free.1 {
+                bail!("failed to write frames to ffmpeg: {error}");
+            }
+            if let Some(idx) = free.0.pop() {
                 if let Some(start) = wait_start {
                     let d = start.elapsed().as_nanos() as u64;
                     self.acquire_blocks.fetch_add(1, Ordering::Relaxed);
                     self.acquire_wait_ns.fetch_add(d, Ordering::Relaxed);
                     self.acquire_max_ns.fetch_max(d, Ordering::Relaxed);
                 }
-                return idx;
+                return Ok(idx);
             }
             wait_start.get_or_insert_with(Instant::now);
             free = self.free_cv.wait(free).unwrap();
@@ -743,8 +746,33 @@ impl FramePipeline {
     }
 
     fn release_buf(&self, idx: usize) {
-        self.free_pool.lock().unwrap().push(idx);
+        self.free_pool.lock().unwrap().0.push(idx);
         self.free_cv.notify_one();
+    }
+
+    fn write_to(&self, mut output: impl Write) -> std::io::Result<u64> {
+        let result: std::io::Result<u64> = (|| {
+            let mut busy = 0;
+            while let Some(buf) = self.pop_job() {
+                let start = Instant::now();
+                output.write_all(&self.pool[buf])?;
+                let elapsed = start.elapsed().as_nanos() as u64;
+                busy += elapsed;
+                self.write_ns.fetch_add(elapsed, Ordering::Relaxed);
+                self.write_count.fetch_add(1, Ordering::Relaxed);
+                self.write_max_ns.fetch_max(elapsed, Ordering::Relaxed);
+                self.release_buf(buf);
+            }
+            let start = Instant::now();
+            output.flush()?;
+            Ok(busy + start.elapsed().as_nanos() as u64)
+        })();
+        if let Err(error) = &result {
+            // Wake a renderer waiting for a buffer when ffmpeg closes its input.
+            self.free_pool.lock().unwrap().1 = Some(error.to_string());
+            self.free_cv.notify_all();
+        }
+        result
     }
 
     fn push_job(&self, idx: usize) {
@@ -821,6 +849,19 @@ fn encoder_qp(config: &RenderConfig, width: u32, height: u32) -> u8 {
 }
 
 const KEYFRAME_INTERVAL_SECS: u32 = 2;
+
+fn av1_ivf_header(width: u32, height: u32, fps: u32, frames: u64) -> [u8; 32] {
+    let mut header = [0; 32];
+    header[..4].copy_from_slice(b"DKIF");
+    header[6..8].copy_from_slice(&32u16.to_le_bytes());
+    header[8..12].copy_from_slice(b"AV01");
+    header[12..14].copy_from_slice(&(width as u16).to_le_bytes());
+    header[14..16].copy_from_slice(&(height as u16).to_le_bytes());
+    header[16..20].copy_from_slice(&fps.to_le_bytes());
+    header[20..24].copy_from_slice(&1u32.to_le_bytes());
+    header[24..28].copy_from_slice(&(frames.min(u32::MAX as u64) as u32).to_le_bytes());
+    header
+}
 
 pub async fn main() -> Result<()> {
     use crate::ipc::client::*;
@@ -1134,24 +1175,42 @@ pub async fn main() -> Result<()> {
     }
 
     let qp = encoder_qp(&params.config, vw, vh);
-    // The Rust Vulkan encoder implements H.264 only, so the existing
-    // "Hardware Encoder", "Video Codec" and "Hardware Acceleration" controls
-    // decide whether it is used at all.  Other selections keep using the
-    // ffmpeg encoder path.
+    // Reuse the AV1 session used by preview instead of depending on ffmpeg's
+    // Vulkan AV1 implementation, which can emit invalid frame headers.
+    let want_vulkan_av1 = params.config.video_codec == "av1" && params.config.encoder == "vulkan";
     let want_vulkan_video = params.config.hardware_accel
-        && params.config.video_codec == "h264"
-        && matches!(params.config.encoder.as_str(), "auto" | "vulkan");
+        && (want_vulkan_av1
+            || (params.config.video_codec == "h264"
+                && matches!(params.config.encoder.as_str(), "auto" | "vulkan")));
     let mut video_context = if want_vulkan_video {
-        crate::vulkan_video::VideoContext::new(vw, vh, qp, 16)
+        if want_vulkan_av1 {
+            crate::vulkan_video::VideoContext::new_av1(vw, vh, qp, 16)
+        } else {
+            crate::vulkan_video::VideoContext::new(vw, vh, qp, 16)
+        }
     } else {
         None
     };
     let vulkan_video = video_context.is_some();
+    let vulkan_av1 = vulkan_video && want_vulkan_av1;
+    let vulkan_codec = if vulkan_av1 { "AV1" } else { "H.264" };
+    if vulkan_av1 && params.config.bitrate_control.eq_ignore_ascii_case("CBR") {
+        let bitrate = parse_bitrate_bps(&params.config.bitrate)
+            .filter(|bps| bps.is_finite() && *bps >= 1.0 && *bps <= u64::MAX as f64)
+            .context("Invalid Vulkan AV1 CBR bitrate")? as u64;
+        if !video_context.as_mut().unwrap().enable_av1_cbr(
+            bitrate, params.config.fps,
+            params.config.fps.saturating_mul(KEYFRAME_INTERVAL_SECS).max(1),
+        ) {
+            bail!("The Vulkan AV1 device does not support the requested CBR bitrate");
+        }
+    }
     if want_vulkan_video && !vulkan_video {
         warn!("Rust Vulkan encoder unavailable; falling back to the ffmpeg encoder");
     }
     info!(
-        "Vulkan Video H.264: {} ({} source images, {}x{}, qp={})",
+        "Vulkan Video {}: {} ({} source images, {}x{}, qp={})",
+        vulkan_codec,
         if vulkan_video { "enabled" } else { "disabled" },
         video_context
             .as_ref()
@@ -1162,7 +1221,9 @@ pub async fn main() -> Result<()> {
         qp
     );
     if want_vulkan_video {
-        if params.config.bitrate_control.eq_ignore_ascii_case("CBR") {
+        if vulkan_av1 && params.config.bitrate_control.eq_ignore_ascii_case("CBR") {
+            info!("Vulkan AV1 native CBR target: {}", params.config.bitrate);
+        } else if params.config.bitrate_control.eq_ignore_ascii_case("CBR") {
             info!(
                 "Vulkan encoder is constant-QP: CBR target '{}' mapped to qp={}",
                 params.config.bitrate, qp
@@ -1463,7 +1524,7 @@ pub async fn main() -> Result<()> {
         }
         if ok_for_codec { break; }
     }
-    if params.config.video_codec == "av1" {
+    if params.config.video_codec == "av1" && !vulkan_video {
         match test_encoder(ffmpeg.as_ref(), "libsvtav1") {
             Ok((ok, err)) => {
                 encoder_availability.av1_svt = ok;
@@ -1483,7 +1544,7 @@ pub async fn main() -> Result<()> {
     ];
 
     for (name, detected, availability_flag) in cuvid_to_test {
-        if detected {
+        if detected && !vulkan_video {
             let (encoder_name, container_format) = if name == "h264_cuvid" {
                 ("libx264", "mpegts")
             } else if name == "hevc_cuvid" {
@@ -1850,11 +1911,11 @@ pub async fn main() -> Result<()> {
             info!("    {}", error);
         }
     }
-    info!("  Selected encoder: {}", if vulkan_video {
-        "Vulkan Video H.264 (built-in; ffmpeg only remuxes with -c:v copy)"
+    if vulkan_video {
+        info!("  Selected encoder: Vulkan Video {} (built-in; ffmpeg remuxes with -c:v copy)", vulkan_codec);
     } else {
-        ffmpeg_encoder
-    });
+        info!("  Selected encoder: {}", ffmpeg_encoder);
+    }
     let probe_s = mark!("encoder probe");
     if ffmpeg_encoder == "libsvtav1"
         && encoder_type == "auto"
@@ -2081,7 +2142,8 @@ pub async fn main() -> Result<()> {
     let global_args = "-y";
     let mut input_args = String::new();
     if vulkan_video {
-        write!(&mut input_args, "-f h264 -r {fps} -i {video_url} -i")?;
+        let input_format = if vulkan_av1 { "ivf" } else { "h264" };
+        write!(&mut input_args, "-f {input_format} -r {fps} -i {video_url} -i")?;
     } else if nv12_mode {
         write!(
             &mut input_args,
@@ -2187,7 +2249,7 @@ pub async fn main() -> Result<()> {
     }
     }
 
-    let async_depth = "-async_depth 4"; // the "4" parallel process 4 frames (vulkan encoder)
+    let async_depth = "-async_depth 4"; // Four frames in flight for Vulkan encoders.
     let args2 = if null_sink {
         "-c:v rawvideo -map 0:v:0 -f null".to_string()
     } else if vulkan_video {
@@ -2197,14 +2259,13 @@ pub async fn main() -> Result<()> {
             audio_mux_args, video_mux,
         )
     } else if is_vulkan_encoder {
+        // Vulkan encoders use -quality rather than the software/NVENC -preset.
         format!(
-            "{} -c:v {} {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} {} -f {}",
+            "{} -c:v {} {} {} -map 0:v:0 -map 1:a:0 -shortest {} {} -f {}",
             audio_mux_args,
             ffmpeg_encoder,
             bitrate_control,
             params.config.bitrate,
-            ffmpeg_preset,
-            ffmpeg_preset_name,
             out_extra,
             async_depth,
             video_mux,
@@ -2257,6 +2318,7 @@ pub async fn main() -> Result<()> {
 
     let mut ffmpeg_stdin = Some(proc.stdin.take().unwrap());
     let keyframe_interval = (fps.saturating_mul(KEYFRAME_INTERVAL_SECS)).max(1) as u64;
+    let vulkan_transport_failed = std::sync::Arc::new(AtomicBool::new(false));
 
     let (mut vulkan_pipe, pipeline, writer, encoder_thread, mut nv12_pipe, nv12_pipeline) =
         if let Some(context) = video_context.take() {
@@ -2269,12 +2331,30 @@ pub async fn main() -> Result<()> {
             let (result_tx, result_rx) = mpsc::channel::<(u64, Option<Vec<u8>>)>();
             let (free_tx, free_rx) = mpsc::channel::<usize>();
             let context = SendVideoContext(context);
+            let encoder_failed = std::sync::Arc::clone(&vulkan_transport_failed);
 
             let encoder_thread = std::thread::Builder::new()
                 .name("vulkan-encode".to_owned())
                 .spawn(move || {
                     let mut context = context.0;
                     for (index, slot) in job_rx {
+                        if encoder_failed.load(Ordering::Acquire) {
+                            break;
+                        }
+                        if vulkan_av1 {
+                            // The AV1 session is synchronous; reuse its prediction
+                            // state across every source image in output order.
+                            let data = context.encode_slot(slot, index % keyframe_interval == 0);
+                            let failed = data.is_none();
+                            if result_tx.send((index, data)).is_err() {
+                                break;
+                            }
+                            free_tx.send(slot).ok();
+                            if failed {
+                                break;
+                            }
+                            continue;
+                        }
                         while context.encoded_in_flight() >= 2 {
                             if let Some((frame_index, data, source_slot)) =
                                 context.collect_encoded()
@@ -2302,32 +2382,52 @@ pub async fn main() -> Result<()> {
                 })
                 .context("failed to spawn Vulkan encoder thread")?;
             let mut stdin = ffmpeg_stdin.take().unwrap();
+            let writer_failed = std::sync::Arc::clone(&vulkan_transport_failed);
 
             let writer = std::thread::Builder::new()
                 .name("ffmpeg-writer".to_owned())
                 .spawn(move || -> std::io::Result<u64> {
-                    let mut busy: u64 = 0;
-                    let mut next = 0u64;
-                    let mut pending = BTreeMap::new();
-                    while let Ok((index, data)) = result_rx.recv() {
-                        let Some(data) = data else {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                "Vulkan encoder produced no bitstream",
-                            ));
-                        };
-                        pending.insert(index, data);
-                        while let Some(data) = pending.remove(&next) {
-                            let t = Instant::now();
-                            stdin.write_all(&data)?;
-                            busy += t.elapsed().as_nanos() as u64;
-                            next += 1;
+                    let result = (|| {
+                        let mut busy: u64 = 0;
+                        let mut next = 0u64;
+                        let mut pending = BTreeMap::new();
+                        if vulkan_av1 {
+                            stdin.write_all(&av1_ivf_header(vw, vh, fps, out_frames))?;
                         }
+                        while let Ok((index, data)) = result_rx.recv() {
+                            let Some(data) = data else {
+                                return Err(std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    "Vulkan encoder produced no bitstream",
+                                ));
+                            };
+                            pending.insert(index, data);
+                            while let Some(data) = pending.remove(&next) {
+                                let t = Instant::now();
+                                if vulkan_av1 {
+                                    stdin.write_all(&(data.len() as u32).to_le_bytes())?;
+                                    stdin.write_all(&next.to_le_bytes())?;
+                                }
+                                stdin.write_all(&data)?;
+                                busy += t.elapsed().as_nanos() as u64;
+                                next += 1;
+                            }
+                        }
+                        if next != out_frames {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::UnexpectedEof,
+                                format!("Vulkan encoder produced {next}/{out_frames} frames"),
+                            ));
+                        }
+                        let t = Instant::now();
+                        stdin.flush()?;
+                        busy += t.elapsed().as_nanos() as u64;
+                        Ok(busy)
+                    })();
+                    if result.is_err() {
+                        writer_failed.store(true, Ordering::Release);
                     }
-                    let t = Instant::now();
-                    stdin.flush()?;
-                    busy += t.elapsed().as_nanos() as u64;
-                    Ok(busy)
+                    result
                 })
                 .context("failed to spawn ffmpeg writer thread")?;
             (
@@ -2357,30 +2457,7 @@ pub async fn main() -> Result<()> {
 
             let writer = std::thread::Builder::new()
                 .name("ffmpeg-writer".to_owned())
-                .spawn(move || -> std::io::Result<u64> {
-                    let mut busy: u64 = 0;
-                    while let Some(buf) = shared.pop_job() {
-
-                        let t = Instant::now();
-                        stdin.write_all(&shared.pool[buf])?;
-                        let d = t.elapsed().as_nanos() as u64;
-
-                        busy += d;
-
-                        shared.write_ns.fetch_add(d, Ordering::Relaxed);
-                        shared.write_count.fetch_add(1, Ordering::Relaxed);
-                        shared.write_max_ns.fetch_max(d, Ordering::Relaxed);
-                        shared.release_buf(buf);
-
-                    }
-
-                    let t = Instant::now();
-
-                    stdin.flush()?;
-                    busy += t.elapsed().as_nanos() as u64;
-                    Ok(busy)
-
-                })
+                .spawn(move || shared.write_to(&mut stdin))
                 .context("failed to spawn ffmpeg writer thread")?;
             (
                 None,
@@ -2408,30 +2485,14 @@ pub async fn main() -> Result<()> {
 
             let writer = std::thread::Builder::new()
                 .name("ffmpeg-writer".to_owned())
-                .spawn(move || -> std::io::Result<u64> {
-                    let mut busy: u64 = 0;
-                    while let Some(buf) = shared.pop_job() {
-                        let t = Instant::now();
-                        stdin.write_all(&shared.pool[buf])?;
-                        let d = t.elapsed().as_nanos() as u64;
-                        busy += d;
-                        shared.write_ns.fetch_add(d, Ordering::Relaxed);
-                        shared.write_count.fetch_add(1, Ordering::Relaxed);
-                        shared.write_max_ns.fetch_max(d, Ordering::Relaxed);
-                        shared.release_buf(buf);
-                    }
-                    let t = Instant::now();
-                    stdin.flush()?;
-                    busy += t.elapsed().as_nanos() as u64;
-                    Ok(busy)
-                })
+                .spawn(move || shared.write_to(&mut stdin))
                 .context("failed to spawn ffmpeg writer thread")?;
             (None, Some(pipeline), writer, None, None, None)
         };
 
     fn submit_frame(pipeline: &FramePipeline, target: &RenderTarget, frame_size: usize, ) -> Result<(f64, f64)> {
         let acquire_start = Instant::now();
-        let buf = pipeline.acquire_buf();
+        let buf = pipeline.acquire_buf()?;
         let pool_wait = acquire_start.elapsed().as_secs_f64();
         let base = pipeline.pool_addrs[buf] as *mut u8;
 
@@ -2500,7 +2561,7 @@ pub async fn main() -> Result<()> {
                 if let Some((_index, read_slot)) = pipe.pending[frame_slot].take() {
                     let pipeline = nv12_pipeline.as_ref().unwrap();
                     let acquire_start = Instant::now();
-                    let buf = pipeline.acquire_buf();
+                    let buf = pipeline.acquire_buf()?;
                     pool_wait_time += acquire_start.elapsed().as_secs_f64();
                     let src = unsafe {
                         std::slice::from_raw_parts(
@@ -2577,12 +2638,15 @@ pub async fn main() -> Result<()> {
             pipe.pending[frame_slot] = Some((output_index, read_slot));
             output_index += 1;
         } else if let Some(pipe) = &mut vulkan_pipe {
+            if vulkan_transport_failed.load(Ordering::Acquire) {
+                bail!("Vulkan encoder or ffmpeg video transport failed");
+            }
             let wait_start = Instant::now();
             let slot = pipe
                 .free
                 .pop_front()
                 .or_else(|| pipe.free_rx.recv().ok())
-                .unwrap();
+                .context("Vulkan encoder stopped before returning a source image")?;
             slot_wait_time += wait_start.elapsed().as_secs_f64();
             if let Some(yuv) = yuvs.first() {
                 yuv.convert(&msts[0].output());
@@ -2623,7 +2687,7 @@ pub async fn main() -> Result<()> {
         if let Some(pipeline) = &nv12_pipeline {
             for slot in 0..pipe.pending.len() {
                 if let Some((_index, read_slot)) = pipe.pending[slot].take() {
-                    let buf = pipeline.acquire_buf();
+                    let buf = pipeline.acquire_buf()?;
                     let src = unsafe {
                         std::slice::from_raw_parts(
                             pipe.ptrs[read_slot] as *const u8,
