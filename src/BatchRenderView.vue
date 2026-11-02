@@ -663,6 +663,7 @@ function onHoldCoverChange(e: Event) {
     <!-- Config Dialog -->
     <mdui-dialog
       :open="configDialog"
+      fullscreen
       role="dialog"
       aria-modal="true"
       :aria-label="t('configure')"
@@ -676,7 +677,7 @@ function onHoldCoverChange(e: Event) {
         </mdui-button-icon>
         <span class="dialog-title">{{ t('configure') }}</span>
         <div class="toolbar-spacer"></div>
-        <mdui-button variant="tonal" @click="saveConfig">
+        <mdui-button variant="text" @click="saveConfig">
           <mdui-icon-save slot="icon"></mdui-icon-save>
           {{ t('save') }}
         </mdui-button>
@@ -702,7 +703,7 @@ function onHoldCoverChange(e: Event) {
         </mdui-button-icon>
         <span class="dialog-title">{{ t('chart-info') }}</span>
         <div class="toolbar-spacer"></div>
-        <mdui-button variant="tonal" @click="saveChartInfo">
+        <mdui-button variant="text" @click="saveChartInfo">
           <mdui-icon-save slot="icon"></mdui-icon-save>
           {{ t('save') }}
         </mdui-button>
@@ -756,7 +757,7 @@ function onHoldCoverChange(e: Event) {
         </mdui-button-icon>
         <span class="dialog-title">{{ t('bulk-edit-title') }}</span>
         <div class="toolbar-spacer"></div>
-        <mdui-button variant="tonal" @click="saveBulkEdit">
+        <mdui-button variant="text" @click="saveBulkEdit">
           <mdui-icon-save slot="icon"></mdui-icon-save>
           {{ t('save') }}
         </mdui-button>
@@ -1070,13 +1071,16 @@ function onHoldCoverChange(e: Event) {
 
 /* ===== Dialogs ===== */
 .config-dialog::part(panel) {
-  width: 100vw;
-  height: 100vh;
-  max-width: none;
-  max-height: none;
+  padding: 0;
   border-radius: 0;
+}
+
+.config-dialog::part(body) {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .edit-dialog::part(panel),
@@ -1088,14 +1092,22 @@ function onHoldCoverChange(e: Event) {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
+  padding: 8px 0 12px;
   flex-shrink: 0;
+}
+
+.config-dialog .dialog-toolbar {
+  height: 64px;
+  padding: 0 12px 0 8px;
+  background-color: rgb(var(--mdui-color-surface));
   border-bottom: 1px solid rgb(var(--mdui-color-outline-variant));
 }
 
 .dialog-title {
+  padding-inline-start: 4px;
   font-size: var(--mdui-typescale-title-large-size);
   font-weight: var(--mdui-typescale-title-large-weight);
+  line-height: var(--mdui-typescale-title-large-line-height);
   color: rgb(var(--mdui-color-on-surface));
 }
 
