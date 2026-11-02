@@ -1,6 +1,10 @@
 <i18n>
 en:
   resolution: Resolution
+  resolution-custom: Custom
+  resolution-custom-label: Custom Resolution
+  resolution-custom-hint: 'Width x height, e.g. 3440x1440'
+  resolution-invalid: 'Enter a valid resolution with positive integer dimensions, e.g. 3440x1440'
   ffmpeg-preset: Preset
   video-codec: Encoder
   encoder-select: Hardware Encoder
@@ -105,6 +109,8 @@ en:
 
 zh-CN:
   resolution: 分辨率
+  resolution-custom: 自定义
+  resolution-custom-label: 自定义分辨率
   ffmpeg-preset: 编码预设
   video-codec: 编码器
   encoder-select: 硬件编码器
@@ -218,14 +224,24 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { toast, anyFilter, toastError, validateFields } from '@/common';
 import type { RenderConfig } from '@/model';
 import TipSwitch from './TipSwitch.vue';
-import MdCombobox from './md/MdCombobox.vue';
 import MdSelect from './md/MdSelect.vue';
 import MdSlider from './md/MdSlider.vue';
 import MdTextField from './md/MdTextField.vue';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 defineProps<{ initAspectRatio?: number }>();
-const RESOLUTIONS = ['1280x720', '1920x1080', '2560x1440', '3840x2160', '2844x1600', '2388x1668', '1600x1080', '7680x4320'];
+//const RESOLUTIONS = ['1280x720', '1920x1080', '2560x1440', '3840x2160', '2844x1600', '2388x1668', '1600x1080', '7680x4320'];
+const RESOLUTIONS = [
+  { value: '1280x720',  title: '1280x720 (720p)' },
+  { value: '1600x1080', title: '1600x1080 (1K)' },
+  { value: '1920x1080', title: '1920x1080 (1K)' },
+  { value: '2560x1440', title: '2560x1440 (2K)' },
+  { value: '2844x1600', title: '2844x1600 (2.8K)' },
+  { value: '2388x1668', title: '2388x1668 (2.4K)' },
+  { value: '3840x2160', title: '3840x2160 (4K)' },
+  { value: '7680x4320', title: '7680x4320 (8K)' },
+];
+
 const FFMPEG_PRESETS = [
   { value: 'veryfast', title: 'VeryFast' },
   { value: 'faster', title: 'Faster' },
@@ -254,9 +270,16 @@ const ENCODERS = computed(() => [
   { value: 'dx12', title: t('encoder-dx12') },
   { value: 'cpu', title: t('encoder-cpu') },
 ]);
-const AUDIO_FORMATS = ['flac', 'mp3', 'aac', 'opus', 'wav'];
+const AUDIO_FORMATS= [
+  { value: 'flac', title: 'FLAC' },
+  { value: 'mp3', title: 'MP3'},
+  { value: 'aac', title: 'AAC'},
+  { value: 'opus', title: 'Opus' },
+  { value: 'wav', title: 'WAV'},
+]
+//const AUDIO_FORMATS = ['flac', 'mp3', 'aac', 'opus', 'wav'];
 const AUDIO_BITS = [16, 24, 32];
-const SAMPLE_RATES = [44100, 48000, 96000, 192000, 384000, 768000];
+const SAMPLE_RATES = [44100, 48000, 96000, 192000, 384000];
 const BITRATE_CONTROLS = ['CRF', 'CBR'];
 const STD_CHALLENGE_COLORS = ['white', 'green', 'blue', 'red', 'golden', 'rainbow'];
 
@@ -281,6 +304,27 @@ const categories = [
 const activeCategory = ref<(typeof categories)[number]['key']>('output');
 
 const resolution = ref('1920x1080');
+const customResolution = ref(false);
+const resolutionItems = computed(() => [
+  ...RESOLUTIONS,
+  { value: 'custom', title: t('resolution-custom') },
+]);
+const resolutionSelection = computed({
+  get: () => customResolution.value ? 'custom' : resolution.value,
+  set: (value: unknown) => {
+    customResolution.value = value === 'custom';
+    if (!customResolution.value) resolution.value = String(value);
+  },
+});
+const resolutionDimensions = computed(() => {
+  const match = resolution.value.trim().match(/^([1-9]\d*)\s*[xX×]\s*([1-9]\d*)$/);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  // RenderConfig stores each dimension as a Rust u32.
+  if (width > 0xffffffff || height > 0xffffffff) return null;
+  return [width, height] as const;
+});
 const fps = ref('60');
 const sampleCount = ref(1);
 const FALLBACK_MSAA_COUNTS = [1, 2, 4, 8];
@@ -394,6 +438,7 @@ watch(videoFormat, (val) => {
  * buildConfig() writes these normalized values back into the existing
  * RenderConfig fields, so no extra input or option is introduced.
  */
+
 const VULKAN_CODEC = 'h264';
 
 function parseBitrateBps(raw: string): number | null {
@@ -436,7 +481,7 @@ const vulkanEligible = computed(
 );
 
 const vulkanQp = computed(() => {
-  const [width, height] = resolution.value.split('x').map(Number);
+  const [width, height] = resolutionDimensions.value ?? [1920, 1080];
   return resolveVulkanQp(
     bitrateControl.value,
     bitrate.value,
@@ -528,7 +573,7 @@ const DEFAULT_PRESET: Preset = {
     particle: true,
     playerAvatar: null,
     playerName: '',
-    playerRks: 15,
+    playerRks: 1.45,
     sampleCount: 4,
     resPackPath: null,
     speed: 1,
@@ -536,7 +581,7 @@ const DEFAULT_PRESET: Preset = {
     volumeSfx: 1,
     combo: 'AUTOPLAY',
     watermark: '',
-    ffmpegThread: false,
+    ffmpegThread: false, // Enabling FFmpeg threads to save memory will actually cause jank.
     showProgressText: false,
     showTimeText: false,
     handSplit: false,
@@ -591,11 +636,16 @@ async function openRespackFolder() {
 }
 
 async function buildConfig(): Promise<RenderConfig | null> {
+  const dimensions = resolutionDimensions.value;
+  if (!dimensions) {
+    toast(t('resolution-invalid'), 'error');
+    return null;
+  }
   if (!validateFields(form.value)) {
     toast(t('has-error'), 'error');
     return null;
   }
-  const [w, h] = resolution.value.split('x').map(Number);
+  const [w, h] = dimensions;
   const encoderParams = resolveEncoderParams(w, h);
   return {
     resolution: [w, h],
@@ -654,6 +704,7 @@ async function buildConfig(): Promise<RenderConfig | null> {
 
 function applyConfig(c: RenderConfig) {
   resolution.value = c.resolution.join('x');
+  customResolution.value = !RESOLUTIONS.some((item) => item.value === resolution.value);
   ffmpegPreset.value = c.ffmpegPreset || 'medium';
   endingLength.value = String(c.endingLength);
   disableLoading.value = c.disableLoading;
@@ -820,13 +871,21 @@ async function replacePreset() {
             <h2 class="section-title">{{ t('group.resolution-fps') }}</h2>
             <div class="setting-card">
               <div class="field-row">
-                <MdCombobox v-model="resolution" :items="RESOLUTIONS" :label="t('resolution')" />
+                <MdSelect v-model="resolutionSelection" :items="resolutionItems" :label="t('resolution')" />
+              </div>
+              <div v-if="customResolution" class="field-row">
+                <MdTextField
+                  v-model="resolution"
+                  variant="outlined"
+                  :label="t('resolution-custom-label')"
+                  placeholder="3440x1440"
+                  required />
               </div>
               <div class="field-row">
                 <MdTextField v-model="fps" variant="outlined" inputmode="numeric" :label="t('fps')" />
                 <MdSelect v-model="sampleCount" variant="outlined" :items="msaaItems" :label="t('sample-count')" />
               </div>
-              <div v-if="msaaLoaded" class="field-hint">
+              <div v-if="msaaLoaded" class="field-hint" style="margin-left: 16px;">
                 {{
                   msaaDevice
                     ? t('sample-count-device', { device: msaaDevice, max: maxMsaa })
@@ -861,7 +920,7 @@ async function replacePreset() {
               </div>
               <!-- Read-only mapping of the existing CRF/bitrate controls to the
                    Vulkan encoder's constant QP.  No extra input is added. -->
-              <div v-if="vulkanEligible" class="field-hint">{{ t('vulkan-qp-hint', { qp: vulkanQp }) }}</div>
+              <div v-if="vulkanEligible" class="field-hint" style="margin-left: 16px;">{{ t('vulkan-qp-hint', { qp: vulkanQp }) }}</div>
             </div>
           </section>
 
