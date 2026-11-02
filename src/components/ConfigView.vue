@@ -846,17 +846,17 @@ async function replacePreset() {
             :class="{ 'is-active': activeCategory === cat.key }"
             :aria-current="activeCategory === cat.key ? 'page' : undefined"
             @click="activeCategory = cat.key">
-            <!-- The active destination swaps to its filled icon — MD3's selected
-                 state for navigation items, not just a colour change. -->
-            <span class="rail-icon"><component :is="activeCategory === cat.key ? cat.activeIcon : cat.icon" /></span>
+            <span class="rail-indicator">
+              <component :is="activeCategory === cat.key ? cat.activeIcon : cat.icon" />
+            </span>
             <span class="rail-label">{{ t(`cat.${cat.key}`) }}</span>
           </button>
         </li>
       </ul>
+    </nav>
 
-      <!-- Preset management lives at the rail's foot: it acts on the whole
-           config rather than on any one destination. -->
-      <div class="rail-foot">
+    <div class="config-pane">
+      <div class="pane-head">
         <MdSelect
           class="preset-select"
           variant="outlined"
@@ -866,28 +866,19 @@ async function replacePreset() {
           item-value="key"
           :label="t('presets')"
           @update:model-value="onPresetChange" />
-        <div class="preset-actions">
-          <mdui-button variant="tonal" class="preset-btn" @click="createPreset">
-            <mdui-icon-add slot="icon"></mdui-icon-add>
-            {{ t('preset-new') }}
-          </mdui-button>
-          <mdui-button variant="tonal" class="preset-btn" :disabled="preset.key === 'default'" @click="replacePreset">
-            <mdui-icon-save--outlined slot="icon"></mdui-icon-save--outlined>
-            {{ t('preset-save') }}
-          </mdui-button>
-          <mdui-button variant="tonal" class="preset-btn btn-danger" :disabled="preset.key === 'default'" @click="deletePreset">
-            <mdui-icon-delete--outlined slot="icon"></mdui-icon-delete--outlined>
-            {{ t('preset-delete') }}
-          </mdui-button>
-        </div>
+        <mdui-button variant="text" @click="createPreset">
+          <mdui-icon-add slot="icon"></mdui-icon-add>
+          {{ t('preset-new') }}
+        </mdui-button>
+        <mdui-button variant="text" :disabled="preset.key === 'default'" @click="replacePreset">
+          <mdui-icon-save--outlined slot="icon"></mdui-icon-save--outlined>
+          {{ t('preset-save') }}
+        </mdui-button>
+        <mdui-button variant="text" :disabled="preset.key === 'default'" @click="deletePreset">
+          <mdui-icon-delete--outlined slot="icon"></mdui-icon-delete--outlined>
+          {{ t('preset-delete') }}
+        </mdui-button>
       </div>
-    </nav>
-
-    <!-- ==================== Detail pane ====================
-         No pane header: the rail already marks the active destination, so an
-         icon + title repeating it here was duplication. The settings grid is the
-         first thing in the pane. -->
-    <div class="config-pane">
 
       <div class="settings-scroll">
         <!-- ==================== OUTPUT ==================== -->
@@ -896,7 +887,7 @@ async function replacePreset() {
             <h2 class="section-title">{{ t('group.resolution-fps') }}</h2>
             <div class="setting-card">
               <div class="field-row">
-                <MdSelect v-model="resolutionSelection" :items="resolutionItems" :label="t('resolution')" />
+                <MdSelect v-model="resolutionSelection" variant="outlined" :items="resolutionItems" :label="t('resolution')" />
               </div>
               <div v-if="customResolution" class="field-row">
                 <MdTextField
@@ -1061,12 +1052,14 @@ async function replacePreset() {
                   @update:model-value="onRespackChange" />
                 <mdui-tooltip :content="t('refresh')">
                   <mdui-button-icon @click="updateRespacks">
-                    <mdui-icon-refresh></mdui-icon-refresh>
+                    <mdui-icon-refresh aria-hidden="true"></mdui-icon-refresh>
+                    <span class="md-sr-only">{{ t('refresh') }}</span>
                   </mdui-button-icon>
                 </mdui-tooltip>
                 <mdui-tooltip :content="t('open-folder')">
                   <mdui-button-icon @click="openRespackFolder">
-                    <mdui-icon-folder-open></mdui-icon-folder-open>
+                    <mdui-icon-folder-open aria-hidden="true"></mdui-icon-folder-open>
+                    <span class="md-sr-only">{{ t('open-folder') }}</span>
                   </mdui-button-icon>
                 </mdui-tooltip>
               </div>
@@ -1212,88 +1205,66 @@ async function replacePreset() {
 .config-rail {
   display: flex;
   flex-direction: column;
-  width: 240px;
+  width: 80px;
   flex-shrink: 0;
   min-height: 0;
-  padding: 16px 12px;
-  gap: 8px;
-  /* `surface-container` is the MD3 container tone for a rail that shares the
-     screen with content, rather than `surface` which it would blend into. */
-  background-color: rgb(var(--mdui-color-surface-container));
-  border-radius: 0 var(--mdui-shape-corner-extra-large) var(--mdui-shape-corner-extra-large) 0;
+  padding: 12px 0;
+  background-color: rgb(var(--mdui-color-surface));
+  border-right: 1px solid rgb(var(--mdui-color-outline-variant));
 }
 
-/* Destination list.
-
-   The rail is narrow, so the global 6px scrollbar reads as a heavy bar against
-   the pill-shaped items. It is slimmed to 3px and kept invisible until the rail
-   is actually hovered — the scroll affordance is still there, it just does not
-   compete with the navigation items. */
 .rail-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-height: 0;
+  gap: 4px;
   overflow-y: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 
 .rail-list::-webkit-scrollbar {
-  width: 3px;
+  display: none;
 }
 
-.rail-list::-webkit-scrollbar-thumb {
-  background: transparent;
-}
-
-.rail-list:hover::-webkit-scrollbar-thumb {
-  background: rgba(var(--mdui-color-outline), 0.5);
-}
-
-/* MD3 navigation item: 56dp tall (well above the 48dp minimum), full pill radius
-   on the selected state. The state layer composites over the selected fill, so a
-   press on the active row still reads as a press. */
 .rail-item {
   @include st.interactive;
 
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
   width: 100%;
-  height: 56px;
-  padding: 0 16px;
+  padding: 4px 0 8px;
   border: none;
-  border-radius: var(--mdui-shape-corner-full);
+  border-radius: var(--mdui-shape-corner-medium);
   background-color: transparent;
   color: rgb(var(--mdui-color-on-surface-variant));
   font: inherit;
-  font-size: var(--mdui-typescale-label-large-size);
-  font-weight: var(--mdui-typescale-label-large-weight);
-  line-height: var(--mdui-typescale-label-large-line-height);
-  text-align: start;
-  transition: color var(--mdui-motion-duration-short4) var(--mdui-motion-easing-standard);
+  font-size: var(--mdui-typescale-label-medium-size);
+  font-weight: 500;
+  line-height: var(--mdui-typescale-label-medium-line-height);
+}
+
+.rail-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 32px;
+  border-radius: var(--mdui-shape-corner-full);
+  font-size: 1.5rem;
+  transition: background-color var(--mdui-motion-duration-short4) var(--mdui-motion-easing-standard);
 }
 
 .rail-item.is-active {
+  color: rgb(var(--mdui-color-on-surface));
+}
+
+.rail-item.is-active .rail-indicator {
   background-color: rgb(var(--mdui-color-secondary-container));
   color: rgb(var(--mdui-color-on-secondary-container));
-  font-weight: 600;
-}
-
-.rail-icon {
-  display: flex;
-  flex-shrink: 0;
-  font-size: 1.375rem;
-}
-
-/* MD3's rail indicator is a shape that appears on selection. The selected item
-   swaps to its filled icon, so animating that swap on the bouncy spring reads as
-   the indicator arriving rather than the icon simply being replaced. */
-.rail-item.is-active .rail-icon {
   animation: rail-icon-pop var(--app-motion-duration-bouncy)
     var(--app-motion-spring-bouncy, var(--mdui-motion-easing-emphasized-decelerate)) both;
 }
@@ -1310,45 +1281,11 @@ async function replacePreset() {
 }
 
 .rail-label {
+  max-width: 100%;
+  padding: 0 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* Preset management — acts on the whole config, so it sits below the
-   destination list rather than inside any one destination. */
-.rail-foot {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(var(--mdui-color-outline-variant), 0.6);
-  flex-shrink: 0;
-}
-
-.preset-select {
-  width: 100%;
-}
-
-.preset-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-/* "Save" spans the full width — it is the primary preset action. */
-.preset-actions .preset-btn:nth-child(2) {
-  grid-column: span 2;
-  order: -1;
-}
-
-.preset-actions .preset-btn {
-  --mdui-button-height: 2.5rem;
-}
-
-.btn-danger {
-  --mdui-color-secondary-container: var(--mdui-color-error-container);
-  --mdui-color-on-secondary-container: var(--mdui-color-on-error-container);
 }
 
 /* ============================================================
@@ -1359,6 +1296,27 @@ async function replacePreset() {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 16px 24px 0;
+  flex-shrink: 0;
+}
+
+.preset-select {
+  flex: 1 1 auto;
+  min-width: 140px;
+  max-width: 280px;
+}
+
+.pane-head > mdui-button:first-of-type {
+  margin-left: auto;
 }
 
 /* ---------- Scrolling settings column ----------
@@ -1377,7 +1335,7 @@ async function replacePreset() {
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
-  padding: 8px 24px 32px;
+  padding: 12px 24px 32px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   align-content: start;
@@ -1415,10 +1373,10 @@ async function replacePreset() {
   margin: 0;
   padding: 0;
   font-size: var(--mdui-typescale-title-small-size);
-  font-weight: 600;
+  font-weight: 500;
   line-height: var(--mdui-typescale-title-small-line-height);
   letter-spacing: 0.01em;
-  color: rgb(var(--mdui-color-primary));
+  color: rgb(var(--mdui-color-on-surface-variant));
 }
 
 /* ---------- Setting card ----------
@@ -1581,104 +1539,49 @@ async function replacePreset() {
    horizontal rail. The named mixins make that class of mistake impossible.
    ============================================================ */
 
-/* Compact and medium: narrow the rail and let the grid fill the pane instead of
-   floating in the middle of it. */
 @include bp.below-large {
-  .config-rail {
-    width: 200px;
-    padding: 12px 10px;
-    gap: 6px;
-  }
-  /* Shorter rows so six destinations plus the preset foot fit without the rail
-     growing its own scrollbar on a short window. */
-  .rail-item {
-    height: 48px;
-    padding: 0 12px;
-    gap: 10px;
-    font-size: var(--mdui-typescale-label-medium-size);
-  }
-  .rail-icon {
-    font-size: 1.25rem;
-  }
-  .rail-foot {
-    padding-top: 8px;
-  }
-  /* Only the gutter narrows. The track width is deliberately NOT overridden:
-     lowering it to 260px would let a third column fit inside the 1000px cap and
-     reintroduce the uneven rows the base rule is sized to prevent. */
   .settings-scroll {
-    padding: 16px 20px 28px;
+    padding: 12px 20px 28px;
+  }
+  .pane-head {
+    padding: 12px 20px 0;
+  }
+  .setting-card {
+    border-radius: var(--mdui-shape-corner-large);
   }
 }
 
-/* Compact: rail moves to the top as a horizontal scroller and the pane stacks
-   under it. Only here does the settings grid collapse to a single column. */
 @include bp.compact {
-  .config-root {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
   .config-rail {
-    width: 100%;
-    padding: 8px 12px;
-    gap: 6px;
-    border-radius: 0 0 var(--mdui-shape-corner-large) var(--mdui-shape-corner-large);
-  }
-  /* A horizontal rail: destinations scroll sideways, presets stay pinned below. */
-  .rail-list {
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    flex: none;
-    gap: 4px;
-    padding-bottom: 4px;
+    width: 72px;
+    padding: 8px 0;
   }
   .rail-item {
-    width: auto;
-    /* MD3 minimum touch target is 48dp; 40dp was below it. */
-    height: 48px;
-    padding: 0 12px;
-    white-space: nowrap;
-    flex-shrink: 0;
-    font-size: var(--mdui-typescale-label-medium-size);
+    font-size: 0.6875rem;
+    line-height: 0.875rem;
   }
-  .rail-icon {
-    font-size: 1.125rem;
+  .rail-indicator {
+    width: 48px;
+    height: 28px;
+    font-size: 1.25rem;
   }
-  .rail-foot {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    padding-top: 8px;
+  .pane-head {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 16px 0;
   }
   .preset-select {
-    width: auto;
-    flex: 1;
-    min-width: 0;
-  }
-  .preset-actions {
-    display: flex;
-    flex-shrink: 0;
-  }
-  /* One compact action survives; the rest would not fit beside the select. */
-  .preset-actions .preset-btn:nth-child(1),
-  .preset-actions .preset-btn:nth-child(3) {
-    display: none;
-  }
-  .preset-actions .preset-btn:nth-child(2) {
-    order: 0;
+    flex-basis: 100%;
+    max-width: none;
   }
   .settings-scroll {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
-    padding: 12px 16px 20px;
+    padding: 8px 16px 20px;
   }
   .field-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
-  }
-  .setting-card {
-    border-radius: var(--mdui-shape-corner-large);
   }
 }
 </style>

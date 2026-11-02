@@ -77,6 +77,7 @@ import '@mdui/icons/videocam--outlined.js';
 import '@mdui/icons/music-note.js';
 import '@mdui/icons/music-note--outlined.js';
 import '@mdui/icons/volume-up.js';
+import '@mdui/icons/palette.js';
 import '@mdui/icons/palette--outlined.js';
 import '@mdui/icons/label--outlined.js';
 
@@ -114,6 +115,7 @@ import '@mdui/icons/sports-esports--outlined.js';
 import '@mdui/icons/warning.js';
 import '@mdui/icons/error.js';
 import '@mdui/icons/error--outlined.js';
+import '@mdui/icons/bug-report.js';
 import '@mdui/icons/bug-report--outlined.js';
 import '@mdui/icons/workspace-premium.js';
 import '@mdui/icons/link.js';
