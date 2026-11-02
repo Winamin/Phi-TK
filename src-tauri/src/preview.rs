@@ -128,13 +128,14 @@ pub async fn main() -> Result<()> {
             let update = frame_times.iter().map(|it| it.0).sum::<f64>() / count;
             let render = frame_times.iter().map(|it| it.1).sum::<f64>() / count;
             let frame = frame_times.iter().map(|it| it.2).sum::<f64>() / count;
-            eprintln!("preview t={elapsed:.1} cpu_fps={:.1} frame_fps={:.1} update_us={:.1} render_us={:.1}", count / frame_sum, 1.0 / frame, update * 1e6, render * 1e6);
+            eprintln!("cpu_fps={:.1} | frame_fps={:.1} | update_us={:.1} | render_us={:.1}", count / frame_sum, 1.0 / frame, update * 1e6, render * 1e6);
             report_time = now;
         }
         if duration.map_or(false, |it| elapsed >= warmup + it) {
             break;
         }
     }
+
     if !measured.is_empty() {
         let count = measured.len() as f64;
         let update = measured.iter().map(|it| it.0).sum::<f64>() / count;
