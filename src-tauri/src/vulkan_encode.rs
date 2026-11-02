@@ -375,6 +375,8 @@ pub(crate) struct VulkanVideoEncoder {
     idr_num: u32,
     force_idr: bool,
     qp: u8,
+    av1_rate_control: Option<Av1RateControl>,
+    av1_cbr_max_bitrate: u64,
     /// AV1 only: the order hint each decoder-side reference slot holds,
     /// mirrored here so frame headers can state them (`ref_order_hint`).
     /// A keyframe refreshes every slot; a delta refreshes only the slot it
@@ -412,6 +414,14 @@ struct AsyncEncodeSlot {
     frame_index: u64,
     source_slot: usize,
     is_idr: bool,
+}
+
+#[derive(Clone, Copy)]
+struct Av1RateControl {
+    bitrate: u64,
+    fps: u32,
+    gop_size: u32,
+    initialized: bool,
 }
 
 unsafe impl Send for VulkanVideoEncoder {}
@@ -915,6 +925,8 @@ impl VulkanVideoEncoder {
             idr_num: 0,
             force_idr: false,
             qp,
+            av1_rate_control: None,
+            av1_cbr_max_bitrate: 0,
             params_bytes,
             poisoned: false,
             async_slots,
@@ -942,6 +954,19 @@ impl VulkanVideoEncoder {
     #[allow(dead_code)]
     pub(crate) fn set_qp(&mut self, qp: u8) {
         self.qp = qp;
+    }
+
+    pub(crate) fn enable_av1_cbr(&mut self, bitrate: u64, fps: u32, gop_size: u32) -> bool {
+        if self.codec != VulkanVideoCodec::AV1 || bitrate == 0
+            || bitrate > self.av1_cbr_max_bitrate || fps == 0 || gop_size == 0
+        {
+            return false;
+        }
+        self.av1_rate_control = Some(Av1RateControl {
+            bitrate, fps, gop_size, initialized: false,
+        });
+        eprintln!("[vulkan-encode] AV1 native CBR: {bitrate} bps, {fps} fps, GOP {gop_size}");
+        true
     }
 
     /// The quantizer currently in effect.
@@ -1704,6 +1729,13 @@ impl VulkanVideoEncoder {
         let _ = caps;
 
         let max_level = av1_caps.max_level;
+        let av1_cbr_max_bitrate = if encode_caps.rate_control_modes
+            .contains(vk::VideoEncodeRateControlModeFlagsKHR::CBR)
+        {
+            encode_caps.max_bitrate
+        } else {
+            0
+        };
 
         eprintln!(
             "[vulkan-encode] AV1 caps: coded={min_coded_w}x{min_coded_h}–{max_coded_w}x{max_coded_h}, max_dpb={max_dpb}, max_level={max_level}",
@@ -1960,6 +1992,8 @@ impl VulkanVideoEncoder {
             idr_num: 0,
             force_idr: false,
             qp,
+            av1_rate_control: None,
+            av1_cbr_max_bitrate,
             // The driver emits frame OBUs only; the sequence header is ours
             // to serialize (from the same values `seq_header` was built
             // with) and gets prepended to every keyframe, mirroring how
@@ -2083,15 +2117,73 @@ impl VulkanVideoEncoder {
         // ---------------------------------------------------------------
         // Begin video coding scope
         // ---------------------------------------------------------------
-        let begin_coding = vk::VideoBeginCodingInfoKHR::default()
+        let rate = self.av1_rate_control.unwrap_or(Av1RateControl {
+            bitrate: 1, fps: 60, gop_size: 120, initialized: false,
+        });
+        let mut av1_control = VideoEncodeAV1RateControlInfoKHR {
+            s_type: vk::StructureType::from_raw(1_000_513_006),
+            p_next: ptr::null(),
+            flags: 0x1 | 0x4,
+            gop_frame_count: rate.gop_size,
+            key_frame_period: rate.gop_size,
+            consecutive_bipredictive_frame_count: 0,
+            temporal_layer_count: 1,
+        };
+        let mut av1_layer = VideoEncodeAV1RateControlLayerInfoKHR {
+            s_type: vk::StructureType::from_raw(1_000_513_007),
+            p_next: ptr::null(),
+            use_min_q_index: vk::FALSE, min_q_index: [0; 3],
+            use_max_q_index: vk::FALSE, max_q_index: [0; 3],
+            use_max_frame_size: vk::FALSE, max_frame_size: [0; 3],
+        };
+        let mut layers = [vk::VideoEncodeRateControlLayerInfoKHR::default()
+            .average_bitrate(rate.bitrate).max_bitrate(rate.bitrate)
+            .frame_rate_numerator(rate.fps).frame_rate_denominator(1)];
+        unsafe { push_next_raw(&mut layers[0], &mut av1_layer as *mut _) };
+        let mut rate_control = vk::VideoEncodeRateControlInfoKHR::default()
+            .rate_control_mode(vk::VideoEncodeRateControlModeFlagsKHR::CBR)
+            .layers(&layers).virtual_buffer_size_in_ms(2000)
+            .initial_virtual_buffer_size_in_ms(1000);
+        unsafe { push_next_raw(&mut rate_control, &mut av1_control as *mut _) };
+        let mut begin_coding = vk::VideoBeginCodingInfoKHR::default()
             .video_session(self.video_session)
             .video_session_parameters(self.session_params)
             .reference_slots(&begin_ref_slots);
 
+        let mut gop_remaining = VideoEncodeAV1GopRemainingFrameInfoKHR {
+            s_type: vk::StructureType::from_raw(1_000_513_010),
+            p_next: ptr::null(),
+            use_gop_remaining_frames: if rate.initialized { vk::TRUE } else { vk::FALSE },
+            gop_remaining_intra: is_key as u32,
+            gop_remaining_predictive: 0,
+            gop_remaining_bipredictive: 0,
+        };
+        if let Some(control) = self.av1_rate_control {
+            gop_remaining.gop_remaining_predictive = control.gop_size
+                .saturating_sub(1 + self.frame_num);
+            unsafe { push_next_raw(&mut begin_coding, &mut gop_remaining as *mut _) };
+            if control.initialized {
+                unsafe { push_next_raw(&mut begin_coding, &mut rate_control as *mut _) };
+            }
+        }
+
         unsafe { (video_fns.cmd_begin_video_coding)(cb, &begin_coding) };
 
-        // On key frame, reset session and disable rate control (CQP).
-        if is_key {
+        if let Some(control) = &mut self.av1_rate_control {
+            if !control.initialized {
+                let mut quality = vk::VideoEncodeQualityLevelInfoKHR::default()
+                    .quality_level(0);
+                unsafe { push_next_raw(&mut quality, &mut rate_control as *mut _) };
+                let control_info = vk::VideoCodingControlInfoKHR::default()
+                    .flags(vk::VideoCodingControlFlagsKHR::RESET
+                        | vk::VideoCodingControlFlagsKHR::ENCODE_RATE_CONTROL
+                        | vk::VideoCodingControlFlagsKHR::ENCODE_QUALITY_LEVEL)
+                    .push_next(&mut quality);
+                unsafe { (video_fns.cmd_control_video_coding)(cb, &control_info) };
+                control.initialized = true;
+            }
+        // CQP retains its original per-keyframe session reset.
+        } else if is_key {
             let mut rate_control = vk::VideoEncodeRateControlInfoKHR::default()
                 .rate_control_mode(vk::VideoEncodeRateControlModeFlagsKHR::DISABLED);
             let control_info = vk::VideoCodingControlInfoKHR::default()
@@ -2211,7 +2303,7 @@ impl VulkanVideoEncoder {
             } else {
                 VK_VIDEO_ENCODE_AV1_RATE_CONTROL_GROUP_PREDICTIVE_KHR
             },
-            constant_q_index: self.qp as u32,
+            constant_q_index: if self.av1_rate_control.is_some() { 128 } else { self.qp as u32 },
             p_std_picture_info: &std_pic_info,
             reference_name_slot_indices,
             primary_reference_cdf_only: vk::FALSE,
@@ -3529,6 +3621,46 @@ const VK_VIDEO_ENCODE_AV1_RATE_CONTROL_GROUP_PREDICTIVE_KHR: u32 = 1;
 
 /// `STD_VIDEO_AV1_FRAME_RESTORATION_TYPE_NONE`.
 const STD_VIDEO_AV1_FRAME_RESTORATION_TYPE_NONE: u32 = 0;
+
+// AV1 rate-control structures are newer than the ash 0.38 bindings.
+#[repr(C)]
+struct VideoEncodeAV1RateControlInfoKHR {
+    s_type: vk::StructureType,
+    p_next: *const std::ffi::c_void,
+    flags: u32,
+    gop_frame_count: u32,
+    key_frame_period: u32,
+    consecutive_bipredictive_frame_count: u32,
+    temporal_layer_count: u32,
+}
+
+#[repr(C)]
+struct VideoEncodeAV1GopRemainingFrameInfoKHR {
+    s_type: vk::StructureType,
+    p_next: *const std::ffi::c_void,
+    use_gop_remaining_frames: vk::Bool32,
+    gop_remaining_intra: u32,
+    gop_remaining_predictive: u32,
+    gop_remaining_bipredictive: u32,
+}
+
+#[repr(C)]
+struct VideoEncodeAV1RateControlLayerInfoKHR {
+    s_type: vk::StructureType,
+    p_next: *const std::ffi::c_void,
+    use_min_q_index: vk::Bool32,
+    min_q_index: [u32; 3],
+    use_max_q_index: vk::Bool32,
+    max_q_index: [u32; 3],
+    use_max_frame_size: vk::Bool32,
+    max_frame_size: [u32; 3],
+}
+
+const _: () = {
+    assert!(std::mem::size_of::<VideoEncodeAV1RateControlInfoKHR>() == 40);
+    assert!(std::mem::size_of::<VideoEncodeAV1GopRemainingFrameInfoKHR>() == 32);
+    assert!(std::mem::size_of::<VideoEncodeAV1RateControlLayerInfoKHR>() == 64);
+};
 
 // ===================================================================
 // Tests
