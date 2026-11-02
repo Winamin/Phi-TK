@@ -26,8 +26,7 @@ en:
   sample-count-device: 'GPU: {device}, up to {max}x MSAA'
   sample-count-unknown: 'GPU capability unavailable; using 1/2/4/8'
   bitrate-control: Bitrate Control
-  bitrate: Bitrate/CRF
-  vulkan-qp-hint: "Vulkan encoder constant QP: {qp} (derived from the existing CRF/bitrate setting)"
+  bitrate: Bitrate (kbps)
   ffmpeg-thread: Thread Optimization
   video-format: Video Format
   video-format-flac-error: Not available with FLAC audio
@@ -132,8 +131,7 @@ zh-CN:
   sample-count-device: 显卡：{device}，最高支持 {max}x MSAA
   sample-count-unknown: 未能检测到显卡信息，使用 1/2/4/8
   bitrate-control: 码率控制
-  bitrate: 码率/CRF
-  vulkan-qp-hint: "Vulkan 编码器常量 QP：{qp}（由现有 CRF/码率设置换算）"
+  bitrate: 码率（kbps）
   ffmpeg-thread: 线程优化
   video-format: 视频格式
   video-format-flac-error: FLAC 音频下不可用
@@ -280,7 +278,6 @@ const AUDIO_FORMATS= [
 //const AUDIO_FORMATS = ['flac', 'mp3', 'aac', 'opus', 'wav'];
 const AUDIO_BITS = [16, 24, 32];
 const SAMPLE_RATES = [44100, 48000, 96000, 192000, 384000];
-const BITRATE_CONTROLS = ['CRF', 'CBR'];
 const STD_CHALLENGE_COLORS = ['white', 'green', 'blue', 'red', 'golden', 'rainbow'];
 
 const form = ref<HTMLFormElement>();
@@ -426,19 +423,6 @@ watch(videoFormat, (val) => {
   video.value = val === 'mov';
 });
 
-/*
- * Rust Vulkan encoder mapping.
- *
- * The encoder is constant-QP and only implements H.264, so it deliberately has
- * no dedicated UI.  Instead the controls that already exist are mapped onto it:
- *   - Hardware Acceleration + Encoder (auto/vulkan) + Video Codec decide
- *     whether the Rust Vulkan path is used at all;
- *   - Bitrate Control + Bitrate/CRF produce the QP (CRF is the QP directly,
- *     CBR is converted from the target bitrate), exactly like the backend.
- * buildConfig() writes these normalized values back into the existing
- * RenderConfig fields, so no extra input or option is introduced.
- */
-
 const VULKAN_CODEC = 'h264';
 
 function parseBitrateBps(raw: string): number | null {
@@ -477,30 +461,69 @@ function resolveVulkanQp(control: string, bitrate: string, width: number, height
 }
 
 const vulkanEligible = computed(
-  () => hwAccel.value && videoCodec.value === VULKAN_CODEC && (encoder.value === 'auto' || encoder.value === 'vulkan'),
+  () => hwAccel.value && (
+    (videoCodec.value === VULKAN_CODEC && (encoder.value === 'auto' || encoder.value === 'vulkan'))
+    || (videoCodec.value === 'av1' && encoder.value === 'vulkan')
+  ),
 );
 
-const vulkanQp = computed(() => {
-  const [width, height] = resolutionDimensions.value ?? [1920, 1080];
-  return resolveVulkanQp(
-    bitrateControl.value,
-    bitrate.value,
-    width || 1920,
-    height || 1080,
-    parseInt(fps.value) || 60,
-  );
+const vulkanControls = computed(() => hwAccel.value && encoder.value === 'vulkan');
+// The built-in H.264 session supports constant QP only. AV1 and ffmpeg HEVC support CBR.
+const vulkanQpOnly = computed(() => vulkanControls.value && videoCodec.value === VULKAN_CODEC);
+const bitrateControls = computed(() => [
+  // Keep CRF as the stored value for compatibility with existing presets and the backend.
+  { value: 'CRF', title: vulkanControls.value ? 'QP' : 'CRF' },
+  ...(!vulkanQpOnly.value ? [{ value: 'CBR', title: 'CBR' }] : []),
+]);
+const bitrateLabel = computed(() => bitrateControl.value === 'CBR'
+  ? t('bitrate')
+  : vulkanControls.value ? 'QP' : 'CRF');
+const qualityMin = computed(() => vulkanControls.value ? 1 : 0);
+const qualityMax = computed(() => !vulkanControls.value && videoCodec.value === 'av1' ? 63 : 51);
+
+// Display CBR in kbps, while keeping the ffmpeg-compatible value in RenderConfig.
+const bitrateInput = computed({
+  get: () => {
+    if (bitrateControl.value !== 'CBR') return bitrate.value;
+    const bps = parseBitrateBps(bitrate.value);
+    return bps === null ? '' : String(bps / 1000);
+  },
+  set: (value: string | number) => {
+    const raw = String(value).trim();
+    bitrate.value = bitrateControl.value === 'CBR' && raw ? `${raw}k` : raw;
+  },
 });
 
-// The Rust encoder implements H.264 only.  Do not rewrite the existing
-// encoder choice here: for HEVC/AV1 the same "vulkan" selection still means
-// ffmpeg's hevc_vulkan/av1_vulkan encoder, and the backend gates only the
-// Rust encoder by codec.
+function setBitrateControl(value: unknown) {
+  const next = value === 'CBR' && !vulkanQpOnly.value ? 'CBR' : 'CRF';
+  if (next === bitrateControl.value) return;
+  const [width, height] = resolutionDimensions.value ?? [1920, 1080];
+  const pixels = Math.max(width * height * Math.max(Number(fps.value) || 60, 1), 1);
+  if (next === 'CBR') {
+    const raw = bitrate.value.trim();
+    const quality = raw && Number.isFinite(Number(raw)) ? Number(raw) : 28;
+    // Inverse of the backend's bitrate-to-QP estimate; this is an initial bitrate,
+    // not a guarantee that different encoders will produce equivalent quality.
+    const kbps = pixels * 0.04 * 2 ** ((28 - quality) / 6) / 1000;
+    bitrate.value = `${Math.max(1, Math.round(kbps))}k`;
+  } else {
+    const bps = parseBitrateBps(bitrate.value);
+    const quality = bps === null ? 28 : Math.round(28 - 6 * Math.log2(bps / pixels / 0.04));
+    bitrate.value = String(Math.min(qualityMax.value, Math.max(qualityMin.value, quality)));
+  }
+  bitrateControl.value = next;
+}
+
+watch(vulkanQpOnly, (qpOnly) => {
+  if (qpOnly) setBitrateControl('CRF');
+});
 
 /** Normalize the existing encoder controls into the values the backend reads. */
 function resolveEncoderParams(width: number, height: number) {
-  const control = bitrateControl.value.toUpperCase() === 'CBR' ? 'CBR' : 'CRF';
-  const value = vulkanEligible.value && control === 'CRF'
-    ? String(resolveVulkanQp(control, bitrate.value, width, height, parseInt(fps.value) || 60))
+  const storedControl = bitrateControl.value.toUpperCase() === 'CBR' ? 'CBR' : 'CRF';
+  const control = vulkanQpOnly.value ? 'CRF' : storedControl;
+  const value = (vulkanEligible.value || vulkanControls.value) && control === 'CRF'
+    ? String(resolveVulkanQp(storedControl, bitrate.value, width, height, parseInt(fps.value) || 60))
     : bitrate.value.trim();
   return { encoder: encoder.value, bitrateControl: control, bitrate: value };
 }
@@ -717,7 +740,9 @@ function applyConfig(c: RenderConfig) {
   videoCodec.value = c.videoCodec || VULKAN_CODEC;
   encoder.value = c.encoder || 'auto';
   bitrateControl.value = (c.bitrateControl || 'CRF').toUpperCase() === 'CBR' ? 'CBR' : 'CRF';
-  bitrate.value = c.bitrate || '28';
+  bitrate.value = c.bitrate || (bitrateControl.value === 'CBR' ? '5000k' : '28');
+  // Normalize legacy Vulkan H.264 CBR presets using the same estimate as the backend.
+  if (vulkanQpOnly.value) setBitrateControl('CRF');
   targetAudio.value = c.targetAudio;
   background.value = c.background ?? false;
   handSplit.value = c.handSplit ?? false;
@@ -915,12 +940,18 @@ async function replacePreset() {
             <h2 class="section-title">{{ t('group.bitrate') }}</h2>
             <div class="setting-card">
               <div class="field-row">
-                <MdSelect v-model="bitrateControl" variant="outlined" :items="BITRATE_CONTROLS" :label="t('bitrate-control')" />
-                <MdTextField v-model="bitrate" variant="outlined" :label="t('bitrate')" />
+                <MdSelect :model-value="bitrateControl" variant="outlined" :items="bitrateControls" :label="t('bitrate-control')" @update:model-value="setBitrateControl" />
+                <MdTextField
+                  v-model="bitrateInput"
+                  variant="outlined"
+                  type="number"
+                  :inputmode="bitrateControl === 'CBR' ? 'decimal' : 'numeric'"
+                  :label="bitrateLabel"
+                  :min="bitrateControl === 'CBR' ? 0.001 : qualityMin"
+                  :max="bitrateControl === 'CBR' ? undefined : qualityMax"
+                  :step="bitrateControl === 'CBR' ? 'any' : 1"
+                  required />
               </div>
-              <!-- Read-only mapping of the existing CRF/bitrate controls to the
-                   Vulkan encoder's constant QP.  No extra input is added. -->
-              <div v-if="vulkanEligible" class="field-hint" style="margin-left: 16px;">{{ t('vulkan-qp-hint', { qp: vulkanQp }) }}</div>
             </div>
           </section>
 
