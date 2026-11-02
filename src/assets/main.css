@@ -195,6 +195,23 @@ body {
   line-height: var(--mdui-typescale-body-medium-line-height);
 }
 
+.md-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.md-route-target:focus {
+  outline: none;
+}
+
 /* A tonal icon badge — MD3's "leading icon in a container" pattern. */
 .md3-icon-badge {
   display: flex;

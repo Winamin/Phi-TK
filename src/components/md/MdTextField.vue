@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useAttrs } from 'vue';
+import { nextTick, onMounted, ref, useAttrs, watch } from 'vue';
+import { labelShadowControl } from '../../a11y';
 
 /**
  * `v-model`-capable wrapper around `<mdui-text-field>`.
@@ -23,6 +24,24 @@ const emit = defineEmits<{
 }>();
 
 const attrs = useAttrs();
+const el = ref<HTMLElement>();
+
+function syncLabel() {
+  const source = [attrs.label, attrs.placeholder].find(
+    (v): v is string => typeof v === 'string' && v.length > 0,
+  );
+  labelShadowControl(el.value, ['input', 'textarea'], source ?? '');
+}
+
+onMounted(syncLabel);
+
+watch(
+  () => [attrs.label, attrs.placeholder],
+  async () => {
+    await nextTick();
+    syncLabel();
+  },
+);
 
 function onInput(e: Event) {
   const raw = (e.target as HTMLInputElement).value;
@@ -36,7 +55,7 @@ function onInput(e: Event) {
 </script>
 
 <template>
-  <mdui-text-field :value="modelValue ?? ''" @input="onInput">
+  <mdui-text-field ref="el" :value="modelValue ?? ''" @input="onInput">
     <!-- `<mdui-text-field>` has no unnamed slot, so only `slot="…"` children render. -->
     <slot></slot>
   </mdui-text-field>

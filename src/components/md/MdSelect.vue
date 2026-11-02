@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, useAttrs, watch } from 'vue';
+import { labelShadowControl } from '../../a11y';
 
 /**
  * `v-model`-capable wrapper around `<mdui-select>`.
@@ -30,6 +31,24 @@ const emit = defineEmits<{
 }>();
 
 const el = ref<HTMLElement & { value?: string }>();
+const attrs = useAttrs();
+
+function syncLabel() {
+  const source = [attrs.label, attrs.placeholder].find(
+    (v): v is string => typeof v === 'string' && v.length > 0,
+  );
+  labelShadowControl(el.value, 'mdui-text-field input', source ?? '');
+}
+
+onMounted(syncLabel);
+
+watch(
+  () => [attrs.label, attrs.placeholder],
+  async () => {
+    await nextTick();
+    syncLabel();
+  },
+);
 
 /** Flattens both accepted `items` shapes into `{ key, label, value }`. */
 const options = computed(() =>

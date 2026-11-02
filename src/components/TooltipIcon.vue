@@ -9,8 +9,9 @@ defineProps<{ tooltip: string }>();
 
 <template>
   <mdui-tooltip :content="tooltip" placement="bottom">
-    <mdui-button-icon class="tip-btn" tabindex="-1">
-      <mdui-icon-info--outlined class="tip-glyph"></mdui-icon-info--outlined>
+    <mdui-button-icon class="tip-btn">
+      <mdui-icon-info--outlined class="tip-glyph" aria-hidden="true"></mdui-icon-info--outlined>
+      <span class="md-sr-only">{{ tooltip }}</span>
     </mdui-button-icon>
   </mdui-tooltip>
 </template>

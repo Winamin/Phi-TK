@@ -13,6 +13,7 @@ defineProps<{
   modelValue?: boolean;
   label: string;
   tooltip?: string;
+  hideLabel?: boolean;
 }>();
 
 defineEmits<{
@@ -21,13 +22,17 @@ defineEmits<{
 </script>
 
 <template>
-  <label class="tip-switch">
-    <MdSwitch :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" />
-    <span class="tip-switch-label">
+  <div class="tip-switch">
+    <MdSwitch
+      :model-value="modelValue"
+      :label="label"
+      @update:model-value="$emit('update:modelValue', $event)" />
+    <span v-if="!hideLabel" class="tip-switch-label">
       {{ label }}
       <TooltipIcon v-if="tooltip" :tooltip="tooltip" />
     </span>
-  </label>
+    <TooltipIcon v-else-if="tooltip" :tooltip="tooltip" />
+  </div>
 </template>
 
 <style scoped>
@@ -35,7 +40,6 @@ defineEmits<{
   display: flex;
   align-items: center;
   gap: 10px;
-  cursor: pointer;
   min-width: 0;
 }
 

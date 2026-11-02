@@ -30,6 +30,10 @@ import '@mdui/icons/open-in-new.js';
 import '@mdui/icons/content-copy.js';
 import '@mdui/icons/download.js';
 import '@mdui/icons/visibility.js';
+import '@mdui/icons/chevron-right.js';
+import '@mdui/icons/more-vert.js';
+import '@mdui/icons/history--outlined.js';
+import '@mdui/icons/delete-sweep--outlined.js';
 
 // Navigation rail
 import '@mdui/icons/menu-book.js';

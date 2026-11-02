@@ -29,6 +29,7 @@ en:
   close: Close
   total-charts: "Total: {count}"
   select-all: Select All
+  select-item: "Select {name}"
   deselect-all: Deselect All
   progress: Progress
   eta: ETA
@@ -97,6 +98,7 @@ zh-CN:
   close: 关闭
   total-charts: "总计: {count}"
   select-all: 全选
+  select-item: "选择 {name}"
   deselect-all: 取消全选
   progress: 进度
   eta: 预计
@@ -525,8 +527,13 @@ function onHoldCoverChange(e: Event) {
     <div class="batch-header">
       <div class="header-row">
         <div class="search-wrap">
-          <mdui-icon-search class="search-icon"></mdui-icon-search>
-          <input v-model="searchQuery" :placeholder="t('search-placeholder')" class="search-input" />
+          <mdui-icon-search class="search-icon" aria-hidden="true"></mdui-icon-search>
+          <input
+            v-model="searchQuery"
+            role="searchbox"
+            :placeholder="t('search-placeholder')"
+            :aria-label="t('search-placeholder')"
+            class="search-input" />
         </div>
         <div class="header-actions">
           <mdui-button variant="tonal" :disabled="isAddingFiles" @click="addFiles">
@@ -548,7 +555,10 @@ function onHoldCoverChange(e: Event) {
     <!-- Selection bar -->
     <div class="selection-bar">
       <div class="sel-left">
-        <MdCheckbox :model-value="allSelected" @update:model-value="toggleSelectAll" />
+        <MdCheckbox
+          :model-value="allSelected"
+          :label="t('select-all')"
+          @update:model-value="toggleSelectAll" />
         <span class="sel-count">{{ t('selected', { count: selectedCount }) }} / {{ t('total-charts', { count: charts.length }) }}</span>
         <mdui-button v-if="selectedCount > 1" variant="text" @click="openBulkEditDialog">
           <mdui-icon-edit-note slot="icon"></mdui-icon-edit-note>
@@ -605,7 +615,10 @@ function onHoldCoverChange(e: Event) {
         <div v-for="item in filteredCharts" :key="item.id" class="chart-row" :class="{ 'is-rendering': item.status === 'rendering', 'is-failed': item.status === 'failed' }">
           <div v-if="item.status === 'rendering' && item.id === currentRenderingId" class="progress-bg" :style="{ width: `${renderProgress}%` }"></div>
           <div class="row-content">
-            <MdCheckbox v-model="item.selected" :disabled="item.status === 'rendering'" />
+            <MdCheckbox
+              v-model="item.selected"
+              :disabled="item.status === 'rendering'"
+              :label="t('select-item', { name: item.name })" />
             <div class="row-info">
               <div class="row-title">
                 <span class="row-name" :title="item.name">{{ item.name }}</span>
@@ -630,13 +643,16 @@ function onHoldCoverChange(e: Event) {
             </mdui-chip>
             <div class="row-actions">
               <mdui-button-icon :disabled="!item.chartInfo || item.status === 'rendering'" @click="openEditDialog(item.id)" :title="t('edit')">
-                <mdui-icon-edit--outlined></mdui-icon-edit--outlined>
+                <mdui-icon-edit--outlined aria-hidden="true"></mdui-icon-edit--outlined>
+                <span class="md-sr-only">{{ t('edit') }}</span>
               </mdui-button-icon>
               <mdui-button-icon :disabled="!item.chartInfo || item.status === 'rendering'" @click="previewChart(item.id)" :title="t('preview')">
-                <mdui-icon-play-circle--outlined></mdui-icon-play-circle--outlined>
+                <mdui-icon-play-circle--outlined aria-hidden="true"></mdui-icon-play-circle--outlined>
+                <span class="md-sr-only">{{ t('preview') }}</span>
               </mdui-button-icon>
               <mdui-button-icon :disabled="item.status === 'rendering'" @click="removeChart(item.id)" :title="t('close')">
-                <mdui-icon-close></mdui-icon-close>
+                <mdui-icon-close aria-hidden="true"></mdui-icon-close>
+                <span class="md-sr-only">{{ t('close') }}</span>
               </mdui-button-icon>
             </div>
           </div>
@@ -645,10 +661,18 @@ function onHoldCoverChange(e: Event) {
     </div>
 
     <!-- Config Dialog -->
-    <mdui-dialog :open="configDialog" @close="configDialog = false" class="config-dialog">
+    <mdui-dialog
+      :open="configDialog"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('configure')"
+      v-focus-trap="configDialog"
+      @close="configDialog = false"
+      class="config-dialog">
       <div class="dialog-toolbar">
         <mdui-button-icon @click="configDialog = false">
-          <mdui-icon-close></mdui-icon-close>
+          <mdui-icon-close aria-hidden="true"></mdui-icon-close>
+          <span class="md-sr-only">{{ t('close') }}</span>
         </mdui-button-icon>
         <span class="dialog-title">{{ t('configure') }}</span>
         <div class="toolbar-spacer"></div>
@@ -663,10 +687,18 @@ function onHoldCoverChange(e: Event) {
     </mdui-dialog>
 
     <!-- Edit Dialog -->
-    <mdui-dialog :open="editDialog" @close="editDialog = false" class="edit-dialog">
+    <mdui-dialog
+      :open="editDialog"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('chart-info')"
+      v-focus-trap="editDialog"
+      @close="editDialog = false"
+      class="edit-dialog">
       <div class="dialog-toolbar">
         <mdui-button-icon @click="editDialog = false">
-          <mdui-icon-close></mdui-icon-close>
+          <mdui-icon-close aria-hidden="true"></mdui-icon-close>
+          <span class="md-sr-only">{{ t('close') }}</span>
         </mdui-button-icon>
         <span class="dialog-title">{{ t('chart-info') }}</span>
         <div class="toolbar-spacer"></div>
@@ -696,11 +728,11 @@ function onHoldCoverChange(e: Event) {
                 <span>{{ t('dim') }}</span>
                 <span class="slider-val">{{ Math.round(editingChart.chartInfo.backgroundDim * 100) }}%</span>
               </div>
-              <MdSlider v-model="editingChart.chartInfo.backgroundDim" :min="0" :max="1" :step="0.01" />
+              <MdSlider v-model="editingChart.chartInfo.backgroundDim" :min="0" :max="1" :step="0.01" :label="t('dim')" />
             </div>
             <div class="field-toggle">
               <span class="field-label">{{ t('hold_cover') }}</span>
-              <MdSwitch v-model="editingChart.chartInfo.HoldPartialCover" />
+              <MdSwitch v-model="editingChart.chartInfo.HoldPartialCover" :label="t('hold_cover')" />
             </div>
             <MdTextField v-model="editingChart.chartInfo.tip" variant="outlined" :label="t('tip')" />
           </div>
@@ -709,10 +741,18 @@ function onHoldCoverChange(e: Event) {
     </mdui-dialog>
 
     <!-- Bulk Edit Dialog -->
-    <mdui-dialog :open="bulkEditDialog" @close="bulkEditDialog = false" class="bulk-edit-dialog">
+    <mdui-dialog
+      :open="bulkEditDialog"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('bulk-edit-title')"
+      v-focus-trap="bulkEditDialog"
+      @close="bulkEditDialog = false"
+      class="bulk-edit-dialog">
       <div class="dialog-toolbar">
         <mdui-button-icon @click="bulkEditDialog = false">
-          <mdui-icon-close></mdui-icon-close>
+          <mdui-icon-close aria-hidden="true"></mdui-icon-close>
+          <span class="md-sr-only">{{ t('close') }}</span>
         </mdui-button-icon>
         <span class="dialog-title">{{ t('bulk-edit-title') }}</span>
         <div class="toolbar-spacer"></div>
@@ -737,11 +777,20 @@ function onHoldCoverChange(e: Event) {
               <span>{{ t('dim') }}</span>
               <span class="slider-val">{{ bulkEditData.backgroundDim !== null ? Math.round(bulkEditData.backgroundDim * 100) + '%' : '—' }}</span>
             </div>
-            <MdSlider :model-value="bulkEditData.backgroundDim ?? 0" @update:model-value="(v: number) => bulkEditData.backgroundDim = v" :min="0" :max="1" :step="0.01" />
+            <MdSlider
+              :model-value="bulkEditData.backgroundDim ?? 0"
+              @update:model-value="(v: number) => bulkEditData.backgroundDim = v"
+              :min="0" :max="1" :step="0.01"
+              :label="t('dim')" />
           </div>
           <div class="field-toggle">
-            <span class="field-label">{{ t('hold_cover') }}</span>
-            <mdui-segmented-button-group selects="single" :value="holdCoverValue" @change="onHoldCoverChange">
+            <span class="field-label" id="bulk-hold-cover-label">{{ t('hold_cover') }}</span>
+            <mdui-segmented-button-group
+              selects="single"
+              :value="holdCoverValue"
+              role="group"
+              aria-labelledby="bulk-hold-cover-label"
+              @change="onHoldCoverChange">
               <mdui-segmented-button value="keep">{{ t('hold-keep') }}</mdui-segmented-button>
               <mdui-segmented-button value="on">{{ t('hold-on') }}</mdui-segmented-button>
               <mdui-segmented-button value="off">{{ t('hold-off') }}</mdui-segmented-button>
@@ -810,8 +859,9 @@ function onHoldCoverChange(e: Event) {
   font-family: inherit;
   transition: border-color var(--mdui-motion-duration-short4) var(--mdui-motion-easing-standard);
 }
-.search-input:focus {
-  outline: none;
+.search-input:focus-visible {
+  outline: 2px solid rgb(var(--mdui-color-primary));
+  outline-offset: 2px;
   border-color: rgb(var(--mdui-color-primary));
 }
 .search-input::placeholder {
