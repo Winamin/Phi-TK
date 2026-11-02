@@ -45,6 +45,7 @@ onMounted(() => {
 <template>
   <div class="about-container">
     <div class="about-content">
+      <h1 class="md-sr-only">Phi TK</h1>
       <div class="app-header">
         <img src="/phi-tklogo.png" alt="Phi TK" class="app-logo-img" />
         <mdui-chip class="version-badge" elevated>
@@ -54,7 +55,16 @@ onMounted(() => {
       </div>
 
       <div class="info-cards">
-        <mdui-card variant="filled" clickable class="info-card" :style="{ '--i': 0 }" @click="openGitHub">
+        <mdui-card
+          variant="filled"
+          clickable
+          class="info-card"
+          :style="{ '--i': 0 }"
+          role="link"
+          tabindex="0"
+          @click="openGitHub"
+          @keydown.enter.prevent="openGitHub"
+          @keydown.space.prevent="openGitHub">
           <div class="card-content">
             <div class="card-icon">
               <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true">
@@ -63,7 +73,7 @@ onMounted(() => {
               </svg>
             </div>
             <div class="card-text">
-              <h3 class="card-title">GitHub</h3>
+              <h2 class="card-title">GitHub</h2>
               <p class="card-subtitle">{{ t('source') }}</p>
             </div>
             <div class="card-arrow">
@@ -78,7 +88,7 @@ onMounted(() => {
               <mdui-icon-workspace-premium></mdui-icon-workspace-premium>
             </div>
             <div class="card-text">
-              <h3 class="card-title">License</h3>
+              <h2 class="card-title">License</h2>
               <p class="card-subtitle">{{ t('license') }}</p>
             </div>
           </div>
@@ -90,7 +100,7 @@ onMounted(() => {
               <mdui-icon-info--outlined></mdui-icon-info--outlined>
             </div>
             <div class="card-text">
-              <h3 class="card-title">Version</h3>
+              <h2 class="card-title">Version</h2>
               <p class="card-subtitle">v{{ appVersion }}</p>
             </div>
           </div>

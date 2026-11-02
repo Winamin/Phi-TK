@@ -26,6 +26,7 @@ en:
       label: "Custom background"
       placeholder: "Click to select image file"
       hint: "Supports JPG, PNG, WEBP format"
+      preview: "Preview of the selected background image"
       selectFile: "Select image"
       clear: "Clear background"
       saved: "Background saved!"
@@ -64,6 +65,7 @@ zh-CN:
       label: "自定义背景"
       placeholder: "点击选择图片文件"
       hint: "支持 JPG、PNG、WEBP 格式"
+      preview: "已选背景图的预览"
       selectFile: "选择图片"
       clear: "清除背景"
       saved: "背景已保存！"
@@ -98,8 +100,6 @@ import {
   setWallpaperColorEnabled,
   BACKGROUND_KEY,
   getDerivedColor,
-  readAppliedPrimary,
-  colorSchemeDiagnostics,
 } from './theme';
 import TipSwitch from './components/TipSwitch.vue';
 import MdTextField from './components/md/MdTextField.vue';
@@ -116,8 +116,6 @@ const backgroundPath = ref<string>(localStorage.getItem(BACKGROUND_KEY) || '');
 const themeMode = ref<ThemeMode>(getThemeMode());
 const wallpaperColor = ref(isWallpaperColorEnabled());
 const derivedColor = ref<string | null>(getDerivedColor());
-const appliedPrimary = ref(readAppliedPrimary());
-const appliedPrimaryCss = computed(() => `rgb(${appliedPrimary.value})`);
 
 const backgroundPreviewUrl = computed(() => {
   if (backgroundPath.value) {
@@ -254,15 +252,13 @@ function clearBackground() {
               <span class="item-label">{{ t('settings.appearance.wallpaperColor') }}</span>
               <span class="item-hint">{{ t('settings.appearance.wallpaperColorTip') }}</span>
               <span v-if="wallpaperColor && derivedColor" class="item-hint derived-color">
-                <i class="derived-dot" :style="{ background: derivedColor }"></i>{{ derivedColor }}
-                <i class="derived-dot" :style="{ background: appliedPrimaryCss }"
-                   :title="colorSchemeDiagnostics()"></i>
-                <span class="derived-applied">applied</span>
+                <i class="derived-dot" :style="{ background: derivedColor }" aria-hidden="true"></i>{{ derivedColor }}
               </span>
             </div>
             <TipSwitch
               :model-value="wallpaperColor"
-              :label="''"
+              :label="t('settings.appearance.wallpaperColor')"
+              hide-label
               @update:model-value="onWallpaperColorChange" />
           </div>
         </div>
@@ -284,8 +280,9 @@ function clearBackground() {
               :label="t('settings.outputPath.label')"
               :placeholder="t('settings.outputPath.placeholder')"
               :helper="t('settings.outputPath.hint')">
-              <mdui-button-icon slot="end-icon" :aria-label="t('settings.selectFolder')" @click="selectFolder">
-                <mdui-icon-folder-open></mdui-icon-folder-open>
+              <mdui-button-icon slot="end-icon" @click="selectFolder">
+                <mdui-icon-folder-open aria-hidden="true"></mdui-icon-folder-open>
+                <span class="md-sr-only">{{ t('settings.selectFolder') }}</span>
               </mdui-button-icon>
             </MdTextField>
           </div>
@@ -302,12 +299,14 @@ function clearBackground() {
             <div class="action-spacer"></div>
             <mdui-tooltip :content="t('settings.copy')">
               <mdui-button-icon :disabled="!outputPath" @click="copyPath">
-                <mdui-icon-content-copy></mdui-icon-content-copy>
+                <mdui-icon-content-copy aria-hidden="true"></mdui-icon-content-copy>
+                <span class="md-sr-only">{{ t('settings.copy') }}</span>
               </mdui-button-icon>
             </mdui-tooltip>
             <mdui-tooltip :content="t('settings.clear')">
               <mdui-button-icon :disabled="!outputPath" @click="clearPath">
-                <mdui-icon-close></mdui-icon-close>
+                <mdui-icon-close aria-hidden="true"></mdui-icon-close>
+                <span class="md-sr-only">{{ t('settings.clear') }}</span>
               </mdui-button-icon>
             </mdui-tooltip>
           </div>
@@ -329,14 +328,15 @@ function clearBackground() {
               :label="t('settings.background.label')"
               :placeholder="t('settings.background.placeholder')"
               :helper="t('settings.background.hint')">
-              <mdui-button-icon slot="end-icon" :aria-label="t('settings.background.selectFile')" @click="selectBackground">
-                <mdui-icon-image></mdui-icon-image>
+              <mdui-button-icon slot="end-icon" @click="selectBackground">
+                <mdui-icon-image aria-hidden="true"></mdui-icon-image>
+                <span class="md-sr-only">{{ t('settings.background.selectFile') }}</span>
               </mdui-button-icon>
             </MdTextField>
           </div>
 
           <div v-if="backgroundPath" class="bg-preview">
-            <img :src="backgroundPreviewUrl" alt="Background preview" class="preview-img" />
+            <img :src="backgroundPreviewUrl" :alt="t('settings.background.preview')" class="preview-img" />
           </div>
 
           <div class="setting-actions">
@@ -347,7 +347,8 @@ function clearBackground() {
             <div class="action-spacer"></div>
             <mdui-tooltip :content="t('settings.background.clear')">
               <mdui-button-icon :disabled="!backgroundPath" @click="clearBackground">
-                <mdui-icon-close></mdui-icon-close>
+                <mdui-icon-close aria-hidden="true"></mdui-icon-close>
+                <span class="md-sr-only">{{ t('settings.background.clear') }}</span>
               </mdui-button-icon>
             </mdui-tooltip>
           </div>
@@ -368,10 +369,6 @@ function clearBackground() {
   font-family: monospace;
 }
 
-.derived-applied {
-  margin-left: 6px;
-  opacity: 0.7;
-}
 .derived-dot {
   width: 12px;
   height: 12px;

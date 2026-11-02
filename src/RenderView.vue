@@ -156,6 +156,7 @@ import * as dialog from '@tauri-apps/plugin-dialog';
 import * as shell from '@tauri-apps/plugin-shell';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import gsap from 'gsap';
+import { prefersReducedMotion } from './a11y';
 const { t } = useI18n();
 
 // Tauri's `listen` resolves asynchronously, so a component unmounted before it settles
@@ -251,6 +252,7 @@ function performFlip() {
   stepIndex.value = 2;
   nextTick(() => {
     if (flipCardRef.value) {
+      if (prefersReducedMotion()) return;
       gsap.from(flipCardRef.value, {
         scale: 0.96,
         opacity: 0,
@@ -630,7 +632,7 @@ let editorOriginal: string | null = null,
   editorMotion: gsap.core.Tween | undefined;
 const previewLabels: Record<PreviewKey, string> = { name: 'chart-name', composer: 'composer', level: 'level', charter: 'charter', illustrator: 'illustrator', tip: 'tip' };
 const editorRequired = computed(() => editingField.value !== null && ['name', 'level', 'charter'].includes(editingField.value));
-const editorDuration = () => (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 0.4);
+const editorDuration = () => (prefersReducedMotion() ? 0 : 0.4);
 
 watch(editorValue, (value) => {
   if (editingField.value && chartInfo.value && !editorClosing) updatePreviewField(editingField.value, value);
@@ -818,7 +820,7 @@ function aspectText(width: string, height: string) {
          A step page replaces this entirely rather than stacking over it, so the
          launcher is unmounted while a step is active — `v-if`, not `v-show`.
          ================================================================== -->
-    <section v-if="!onStepPage" class="start-layer">
+    <section v-if="!onStepPage" class="start-layer" :inert="showShortcuts">
       <div class="start-scroll">
         <div class="start-inner">
           <!-- ---------- Hero ---------- -->
@@ -861,11 +863,12 @@ function aspectText(width: string, height: string) {
             <div class="bento-cell cell-recent">
               <div class="cell-head">
                 <h2 class="cell-title">{{ t('recent.title') }}</h2>
-                <mdui-button-icon v-if="recentCharts.length" @click="clearRecent">
-                  <mdui-tooltip :content="t('recent.clear')">
-                    <mdui-icon-delete-sweep--outlined></mdui-icon-delete-sweep--outlined>
-                  </mdui-tooltip>
-                </mdui-button-icon>
+                <mdui-tooltip v-if="recentCharts.length" :content="t('recent.clear')">
+                  <mdui-button-icon @click="clearRecent">
+                    <mdui-icon-delete-sweep--outlined aria-hidden="true"></mdui-icon-delete-sweep--outlined>
+                    <span class="md-sr-only">{{ t('recent.clear') }}</span>
+                  </mdui-button-icon>
+                </mdui-tooltip>
               </div>
 
               <ul v-if="recentCharts.length" class="recent-list">
@@ -902,14 +905,15 @@ function aspectText(width: string, height: string) {
          maintain — each step owns the whole content area.
          ================================================================== -->
     <Transition name="page">
-      <section v-if="onStepPage" :key="step" class="step-page" :class="'is-' + step" :inert="editingField !== null">
+      <section v-if="onStepPage" :key="step" class="step-page" :class="'is-' + step" :inert="editingField !== null || showShortcuts">
         <!-- ---------- Page app bar ---------- -->
         <header class="page-bar">
-          <mdui-button-icon @click="goBack">
-            <mdui-tooltip :content="t('prev-step')">
-              <mdui-icon-arrow-back></mdui-icon-arrow-back>
-            </mdui-tooltip>
-          </mdui-button-icon>
+          <mdui-tooltip :content="t('prev-step')">
+            <mdui-button-icon @click="goBack">
+              <mdui-icon-arrow-back aria-hidden="true"></mdui-icon-arrow-back>
+              <span class="md-sr-only">{{ t('prev-step') }}</span>
+            </mdui-button-icon>
+          </mdui-tooltip>
 
           <div class="page-heading">
             <h2 class="page-title md3-title-large">{{ surfaceTitle }}</h2>
@@ -962,11 +966,11 @@ function aspectText(width: string, height: string) {
                 </div>
                 <div class="field-group">
                   <span class="field-label">{{ t('dim') }} — {{ Math.round(chartInfo.backgroundDim * 100) }}%</span>
-                  <MdSlider v-model="chartInfo.backgroundDim" :min="0" :max="1" :step="0.01" :labelFormatter="dimLabel" />
+                  <MdSlider v-model="chartInfo.backgroundDim" :min="0" :max="1" :step="0.01" :labelFormatter="dimLabel" :label="t('dim')" />
                 </div>
                 <div class="field-group field-toggle">
                   <span class="field-label">{{ t('hold_cover') }}</span>
-                  <MdSwitch v-model="chartInfo.HoldPartialCover" />
+                  <MdSwitch v-model="chartInfo.HoldPartialCover" :label="t('hold_cover')" />
                 </div>
               </div>
               <div class="loading-preview-area">
@@ -1121,7 +1125,7 @@ function aspectText(width: string, height: string) {
     <!-- Deliberately not an `<mdui-dialog>`: this is a transient hover affordance,
          and a modal would trap focus and animate on every drag event. -->
     <Teleport to="body">
-      <div v-if="editingField" class="preview-edit-layer" :class="{ 'is-focused': editorFocused }" role="dialog" aria-modal="true" :aria-label="t(previewLabels[editingField])">
+      <div v-if="editingField" class="preview-edit-layer" :class="{ 'is-focused': editorFocused }" role="dialog" aria-modal="true" :aria-label="t(previewLabels[editingField])" v-focus-trap="true">
         <div class="preview-edit-backdrop" @click="finishPreviewEdit(true)"></div>
         <div ref="previewEditor" class="preview-editor" :class="{ 'is-dark': editingField === 'level' }">
           <label for="loading-preview-input" class="preview-editor-label">{{ t(previewLabels[editingField]) }}</label>
@@ -1130,7 +1134,6 @@ function aspectText(width: string, height: string) {
             ref="previewInput"
             v-model="editorValue"
             :required="editorRequired"
-            :aria-label="t(previewLabels[editingField])"
             :placeholder="editingField === 'tip' ? t('tip-placeholder') : ''"
             autocomplete="off" />
           <span class="preview-editor-hint">{{ t('edit-hint') }}</span>
@@ -1149,7 +1152,7 @@ function aspectText(width: string, height: string) {
 
     <Transition name="fade">
       <div v-if="parsingChart" class="overlay">
-        <div class="overlay-card parse-card">
+        <div class="overlay-card parse-card" role="status">
           <mdui-circular-progress class="parse-spinner"></mdui-circular-progress>
           <span>{{ t('parsing') }}</span>
         </div>
@@ -1158,12 +1161,20 @@ function aspectText(width: string, height: string) {
 
     <!-- Shortcut reference. Its own floating layer, so it stacks above the wizard. -->
     <Transition name="fade">
-      <div v-if="showShortcuts" class="overlay" @click.self="showShortcuts = false">
+      <div
+        v-if="showShortcuts"
+        class="overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shortcut-title"
+        v-focus-trap="showShortcuts"
+        @click.self="showShortcuts = false">
         <div class="overlay-card shortcut-card">
           <div class="shortcut-head">
-            <h3 class="md3-title-large">{{ t('shortcuts.title') }}</h3>
+            <h3 id="shortcut-title" class="md3-title-large">{{ t('shortcuts.title') }}</h3>
             <mdui-button-icon @click="showShortcuts = false">
-              <mdui-icon-close></mdui-icon-close>
+              <mdui-icon-close aria-hidden="true"></mdui-icon-close>
+              <span class="md-sr-only">{{ t('shortcuts.close') }}</span>
             </mdui-button-icon>
           </div>
           <ul class="shortcut-list">

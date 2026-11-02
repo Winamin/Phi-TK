@@ -8,6 +8,7 @@ import { createApp } from 'vue';
 import { createI18n } from 'vue-i18n';
 
 import { changeLocale } from './common';
+import { initA11y, vFocusTrap } from './a11y';
 
 import App from './App.vue';
 import router from './router';
@@ -74,8 +75,10 @@ const i18n = createI18n({
 changeLocale(locale);
 
 initTheme();
+initA11y();
 
 const app = createApp(App);
+app.directive('focus-trap', vFocusTrap);
 app.use(i18n).use(router);
 
 app.mount('#app');

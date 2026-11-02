@@ -21,6 +21,16 @@ en:
   show-output: Show Output
   show-log: Show Log
   show-in-folder: Open Folder
+  more: More actions
+
+  status-chip:
+    pending: Pending
+    loading: Loading
+    mixing: Mixing
+    rendering: Rendering
+    done: Done
+    canceled: Canceled
+    failed: Failed
 
   detail:
     name: Name
@@ -55,6 +65,16 @@ zh-CN:
   show-output: 查看输出
   show-log: 查看日志
   show-in-folder: 打开文件夹
+  more: 更多操作
+
+  status-chip:
+    pending: 等待中
+    loading: 加载中
+    mixing: 混音中
+    rendering: 渲染中
+    done: 已完成
+    canceled: 已取消
+    failed: 失败
 
   detail:
     name: 名称
@@ -70,7 +90,7 @@ zh-CN:
 </i18n>
 
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue';
+import { ref, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Task, TaskStatus } from './model';
 import { invoke } from '@tauri-apps/api/core';
@@ -78,11 +98,29 @@ import { getOutputPathArg } from './outputPath';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import moment from 'moment';
 import { toastError } from './common';
+import { announce } from './a11y';
 import LogWindow from './components/LogWindow.vue';
 
 const { t } = useI18n();
 
 const tasks = ref<Task[]>();
+
+const menuTaskId = ref<number | null>(null);
+const toggleMenu = (id: number) => {
+  menuTaskId.value = menuTaskId.value === id ? null : id;
+};
+
+const lastStatus = new Map<number, string>();
+watch(tasks, (list) => {
+  for (const task of list ?? []) {
+    const previous = lastStatus.get(task.id);
+    lastStatus.set(task.id, task.status.type);
+    if (!previous || previous === task.status.type) continue;
+    if (['done', 'failed', 'canceled'].includes(task.status.type)) {
+      announce(`${task.name} · ${t(`status-chip.${task.status.type}`)}`);
+    }
+  }
+});
 
 const ACTIVE_STATUSES = ['pending', 'loading', 'mixing', 'rendering'];
 const POLL_ACTIVE_MS = 300;
@@ -209,7 +247,7 @@ const showDetail = (task: Task) => {
   <div class="tasks-container">
     <!-- Header -->
     <div class="tasks-header">
-      <h2 class="tasks-title md3-headline">{{ t('output') }}</h2>
+      <h1 class="tasks-title md3-headline">{{ t('output') }}</h1>
       <mdui-button variant="tonal" @click="showFolder()">
         <mdui-icon-folder-open--outlined slot="icon"></mdui-icon-folder-open--outlined>
         {{ t('show-in-folder') }}
@@ -225,10 +263,19 @@ const showDetail = (task: Task) => {
     <!-- Task list -->
     <div v-else class="task-list">
       <!-- `<mdui-dropdown>` is `display: contents`, so the card below stays a flex item of
-           the list. Anchoring the menu at the pointer replaces the old hand-tracked
-           `contextMenuX`/`contextMenuY` coordinates. -->
-      <mdui-dropdown v-for="task in tasks" :key="task.id" trigger="contextmenu" open-on-pointer>
-        <mdui-card slot="trigger" variant="filled" class="task-card" :style="statusVars(task.status.type)">
+           the list. -->
+      <mdui-dropdown
+        v-for="task in tasks"
+        :key="task.id"
+        trigger="manual"
+        :open="menuTaskId === task.id"
+        @closed="menuTaskId = null">
+        <mdui-card
+          slot="trigger"
+          variant="filled"
+          class="task-card"
+          :style="statusVars(task.status.type)"
+          @contextmenu.prevent="toggleMenu(task.id)">
           <!-- Cover (left 35%) -->
           <div class="task-cover">
             <div
@@ -240,7 +287,13 @@ const showDetail = (task: Task) => {
           <div class="task-info">
             <div class="task-header">
               <h3 class="task-name" :title="task.name">{{ task.name }}</h3>
-              <span class="status-chip">{{ task.status.type.toUpperCase() }}</span>
+              <span class="status-chip">{{ t(`status-chip.${task.status.type}`) }}</span>
+              <mdui-tooltip :content="t('more')">
+                <mdui-button-icon class="task-more" @click="toggleMenu(task.id)">
+                  <mdui-icon-more-vert aria-hidden="true"></mdui-icon-more-vert>
+                  <span class="md-sr-only">{{ t('more') }}</span>
+                </mdui-button-icon>
+              </mdui-tooltip>
             </div>
 
             <p class="task-path" :title="task.path">{{ task.path }}</p>
@@ -308,6 +361,10 @@ const showDetail = (task: Task) => {
       class="log-dialog"
       close-on-esc
       close-on-overlay-click
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('details')"
+      v-focus-trap="detailDialog"
       :open="detailDialog"
       @close="detailDialog = false">
       <span slot="headline">{{ t('details') }}</span>
@@ -455,6 +512,13 @@ const showDetail = (task: Task) => {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+}
+
+.task-more {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin: -4px -4px -4px 0;
 }
 
 .task-name {

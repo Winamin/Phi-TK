@@ -7,6 +7,9 @@ en:
   batch-render: Batch Render
   setting: Setting
   more: More
+  skip-to-content: Skip to content
+  main-nav: Main navigation
+  main-content: Main content
 
 zh-CN:
   render: 渲染
@@ -16,6 +19,9 @@ zh-CN:
   batch-render: 批量渲染
   setting: 设置
   more: 更多
+  skip-to-content: 跳到主要内容
+  main-nav: 主导航
+  main-content: 主要内容
 
 </i18n>
 
@@ -43,9 +49,10 @@ declare global {
 </script>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted } from 'vue';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { useWindowSize } from './window-size';
+import { announce } from './a11y';
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -84,6 +91,33 @@ function onNavChange(e: Event) {
   const name = (e.target as HTMLElement & { value?: string }).value;
   if (name && name !== route.name) navigateTo(name);
 }
+
+function onNavKey(e: KeyboardEvent, name: string) {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  e.stopPropagation();
+  navigateTo(name);
+}
+
+const mainEl = ref<HTMLElement>();
+let firstRoute = true;
+
+watch(
+  () => route.fullPath,
+  async () => {
+    await nextTick();
+    const active = document.activeElement as HTMLElement | null;
+    const inside = active && mainEl.value?.contains(active);
+    if (!inside) mainEl.value?.focus({ preventScroll: true });
+
+    if (firstRoute) {
+      firstRoute = false;
+      return;
+    }
+    const title = t('title-' + ((route.name as string | undefined) ?? 'default'));
+    if (title) announce(title);
+  },
+);
 
 const customBackground = ref<string | null>(null);
 
@@ -135,6 +169,8 @@ const backgroundStyle = computed(() => {
 </script>
 
 <template>
+  <a class="skip-link" href="#main-content" @click.prevent="mainEl?.focus()">{{ t('skip-to-content') }}</a>
+
   <!-- The wallpaper sits outside <mdui-layout>: it is the only place the user's image is
        meant to show through, and every surface above it is an opaque MD3 container. -->
   <div v-if="customBackground" class="custom-bg-layer" :style="backgroundStyle"></div>
@@ -147,16 +183,32 @@ const backgroundStyle = computed(() => {
       v-show="!railHidden"
       alignment="center"
       divider
+      role="navigation"
+      :aria-label="t('main-nav')"
       :value="(route.name as string)"
       @change="onNavChange">
-      <mdui-navigation-rail-item v-for="item in navItems" :key="item.key" :value="item.key">
+      <mdui-navigation-rail-item
+        v-for="item in navItems"
+        :key="item.key"
+        :value="item.key"
+        role="link"
+        tabindex="0"
+        :aria-current="route.name === item.key ? 'page' : undefined"
+        :aria-label="t(item.key)"
+        @keydown="onNavKey($event, item.key)">
         {{ t(item.key) }}
         <span slot="icon" class="rail-icon"><component :is="item.icon" /></span>
         <span slot="active-icon" class="rail-icon"><component :is="item.activeIcon" /></span>
       </mdui-navigation-rail-item>
     </mdui-navigation-rail>
 
-    <mdui-layout-main>
+    <mdui-layout-main
+      id="main-content"
+      ref="mainEl"
+      class="md-route-target"
+      role="main"
+      tabindex="-1"
+      :aria-label="t('main-content')">
       <router-view v-slot="{ Component }">
         <Suspense timeout="0">
           <template #default>
@@ -177,9 +229,19 @@ const backgroundStyle = computed(() => {
       v-if="isCompact"
       v-show="!railHidden"
       label-visibility="selected"
+      role="navigation"
+      :aria-label="t('main-nav')"
       :value="(route.name as string)"
       @change="onNavChange">
-      <mdui-navigation-bar-item v-for="item in navItems" :key="item.key" :value="item.key">
+      <mdui-navigation-bar-item
+        v-for="item in navItems"
+        :key="item.key"
+        :value="item.key"
+        role="link"
+        tabindex="0"
+        :aria-current="route.name === item.key ? 'page' : undefined"
+        :aria-label="t(item.key)"
+        @keydown="onNavKey($event, item.key)">
         {{ t(item.key) }}
         <span slot="icon" class="rail-icon"><component :is="item.icon" /></span>
         <span slot="active-icon" class="rail-icon"><component :is="item.activeIcon" /></span>
@@ -189,6 +251,35 @@ const backgroundStyle = computed(() => {
 </template>
 
 <style scoped>
+.skip-link {
+  position: fixed;
+  top: 8px;
+  inset-inline-start: 8px;
+  z-index: 4000;
+  padding: 10px 16px;
+  border-radius: var(--mdui-shape-corner-full);
+  background-color: rgb(var(--mdui-color-primary));
+  color: rgb(var(--mdui-color-on-primary));
+  font-size: var(--mdui-typescale-label-large-size);
+  font-weight: var(--mdui-typescale-label-large-weight);
+  text-decoration: none;
+  transform: translateY(-200%);
+  transition: transform var(--app-motion-duration-effects-fast) var(--mdui-motion-easing-standard);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid rgb(var(--mdui-color-on-primary));
+  outline-offset: -4px;
+}
+
+mdui-navigation-rail-item:focus-visible,
+mdui-navigation-bar-item:focus-visible {
+  outline: 2px solid rgb(var(--mdui-color-primary));
+  outline-offset: -2px;
+  border-radius: var(--mdui-shape-corner-full);
+}
+
 .custom-bg-layer {
   position: fixed;
   inset: 0;

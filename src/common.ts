@@ -3,6 +3,7 @@ import { SUPPORTED_LOCALES, i18n } from './main';
 import { setLocale } from 'mdui/functions/setLocale.js';
 import { snackbar } from 'mdui/functions/snackbar.js';
 import { mduiLocaleFor } from './mdui-locale';
+import { announce } from './a11y';
 
 import moment from 'moment';
 
@@ -53,6 +54,7 @@ export function changeLocale(locale: string) {
   if (!SUPPORTED_LOCALES.includes(locale)) locale = 'en';
   i18n.global.locale.value = (locale === 'zh-TW' ? 'zh-CN' : locale) as typeof i18n.global.locale.value;
   localStorage.setItem('locale', locale);
+  document.documentElement.lang = locale === 'en' ? 'en' : 'zh-CN';
   // Keep mdui's own built-in strings in step with the UI language.
   setLocale(mduiLocaleFor(locale)).catch((e) => console.error('failed to set mdui locale', e));
   const momentLocale =
@@ -72,6 +74,7 @@ export function toast(message: string, kind?: 'success' | 'info' | 'warning' | '
     closeOnOutsideClick: true,
   });
   if (kind) bar.classList.add(`toast-${kind}`);
+  announce(message, kind === 'error');
 }
 
 export function toastError(error: any) {

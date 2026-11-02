@@ -1339,6 +1339,31 @@ function clearLogSelection(event?: MouseEvent) {
   logSelection.value = null;
 }
 
+const activeLine = ref(0);
+const activeLineId = computed(() => {
+  const count = filteredLines.value.length;
+  if (!count) return undefined;
+  return `log-line-${Math.min(activeLine.value, count - 1)}`;
+});
+
+function onLogKeydown(e: KeyboardEvent) {
+  const count = filteredLines.value.length;
+  if (!count) return;
+
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const step = e.key === 'ArrowDown' ? 1 : -1;
+    activeLine.value = Math.max(0, Math.min(count - 1, activeLine.value + step));
+    document.getElementById(`log-line-${activeLine.value}`)?.scrollIntoView({ block: 'nearest' });
+    return;
+  }
+
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    selectLogLine(activeLine.value);
+  }
+}
+
 function logFileName() {
   return (props.task?.name || 'output').replace(/[\\/:*?"<>|]/g, '_');
 }
@@ -1487,6 +1512,7 @@ watch(
     level.value = 'all';
     query.value = '';
     logSelection.value = null;
+    activeLine.value = 0;
     // A failed run usually has no dashboard data, so the raw error is the useful view.
     mode.value = props.task?.status.type === 'failed' ? 'detail' : 'simple';
     await nextTick();
@@ -1497,6 +1523,7 @@ watch(
 
 watch([level, query], async () => {
   await nextTick();
+  activeLine.value = 0;
   if (body.value) body.value.scrollTop = 0;
 });
 
@@ -1562,11 +1589,13 @@ onUnmounted(() => {
         tabindex="-1"
         role="dialog"
         aria-modal="true"
-        :aria-label="t('log.title')">
+        :aria-label="t('log.title')"
+        v-focus-trap="true">
         <header class="log-header">
           <h2 class="log-title" :title="task?.name">{{ task?.name }}</h2>
-          <mdui-button-icon class="log-close" :title="t('log.close')" @click="emit('close')">
-            <mdui-icon-close></mdui-icon-close>
+          <mdui-button-icon class="log-close" @click="emit('close')">
+            <mdui-icon-close aria-hidden="true"></mdui-icon-close>
+            <span class="md-sr-only">{{ t('log.close') }}</span>
           </mdui-button-icon>
         </header>
 
@@ -1796,15 +1825,28 @@ onUnmounted(() => {
           </div>
 
           <!-- Detailed: the complete raw log, with colour-coded levels and stages. -->
-          <div v-else ref="body" class="log-body" @contextmenu="clearLogSelection">
+          <div
+            v-else
+            ref="body"
+            class="log-body"
+            role="listbox"
+            aria-multiselectable="true"
+            :aria-label="t('log.detail')"
+            tabindex="0"
+            :aria-activedescendant="activeLineId"
+            @keydown="onLogKeydown"
+            @contextmenu="clearLogSelection">
             <div v-if="!filteredLines.length" class="log-empty is-inline">
               <mdui-icon-search class="log-empty-icon"></mdui-icon-search>
               <p>{{ t('log.no-match') }}</p>
             </div>
             <div
               v-for="(line, index) in filteredLines"
+              :id="`log-line-${index}`"
               :key="line.no"
               class="log-line"
+              role="option"
+              :aria-selected="isLogLineSelected(index)"
               :class="[`is-${line.level}`, { 'is-selected': isLogLineSelected(index) }]"
               @click="selectLogLine(index)">
               <span class="log-no">{{ line.no }}</span>
@@ -1838,6 +1880,7 @@ onUnmounted(() => {
           <span
             v-if="mode === 'detail'"
             class="log-line-count"
+            role="status"
             :class="{ 'is-selected': logSelection }"
             :title="logSelection ? t('log.selection-hint', { count: selectedLineCount }) : undefined">
             {{ lineCountLabel }}
@@ -2843,6 +2886,16 @@ onUnmounted(() => {
 
 .log-stat:hover {
   background-color: rgba(var(--mdui-color-on-surface), 0.06);
+}
+
+.log-stat:focus-visible {
+  outline: 2px solid rgb(var(--mdui-color-primary));
+  outline-offset: 2px;
+}
+
+.log-body:focus-visible {
+  outline: 2px solid rgb(var(--mdui-color-primary));
+  outline-offset: -2px;
 }
 
 .log-stat.active {
