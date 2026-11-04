@@ -1421,21 +1421,11 @@ pub async fn main() -> Result<()> {
     let hw_errors = Vec::new();
 
     let mut encoder_availability = EncoderAvailability {
-        h264_nvenc: false,
-        hevc_nvenc: false,
-        av1_nvenc: false,
-        h264_qsv: false,
-        hevc_qsv: false,
-        av1_qsv: false,
-        h264_amf: false,
-        hevc_amf: false,
-        av1_amf: false,
-        h264_cuvid: false,
-        hevc_cuvid: false,
-        av1_cuvid: false,
-        h264_vulkan: false,
-        hevc_vulkan: false,
-        av1_vulkan: false,
+        h264_nvenc: false,hevc_nvenc: false,av1_nvenc: false,
+        h264_qsv: false,hevc_qsv: false,av1_qsv: false,
+        h264_amf: false,hevc_amf: false,av1_amf: false,
+        h264_cuvid: false,hevc_cuvid: false,av1_cuvid: false,
+        h264_vulkan: false,hevc_vulkan: false,av1_vulkan: false,
         av1_svt: false,
     };
 
