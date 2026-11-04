@@ -63,15 +63,33 @@ pub async fn run_wrapped(f: impl Future<Output = Result<()>>) -> ! {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() -> Result<()> {
+    #[cfg(feature = "tracy")]
+    let _tracy = tracy_client::Client::start();
+    #[cfg(feature = "tracy")]
+    {
+        if let Err(error) = rayon::ThreadPoolBuilder::new()
+            .thread_name(|id| format!("rayon-global-{id}"))
+            .start_handler(|id| macroquad::miniquad::tracy::register_thread(&format!("rayon-global-{id}")))
+            .build_global()
+        {
+            eprintln!("Tracy: global Rayon pool was already initialized: {error}");
+        }
+    }
+
     //dynamic cpu core
     let num_workers = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
 
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(num_workers)
-        .enable_all()
-        .build()?;
+    let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
+    runtime_builder.worker_threads(num_workers).enable_all();
+    #[cfg(feature = "tracy")]
+    runtime_builder.on_thread_start(|| {
+        static NEXT_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        macroquad::miniquad::tracy::register_thread(&format!("tokio-worker-{id}"));
+    });
+    let rt = runtime_builder.build()?;
     let _guard = rt.enter();
 
     if std::env::args().len() > 1 {

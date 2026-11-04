@@ -39,6 +39,7 @@ sasa = { git = "https://github.com/Winamin/sasa" }
 serde_yaml = "0.9"
 tokio = { version = "1.36.0", features = ["process", "rt-multi-thread", "fs", "full"] }
 tracing = "0.1.37"
+tracy-client = { version = "0.19.0", optional = true, default-features = false, features = ["enable", "ondemand", "only-localhost"] }
 tempfile = "3.8.0"
 crossbeam-deque = "0.8.6"
 chrono = "0.4.28"
@@ -54,13 +55,19 @@ tauri-plugin-http = "2.6"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
+tracy = ["dep:tracy-client", "prpr/tracy", "macroquad/tracy"]
+tracy-system = ["tracy", "tracy-client/system-tracing", "tracy-client/context-switch-tracing", "tracy-client/sampling", "tracy-client/wait-stacks"]
 
 [profile.release]
 opt-level = 3
 # debug = 1
 
+[profile.dev.package.prpr]
+opt-level = 0
+debug = 2
+
 [profile.dev.package."*"]
-opt-level = 3
+opt-level = 0
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55.0"

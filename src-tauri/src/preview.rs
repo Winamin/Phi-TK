@@ -45,6 +45,9 @@ impl Scene for BaseScene {
 }
 
 pub async fn main() -> Result<()> {
+    #[cfg(feature = "tracy")]
+    tracy_client::set_thread_name!("Preview main");
+
     set_pc_assets_folder(&std::env::args().nth(2).unwrap());
 
     let mut stdin = std::io::stdin().lock();
@@ -94,20 +97,44 @@ pub async fn main() -> Result<()> {
     let mut frame_times = VecDeque::with_capacity(100);
     let mut frame_sum = 0.0;
     let mut measured = Vec::new();
+    #[cfg(feature = "tracy")]
+    let mut tracy_registered = false;
     loop {
+        #[cfg(feature = "tracy")]
+        {
+            let connected = tracy_client::Client::is_connected();
+            if connected && !tracy_registered {
+                rayon::broadcast(|context| miniquad::tracy::register_thread(&format!("rayon-global-{}", context.index())));
+                tracy_registered = true;
+            } else if !connected {
+                tracy_registered = false;
+            }
+        }
         let frame_start = Instant::now();
         if is_key_pressed(KeyCode::F11) {
             is_fullscreen = !is_fullscreen;
             set_fullscreen(is_fullscreen);
         }
-        main.update()?;
+        {
+            #[cfg(feature = "tracy")]
+            let _span = miniquad::tracy::span_with_callstack(miniquad::tracy::span_location!("Preview::update"));
+            main.update()?;
+        }
         let updated = Instant::now();
-        main.render(&mut painter)?;
+        {
+            #[cfg(feature = "tracy")]
+            let _span = miniquad::tracy::span_with_callstack(miniquad::tracy::span_location!("Preview::render"));
+            main.render(&mut painter)?;
+        }
         let rendered = Instant::now();
         if main.should_exit() {
             break;
         }
+        // Tracy zones must end before yielding: macroquad closes the enclosing
+        // user-code zone between polls. Backend zones measure submit/wait work.
         next_frame().await;
+        #[cfg(feature = "tracy")]
+        tracy_client::frame_mark();
         let now = Instant::now();
         let update = (updated - frame_start).as_secs_f64();
         let render = (rendered - updated).as_secs_f64();
